@@ -9,8 +9,76 @@ import { StatsBar } from '~/components/StatsBar.js'
 export function Dashboard() {
   const [room, setRoom] = createSignal('W1N1')
   const [shard, setShard] = createSignal('shard0')
-  const [sidebarOpen, setSidebarOpen] = createSignal(true)
-  const [consoleOpen, setConsoleOpen] = createSignal(true)
+
+  const [sidebarWidth, setSidebarWidth] = createSignal(260)
+  const [sidebarPrevWidth, setSidebarPrevWidth] = createSignal(260)
+  const [consoleHeight, setConsoleHeight] = createSignal(220)
+  const [consolePrevHeight, setConsolePrevHeight] = createSignal(220)
+  const [sidebarDragging, setSidebarDragging] = createSignal(false)
+  const [consoleDragging, setConsoleDragging] = createSignal(false)
+
+  const sidebarCollapsed = () => sidebarWidth() <= 32
+  const consoleCollapsed = () => consoleHeight() <= 32
+
+  const toggleSidebar = () => {
+    if (sidebarWidth() > 32) {
+      setSidebarPrevWidth(sidebarWidth())
+      setSidebarWidth(32)
+    } else {
+      setSidebarWidth(sidebarPrevWidth())
+    }
+  }
+
+  const toggleConsole = () => {
+    if (consoleHeight() > 32) {
+      setConsolePrevHeight(consoleHeight())
+      setConsoleHeight(32)
+    } else {
+      setConsoleHeight(consolePrevHeight())
+    }
+  }
+
+  const startSidebarDrag = (e: PointerEvent) => {
+    e.preventDefault()
+    setSidebarDragging(true)
+    const startX = e.clientX
+    const startWidth = sidebarWidth()
+
+    const onMove = (ev: PointerEvent) => {
+      const delta = ev.clientX - startX
+      setSidebarWidth(Math.max(32, Math.min(500, startWidth - delta)))
+    }
+
+    const onUp = () => {
+      setSidebarDragging(false)
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+    }
+
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+  }
+
+  const startConsoleDrag = (e: PointerEvent) => {
+    e.preventDefault()
+    setConsoleDragging(true)
+    const startY = e.clientY
+    const startHeight = consoleHeight()
+
+    const onMove = (ev: PointerEvent) => {
+      const delta = ev.clientY - startY
+      setConsoleHeight(Math.max(32, Math.min(500, startHeight - delta)))
+    }
+
+    const onUp = () => {
+      setConsoleDragging(false)
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+    }
+
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+  }
 
   const handleNavigate = (r: string, s: string) => {
     setRoom(r)
@@ -62,15 +130,31 @@ export function Dashboard() {
           {/* Bottom Console */}
           <div
             style={{
-              height: consoleOpen() ? '220px' : '32px',
+              height: `${consoleHeight()}px`,
               'border-top': '1px solid #30363d',
-              transition: 'height 0.2s ease',
+              transition: consoleDragging() ? 'none' : 'height 0.15s ease',
               overflow: 'hidden',
+              position: 'relative',
             }}
           >
+            {/* Drag handle */}
+            <div
+              onPointerDown={startConsoleDrag}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: '4px',
+                cursor: 'row-resize',
+                'z-index': 10,
+                background: '#21262d',
+              }}
+            />
             <ConsolePanel
               shard={shard()}
-              onToggle={() => setConsoleOpen((v) => !v)}
+              isCollapsed={consoleCollapsed()}
+              onToggle={toggleConsole}
             />
           </div>
         </div>
@@ -78,13 +162,31 @@ export function Dashboard() {
         {/* Right Sidebar */}
         <div
           style={{
-            width: sidebarOpen() ? '260px' : '32px',
+            width: `${sidebarWidth()}px`,
             'border-left': '1px solid #30363d',
-            transition: 'width 0.2s ease',
+            transition: sidebarDragging() ? 'none' : 'width 0.15s ease',
             overflow: 'hidden',
+            position: 'relative',
           }}
         >
-          <Sidebar onToggle={() => setSidebarOpen((v) => !v)} />
+          {/* Drag handle */}
+          <div
+            onPointerDown={startSidebarDrag}
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '4px',
+              height: '100%',
+              cursor: 'col-resize',
+              'z-index': 10,
+              background: '#21262d',
+            }}
+          />
+          <Sidebar
+            isCollapsed={sidebarCollapsed()}
+            onToggle={toggleSidebar}
+          />
         </div>
       </div>
     </div>

@@ -9,7 +9,7 @@ interface ConsoleEntry {
   results: string[]
 }
 
-export function ConsolePanel(props: { shard?: string; onToggle?: () => void }) {
+export function ConsolePanel(props: { shard?: string; isCollapsed?: boolean; onToggle?: () => void }) {
   const [entries, setEntries] = createSignal<ConsoleEntry[]>([])
   const [input, setInput] = createSignal('')
   const [autoScroll, setAutoScroll] = createSignal(true)
@@ -75,6 +75,16 @@ export function ConsolePanel(props: { shard?: string; onToggle?: () => void }) {
     'border-radius': '4px',
   } as const)
 
+  const handleBarClick = (e: MouseEvent) => {
+    if (!(e.target as HTMLElement).closest('button')) {
+      props.onToggle?.()
+    }
+  }
+
+  const stopPropagation = (e: MouseEvent) => {
+    e.stopPropagation()
+  }
+
   const logLines = () => entries().flatMap((e) => e.log)
   const resultLines = () => entries().flatMap((e) => e.results)
 
@@ -89,6 +99,7 @@ export function ConsolePanel(props: { shard?: string; onToggle?: () => void }) {
     >
       {/* Tab bar - always visible */}
       <div
+        onClick={handleBarClick}
         style={{
           height: '32px',
           'flex-shrink': 0,
@@ -97,18 +108,19 @@ export function ConsolePanel(props: { shard?: string; onToggle?: () => void }) {
           display: 'flex',
           'align-items': 'center',
           gap: '4px',
+          cursor: 'pointer',
         }}
       >
-        <button onClick={() => setActiveTab('log')} style={tabButtonStyle('log')}>
+        <button onClick={(e) => { stopPropagation(e); setActiveTab('log') }} style={tabButtonStyle('log')}>
           Log
         </button>
-        <button onClick={() => setActiveTab('console')} style={tabButtonStyle('console')}>
+        <button onClick={(e) => { stopPropagation(e); setActiveTab('console') }} style={tabButtonStyle('console')}>
           Console
         </button>
 
         <div style={{ 'margin-left': 'auto', display: 'flex', gap: '8px', 'align-items': 'center' }}>
           <button
-            onClick={() => setEntries([])}
+            onClick={(e) => { stopPropagation(e); setEntries([]) }}
             style={{
               background: 'transparent',
               border: 'none',
@@ -121,7 +133,7 @@ export function ConsolePanel(props: { shard?: string; onToggle?: () => void }) {
           </button>
           {props.onToggle && (
             <button
-              onClick={props.onToggle}
+              onClick={(e) => { stopPropagation(e); props.onToggle?.() }}
               style={{
                 background: 'transparent',
                 border: 'none',
@@ -130,7 +142,7 @@ export function ConsolePanel(props: { shard?: string; onToggle?: () => void }) {
                 cursor: 'pointer',
               }}
             >
-              ▼
+              {props.isCollapsed ? '▲' : '▼'}
             </button>
           )}
         </div>

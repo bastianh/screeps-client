@@ -1,4 +1,13 @@
-export function Sidebar(props: { onToggle?: () => void }) {
+export function Sidebar(props: { isCollapsed?: boolean; onToggle?: () => void }) {
+  const handleStripClick = () => {
+    props.onToggle?.()
+  }
+
+  const handleButtonClick = (e: MouseEvent) => {
+    e.stopPropagation()
+    props.onToggle?.()
+  }
+
   return (
     <div
       style={{
@@ -8,8 +17,9 @@ export function Sidebar(props: { onToggle?: () => void }) {
         background: '#0d1117',
       }}
     >
-      {/* Collapsed strip – always visible */}
+      {/* Collapsed strip – always visible, clickable background */}
       <div
+        onClick={handleStripClick}
         style={{
           width: '32px',
           height: '100%',
@@ -18,11 +28,12 @@ export function Sidebar(props: { onToggle?: () => void }) {
           'align-items': 'center',
           'border-right': '1px solid #30363d',
           padding: '8px 0',
+          cursor: 'pointer',
         }}
       >
         {props.onToggle && (
           <button
-            onClick={props.onToggle}
+            onClick={handleButtonClick}
             style={{
               background: 'transparent',
               border: 'none',
@@ -32,7 +43,7 @@ export function Sidebar(props: { onToggle?: () => void }) {
               padding: '4px',
             }}
           >
-            ◀
+            {props.isCollapsed ? '▶' : '◀'}
           </button>
         )}
       </div>
@@ -61,7 +72,7 @@ export function Sidebar(props: { onToggle?: () => void }) {
           <span>Properties</span>
           {props.onToggle && (
             <button
-              onClick={props.onToggle}
+              onClick={handleButtonClick}
               style={{
                 background: 'transparent',
                 border: 'none',
