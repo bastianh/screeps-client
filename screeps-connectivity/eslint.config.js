@@ -1,3 +1,4 @@
+import globals from 'globals';
 import js from '@eslint/js'
 import tsParser from '@typescript-eslint/parser'
 import tsPlugin from '@typescript-eslint/eslint-plugin'
@@ -11,10 +12,18 @@ export default [
     files: ['src/**/*.ts'],
     languageOptions: {
       parser: tsParser,
+      globals: {
+        ...globals.browser,
+        ...globals.node,
+        RequestInit: 'readonly',
+        ResponseInit: 'readonly',
+        NodeJS: 'readonly',
+      },
     },
     plugins: { '@typescript-eslint': tsPlugin },
     rules: {
       ...tsPlugin.configs['recommended'].rules,
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
     },
   },
   {
@@ -22,6 +31,11 @@ export default [
     languageOptions: {
       parser: tsParser,
       globals: {
+        ...globals.browser,
+        ...globals.node,
+        RequestInit: 'readonly',
+        ResponseInit: 'readonly',
+        NodeJS: 'readonly',
         describe: 'readonly',
         it: 'readonly',
         expect: 'readonly',
@@ -34,6 +48,7 @@ export default [
     plugins: { '@typescript-eslint': tsPlugin },
     rules: {
       ...tsPlugin.configs['recommended'].rules,
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
     },
   },
 ]

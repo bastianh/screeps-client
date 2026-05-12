@@ -406,7 +406,8 @@ export class RoomRenderer {
         this.lastMouseY >= sy &&
         this.lastMouseY <= sy + sh
       ) {
-        ;(zone as any).emit('pointerover')
+        // @ts-expect-error - Event type mismatch with PixiJS event emitter
+        zone.emit('pointerover', new Event('pointerover'))
       }
     }
   }

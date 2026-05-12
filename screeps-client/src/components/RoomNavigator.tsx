@@ -7,11 +7,25 @@ interface RoomNavigatorProps {
 }
 
 export function RoomNavigator(props: RoomNavigatorProps) {
-  const [room, setRoom] = createSignal(props.currentRoom ?? 'W1N1')
-  const [shard, setShard] = createSignal(props.currentShard ?? 'shard0')
+  const [room, setRoom] = createSignal('W1N1')
+  const [shard, setShard] = createSignal('shard0')
 
-  createEffect(() => setRoom(props.currentRoom ?? 'W1N1'))
-  createEffect(() => setShard(props.currentShard ?? 'shard0'))
+  createEffect(() => {
+    const r = props.currentRoom
+    if (r) {
+      setRoom(r)
+    } else {
+      setRoom('W1N1')
+    }
+  })
+  createEffect(() => {
+    const s = props.currentShard
+    if (s) {
+      setShard(s)
+    } else {
+      setShard('shard0')
+    }
+  })
 
   const handleSubmit = (e: Event) => {
     e.preventDefault()

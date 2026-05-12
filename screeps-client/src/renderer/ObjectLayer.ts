@@ -94,9 +94,14 @@ function createObjectVisual(obj: RoomObject): Container {
   return container
 }
 
+type ContainerWithTarget = Container & {
+  __targetX?: number
+  __targetY?: number
+}
+
 export class ObjectLayer {
   readonly container: Container
-  private objects = new Map<string, Container>()
+  private objects = new Map<string, ContainerWithTarget>()
   private ticker: Ticker | null = null
   private tickerCallback: (() => void) | null = null
 
@@ -106,15 +111,15 @@ export class ObjectLayer {
       this.ticker = ticker
       this.tickerCallback = () => {
         for (const visual of this.objects.values()) {
-          const targetX = (visual as any).__targetX
-          const targetY = (visual as any).__targetY
-          if (targetX !== undefined) {
+          const targetX = visual.__targetX
+          const targetY = visual.__targetY
+          if (targetX !== undefined && targetY !== undefined) {
             const dx = targetX - visual.x
             const dy = targetY - visual.y
             if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) {
               visual.position.set(targetX, targetY)
-              ;(visual as any).__targetX = undefined
-              ;(visual as any).__targetY = undefined
+              visual.__targetX = undefined
+              visual.__targetY = undefined
             } else {
               visual.x += dx * 0.15
               visual.y += dy * 0.15
@@ -133,7 +138,7 @@ export class ObjectLayer {
       seen.add(id)
       const existing = this.objects.get(id)
       if (!existing) {
-        const visual = createObjectVisual(obj)
+        const visual: ContainerWithTarget = createObjectVisual(obj)
         this.objects.set(id, visual)
         this.container.addChild(visual)
       } else {
@@ -141,8 +146,8 @@ export class ObjectLayer {
         const ty = obj.y * TILE_SIZE
         if (obj.type === 'creep') {
           if (existing.x !== tx || existing.y !== ty) {
-            ;(existing as any).__targetX = tx
-            ;(existing as any).__targetY = ty
+            existing.__targetX = tx
+            existing.__targetY = ty
           }
         } else {
           existing.position.set(tx, ty)

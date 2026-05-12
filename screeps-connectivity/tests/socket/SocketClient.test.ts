@@ -123,7 +123,7 @@ describe('SocketClient', () => {
 
   it('disconnect() prevents reconnect even when not currently reconnecting', async () => {
     const client = makeClient()
-    const ws = await connectClient(client)
+    const _ws = await connectClient(client)
     client.disconnect()
     // After disconnect, scheduleReconnect should be a no-op
     // We verify by checking no new WS instance is created after a tick
@@ -133,7 +133,7 @@ describe('SocketClient', () => {
 
   it('disconnected event has willReconnect: false when disconnect() is called', async () => {
     const client = makeClient()
-    const ws = await connectClient(client)
+    const _ws = await connectClient(client)
     let willReconnect: boolean | undefined
     client.on('disconnected', (data) => {
       willReconnect = (data as { willReconnect: boolean }).willReconnect
