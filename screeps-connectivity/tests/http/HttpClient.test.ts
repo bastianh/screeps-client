@@ -41,6 +41,15 @@ describe('HttpClient', () => {
     expect(url).toContain('shard=shard0')
   })
 
+  it('omits null GET params from query string', async () => {
+    fetchMock.mockResolvedValue(mockResponse({ ok: 1 }))
+    const http = new HttpClient({ url: 'http://test.local', auth: new TokenAuth({ token: 't' }) })
+    await http.request('GET', '/api/game/time', { shard: null, room: 'E9N3' })
+    const [url] = fetchMock.mock.calls[0] as [string]
+    expect(url).not.toContain('shard')
+    expect(url).toContain('room=E9N3')
+  })
+
   it('sends POST body as JSON', async () => {
     fetchMock.mockResolvedValue(mockResponse({ ok: 1 }))
     const http = new HttpClient({ url: 'http://test.local', auth: new TokenAuth({ token: 't' }) })

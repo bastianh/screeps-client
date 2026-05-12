@@ -21,7 +21,7 @@ export class RoomStore extends TypedStore<RoomStoreEvents> {
     this.cache = cache
   }
 
-  async terrain(room: string, shard: string): Promise<RoomTerrain> {
+  async terrain(room: string, shard: string | null): Promise<RoomTerrain> {
     const key = `terrain/${shard}/${room}`
 
     const cached = this.cache.get<RoomTerrain>(key)
@@ -34,7 +34,7 @@ export class RoomStore extends TypedStore<RoomStoreEvents> {
       return terrain
     }
 
-    const res = await this.http.game.roomTerrain(room, shard)
+    const res = await this.http.game.roomTerrain(room, shard ?? undefined)
     const entry = res.terrain[0]
     if (!entry) throw new Error(`No terrain data for room ${room} shard ${shard}`)
     const terrain = RoomTerrain.fromEncodedString(entry.terrain)
@@ -46,20 +46,20 @@ export class RoomStore extends TypedStore<RoomStoreEvents> {
     return terrain
   }
 
-  objects(room: string, shard: string): RoomObjectMap | null {
+  objects(room: string, shard: string | null): RoomObjectMap | null {
     return this.roomObjects.get(`${room}/${shard}`) ?? null
   }
 
-  subscribe(room: string, shard: string): Subscription {
+  subscribe(room: string, shard: string | null): Subscription {
     const mapKey = `${room}/${shard}`
     const count = this.roomSubCount.get(mapKey) ?? 0
     this.roomSubCount.set(mapKey, count + 1)
 
-    const channel = `room:${shard}/${room}`
+    const channel = shard ? `room:${shard}/${room}` : `room:${room}`
     const socketSub = this.socket.subscribe(channel)
 
     const listenerSub = this.socket.on(channel, (data) => {
-      const update = data as { objects: Record<string, Partial<RoomObject> | null>; gameTime: number }
+      const update = data as { objects: Record<string, Partial<RoomObject> | null>; gameTime?: number }
       const current: RoomObjectMap = { ...(this.roomObjects.get(mapKey) ?? {}) }
 
       for (const [id, obj] of Object.entries(update.objects)) {

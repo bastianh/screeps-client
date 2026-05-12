@@ -51,7 +51,7 @@ export class HttpClient {
 
     if (method === 'GET' && body) {
       for (const [k, v] of Object.entries(body)) {
-        if (v !== undefined) url.searchParams.set(k, String(v))
+        if (v != null) url.searchParams.set(k, String(v))
       }
     } else if (body) {
       headers['Content-Type'] = 'application/json'

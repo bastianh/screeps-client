@@ -1,8 +1,8 @@
 import type { RoomObjectMap, RoomTerrain, CpuStats, ConsoleMessage } from './game.js'
 
 export interface RoomStoreEvents {
-  'room:update': { room: string; shard: string; gameTime: number; objects: RoomObjectMap }
-  'room:terrainavailable': { room: string; shard: string; terrain: RoomTerrain }
+  'room:update': { room: string; shard: string | null; gameTime: number | undefined; objects: RoomObjectMap }
+  'room:terrainavailable': { room: string; shard: string | null; terrain: RoomTerrain }
 }
 
 export interface UserStoreEvents {

@@ -49,6 +49,12 @@ describe('RoomStore', () => {
     expect(socket.subscribe).toHaveBeenCalledWith('room:shard0/W7N7')
   })
 
+  it('subscribe() omits shard prefix when shard is null (private server)', () => {
+    const { store, socket } = makeStore()
+    store.subscribe('E9N3', null)
+    expect(socket.subscribe).toHaveBeenCalledWith('room:E9N3')
+  })
+
   it('subscribe() returns a Subscription with dispose()', () => {
     const { store } = makeStore()
     const sub = store.subscribe('W7N7', 'shard0')
