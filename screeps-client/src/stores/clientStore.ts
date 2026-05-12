@@ -56,12 +56,31 @@ export async function connect(opts: {
     await screepsClient.connect()
     setClient(screepsClient)
     setStatus('connected')
+
+    // Persist credentials for auto-reconnect on reload
+    localStorage.setItem('screeps:url', opts.url)
+    if (screepsClient.http.token) {
+      localStorage.setItem('screeps:token', screepsClient.http.token)
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     setError(message)
     setStatus('error')
     setClient(null)
     throw err
+  }
+}
+
+export async function tryAutoConnect(): Promise<void> {
+  const url = localStorage.getItem('screeps:url')
+  const token = localStorage.getItem('screeps:token')
+  if (!url || !token) return
+
+  try {
+    await connect({ url, auth: 'token', token })
+  } catch {
+    // Invalid or expired token — clear it so user sees login form
+    localStorage.removeItem('screeps:token')
   }
 }
 
@@ -73,4 +92,5 @@ export function disconnect(): void {
   setClient(null)
   setStatus('idle')
   setError(null)
+  localStorage.removeItem('screeps:token')
 }

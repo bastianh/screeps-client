@@ -7,8 +7,8 @@ import { Sidebar } from '~/components/Sidebar.js'
 import { StatsBar } from '~/components/StatsBar.js'
 
 export function Dashboard() {
-  const [room, setRoom] = createSignal('W1N1')
-  const [shard, setShard] = createSignal('shard0')
+  const [room, setRoom] = createSignal(localStorage.getItem('screeps:room') ?? 'W1N1')
+  const [shard, setShard] = createSignal(localStorage.getItem('screeps:shard') ?? 'shard0')
 
   const [sidebarWidth, setSidebarWidth] = createSignal(260)
   const [sidebarPrevWidth, setSidebarPrevWidth] = createSignal(260)
@@ -83,6 +83,8 @@ export function Dashboard() {
   const handleNavigate = (r: string, s: string) => {
     setRoom(r)
     setShard(s)
+    localStorage.setItem('screeps:room', r)
+    localStorage.setItem('screeps:shard', s)
   }
 
   return (
