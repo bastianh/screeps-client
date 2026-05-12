@@ -6,7 +6,6 @@ export { PasswordAuth } from './http/auth/PasswordAuth.js'
 export type { AuthStrategy } from './http/auth/AuthStrategy.js'
 
 export { IndexedDBStorage } from './storage/IndexedDBStorage.js'
-export { FileStorage } from './storage/FileStorage.js'
 export { NullStorage } from './storage/NullStorage.js'
 export type { StorageAdapter } from './storage/StorageAdapter.js'
 
