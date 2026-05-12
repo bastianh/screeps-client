@@ -13,6 +13,7 @@ interface RoomViewerProps {
 
 export function RoomViewer(props: RoomViewerProps) {
   let containerRef: HTMLDivElement | undefined
+  let objLayer: ObjectLayer | null = null
   const [renderer, setRenderer] = createSignal<RoomRenderer | null>(null)
   const [terrain, setTerrain] = createSignal<RoomTerrain | null>(null)
   const [objects, setObjects] = createSignal<RoomObjectMap | null>(null)
@@ -25,6 +26,8 @@ export function RoomViewer(props: RoomViewerProps) {
   })
 
   onCleanup(() => {
+    objLayer?.destroy()
+    objLayer = null
     const r = renderer()
     if (r) r.destroy()
   })
@@ -43,6 +46,8 @@ export function RoomViewer(props: RoomViewerProps) {
     setObjects(null)
     setGameTime(null)
     r.clear()
+    objLayer?.destroy()
+    objLayer = null
 
     const group = new SubscriptionGroup()
 
@@ -51,12 +56,16 @@ export function RoomViewer(props: RoomViewerProps) {
       .then((t) => setTerrain(t))
       .catch((err) => console.error('Failed to load terrain:', err))
 
+    // Fetch initial room objects
+    c.stores.room.fetchObjects(room, shard)
+      .catch((err) => console.error('Failed to load room objects:', err))
+
     // Subscribe to room updates
     group.add(c.stores.room.subscribe(room, shard))
 
     group.add(c.stores.room.on('room:update', (data) => {
       setObjects(data.objects)
-      setGameTime(data.gameTime)
+      setGameTime(data.gameTime ?? null)
     }))
 
     onCleanup(() => {
@@ -80,10 +89,8 @@ export function RoomViewer(props: RoomViewerProps) {
     const objs = objects()
     if (!r || !objs) return
 
-    // Lazy-init object layer on first object update
-    let objLayer = r.world.getChildByLabel('objects') as unknown as ObjectLayer | undefined
     if (!objLayer) {
-      objLayer = new ObjectLayer()
+      objLayer = new ObjectLayer(r.app.ticker)
       objLayer.container.label = 'objects'
       r.world.addChild(objLayer.container)
     }

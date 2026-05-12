@@ -10,11 +10,11 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://144.76.164.126:21025',
+        target: 'https://screeps.w4rl0ck.dev',
         changeOrigin: true,
       },
       '/socket': {
-        target: 'http://144.76.164.126:21025',
+        target: 'https://screeps.w4rl0ck.dev',
         changeOrigin: true,
         ws: true,
       },

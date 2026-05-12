@@ -50,6 +50,19 @@ export class RoomStore extends TypedStore<RoomStoreEvents> {
     return this.roomObjects.get(`${room}/${shard}`) ?? null
   }
 
+  async fetchObjects(room: string, shard: string | null): Promise<void> {
+    const mapKey = `${room}/${shard}`
+    const res = await this.http.game.roomObjects(room, shard ?? undefined)
+    const map: RoomObjectMap = {}
+    for (const obj of res.objects as RoomObject[]) {
+      if (obj && typeof obj === 'object' && '_id' in obj) {
+        map[(obj as RoomObject)._id] = obj as RoomObject
+      }
+    }
+    this.roomObjects.set(mapKey, map)
+    this.emit('room:update', { room, shard, gameTime: undefined, objects: map })
+  }
+
   subscribe(room: string, shard: string | null): Subscription {
     const mapKey = `${room}/${shard}`
     const count = this.roomSubCount.get(mapKey) ?? 0

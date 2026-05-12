@@ -10,6 +10,7 @@ function makeStore() {
         ok: 1,
         terrain: [{ _id: 'id', room: 'W7N7', terrain: '0'.repeat(2500), type: 'terrain' }],
       }),
+      roomObjects: vi.fn().mockResolvedValue({ ok: 1, objects: [], users: {} }),
     },
   } as unknown as import('../../src/http/HttpClient.js').HttpClient
 
@@ -104,5 +105,26 @@ describe('RoomStore', () => {
     messageHandler({ objects: {}, gameTime: 2000 })
 
     expect(handler).toHaveBeenCalledWith(expect.objectContaining({ room: 'W7N7', shard: 'shard0', gameTime: 2000 }))
+  })
+
+  it('fetchObjects loads objects via HTTP and emits room:update', async () => {
+    const { store, http } = makeStore()
+    const mockObjects = [
+      { _id: 'o1', type: 'controller', room: 'E9N3', x: 25, y: 25 },
+      { _id: 'o2', type: 'source', room: 'E9N3', x: 10, y: 10 },
+    ]
+    ;(http.game as unknown as { roomObjects: ReturnType<typeof vi.fn> }).roomObjects = vi.fn().mockResolvedValue({ ok: 1, objects: mockObjects, users: {} })
+
+    const eventSpy = vi.fn()
+    store.on('room:update', eventSpy)
+
+    await store.fetchObjects('E9N3', 'shard0')
+
+    expect(http.game.roomObjects).toHaveBeenCalledWith('E9N3', 'shard0')
+    expect(eventSpy).toHaveBeenCalledOnce()
+    const update = eventSpy.mock.calls[0][0] as { objects: Record<string, unknown> }
+    expect(update.objects).toHaveProperty('o1')
+    expect(update.objects).toHaveProperty('o2')
+    expect(update.objects.o1).toEqual(expect.objectContaining({ type: 'controller' }))
   })
 })

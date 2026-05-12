@@ -1,4 +1,4 @@
-import { Container, Graphics, Text } from 'pixi.js'
+import { Container, Graphics, Text, Ticker } from 'pixi.js'
 import type { RoomObject, RoomObjectMap } from 'screeps-connectivity'
 import { TILE_SIZE } from './RoomRenderer.js'
 
@@ -37,8 +37,8 @@ function createObjectVisual(obj: RoomObject): Container {
   const container = new Container()
   const g = new Graphics()
   const color = getObjectColor(obj.type)
-  const cx = obj.x * TILE_SIZE + TILE_SIZE / 2
-  const cy = obj.y * TILE_SIZE + TILE_SIZE / 2
+  const cx = TILE_SIZE / 2
+  const cy = TILE_SIZE / 2
 
   switch (obj.type) {
     case 'creep': {
@@ -49,7 +49,7 @@ function createObjectVisual(obj: RoomObject): Container {
     case 'source':
     case 'mineral':
     case 'deposit': {
-      g.rect(obj.x * TILE_SIZE + 2, obj.y * TILE_SIZE + 2, TILE_SIZE - 4, TILE_SIZE - 4)
+      g.rect(2, 2, TILE_SIZE - 4, TILE_SIZE - 4)
       g.fill(color)
       break
     }
@@ -68,7 +68,7 @@ function createObjectVisual(obj: RoomObject): Container {
     default: {
       // Structures
       const size = TILE_SIZE - 2
-      g.rect(obj.x * TILE_SIZE + 1, obj.y * TILE_SIZE + 1, size, size)
+      g.rect(1, 1, size, size)
       g.fill(color)
     }
   }
@@ -86,20 +86,44 @@ function createObjectVisual(obj: RoomObject): Container {
     })
     label.anchor.set(0.5, 1)
     label.x = cx
-    label.y = obj.y * TILE_SIZE - 2
+    label.y = -2
     container.addChild(label)
   }
 
-  container.position.set(0, 0)
+  container.position.set(obj.x * TILE_SIZE, obj.y * TILE_SIZE)
   return container
 }
 
 export class ObjectLayer {
   readonly container: Container
   private objects = new Map<string, Container>()
+  private ticker: Ticker | null = null
+  private tickerCallback: (() => void) | null = null
 
-  constructor() {
+  constructor(ticker?: Ticker) {
     this.container = new Container()
+    if (ticker) {
+      this.ticker = ticker
+      this.tickerCallback = () => {
+        for (const visual of this.objects.values()) {
+          const targetX = (visual as any).__targetX
+          const targetY = (visual as any).__targetY
+          if (targetX !== undefined) {
+            const dx = targetX - visual.x
+            const dy = targetY - visual.y
+            if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) {
+              visual.position.set(targetX, targetY)
+              ;(visual as any).__targetX = undefined
+              ;(visual as any).__targetY = undefined
+            } else {
+              visual.x += dx * 0.15
+              visual.y += dy * 0.15
+            }
+          }
+        }
+      }
+      ticker.add(this.tickerCallback)
+    }
   }
 
   update(objects: RoomObjectMap): void {
@@ -107,10 +131,22 @@ export class ObjectLayer {
 
     for (const [id, obj] of Object.entries(objects)) {
       seen.add(id)
-      if (!this.objects.has(id)) {
+      const existing = this.objects.get(id)
+      if (!existing) {
         const visual = createObjectVisual(obj)
         this.objects.set(id, visual)
         this.container.addChild(visual)
+      } else {
+        const tx = obj.x * TILE_SIZE
+        const ty = obj.y * TILE_SIZE
+        if (obj.type === 'creep') {
+          if (existing.x !== tx || existing.y !== ty) {
+            ;(existing as any).__targetX = tx
+            ;(existing as any).__targetY = ty
+          }
+        } else {
+          existing.position.set(tx, ty)
+        }
       }
     }
 
@@ -130,5 +166,14 @@ export class ObjectLayer {
     }
     this.objects.clear()
     this.container.removeChildren()
+  }
+
+  destroy(): void {
+    this.clear()
+    if (this.ticker && this.tickerCallback) {
+      this.ticker.remove(this.tickerCallback)
+    }
+    this.ticker = null
+    this.tickerCallback = null
   }
 }
