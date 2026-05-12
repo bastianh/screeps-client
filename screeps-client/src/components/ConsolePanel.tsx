@@ -125,14 +125,10 @@ export function ConsolePanel(props: { shard?: string }) {
         {entries().map((entry) => (
           <div style={{ 'margin-bottom': '4px' }}>
             {entry.log.map((line) => (
-              <div style={{ color: '#c9d1d9', 'white-space': 'pre-wrap', 'word-break': 'break-word' }}>
-                {line}
-              </div>
+              <div style={{ color: '#c9d1d9', 'white-space': 'pre-wrap', 'word-break': 'break-word' }} innerHTML={line} />
             ))}
             {entry.results.map((line) => (
-              <div style={{ color: '#58a6ff', 'white-space': 'pre-wrap', 'word-break': 'break-word' }}>
-                {line}
-              </div>
+              <div style={{ color: '#58a6ff', 'white-space': 'pre-wrap', 'word-break': 'break-word' }} innerHTML={line} />
             ))}
           </div>
         ))}

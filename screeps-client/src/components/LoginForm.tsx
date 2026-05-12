@@ -3,7 +3,7 @@ import { connect, status, error } from '~/stores/clientStore.js'
 
 export function LoginForm() {
   const [authType, setAuthType] = createSignal<'password' | 'token'>('password')
-  const [url, setUrl] = createSignal('https://screeps.com')
+  const [url, setUrl] = createSignal('http://localhost:5173')
   const [email, setEmail] = createSignal('')
   const [password, setPassword] = createSignal('')
   const [token, setToken] = createSignal('')

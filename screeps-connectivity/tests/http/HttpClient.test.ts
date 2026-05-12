@@ -81,6 +81,17 @@ describe('HttpClient', () => {
     expect(calls).toBe(2)
   })
 
+  it('throws immediately on 401 during authenticate() — no recursion', async () => {
+    fetchMock.mockResolvedValue(new Response('Unauthorized', { status: 401 }))
+    const badAuth = {
+      authenticate: (http: HttpClient) => http.request<{ token: string }>('POST', '/api/auth/signin', { email: 'x', password: 'wrong' }).then(r => r.token),
+    }
+    const http = new HttpClient({ url: 'http://test.local', auth: badAuth })
+    await expect(http.authenticate()).rejects.toThrow('HTTP 401')
+    // fetchMock called exactly once — no retry loop
+    expect(fetchMock).toHaveBeenCalledOnce()
+  })
+
   it('does not retry a second time if re-auth 401 persists', async () => {
     fetchMock.mockResolvedValue(new Response('Unauthorized', { status: 401 }))
     const http = new HttpClient({ url: 'http://test.local', auth: new TokenAuth({ token: 'tok' }) })

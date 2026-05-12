@@ -17,6 +17,7 @@ export class HttpClient {
   private readonly authStrategy: AuthStrategy
   token: string | null = null
   readonly rateLimits = new Map<string, RateLimitInfo>()
+  private authenticating = false
 
   readonly auth: AuthEndpoints
   readonly game: GameEndpoints
@@ -35,7 +36,12 @@ export class HttpClient {
   }
 
   async authenticate(): Promise<void> {
-    this.token = await this.authStrategy.authenticate(this)
+    this.authenticating = true
+    try {
+      this.token = await this.authStrategy.authenticate(this)
+    } finally {
+      this.authenticating = false
+    }
   }
 
   async request<T>(method: string, path: string, body?: Record<string, unknown>, isRetry = false): Promise<T> {
@@ -65,7 +71,7 @@ export class HttpClient {
 
     this.updateRateLimit(path, res)
 
-    if (res.status === 401 && !isRetry) {
+    if (res.status === 401 && !isRetry && !this.authenticating) {
       await this.authenticate()
       return this.request<T>(method, path, body, true)
     }

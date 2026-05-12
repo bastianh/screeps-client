@@ -68,7 +68,7 @@ describe('UserStore', () => {
     })
     store.subscribe('console')
     await new Promise(r => setTimeout(r, 0))
-    handler({ log: ['line1'], results: [] })
+    handler({ messages: { log: ['line1'], results: [] } })
     expect(store.console).toHaveLength(1)
   })
 

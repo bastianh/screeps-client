@@ -7,6 +7,19 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 
 export default defineConfig({
   plugins: [solid()],
+  server: {
+    proxy: {
+      '/api': {
+        target: 'http://144.76.164.126:21025',
+        changeOrigin: true,
+      },
+      '/socket': {
+        target: 'http://144.76.164.126:21025',
+        changeOrigin: true,
+        ws: true,
+      },
+    },
+  },
   resolve: {
     alias: {
       '~/': '/src/',
