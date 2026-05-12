@@ -1,4 +1,4 @@
-import { client, status, disconnect } from '~/stores/clientStore.js'
+import { status } from '~/stores/clientStore.js'
 
 export function ConnectionStatus() {
   const statusColor = () => {
@@ -35,23 +35,7 @@ export function ConnectionStatus() {
           {status() === 'connected' ? 'Online' : status()}
         </span>
       </div>
-      {client() && (
-        <button
-          onClick={disconnect}
-          style={{
-            'margin-left': 'auto',
-            padding: '4px 10px',
-            'border-radius': '4px',
-            border: '1px solid #30363d',
-            background: 'transparent',
-            color: '#c9d1d9',
-            'font-size': '12px',
-            cursor: 'pointer',
-          }}
-        >
-          Disconnect
-        </button>
-      )}
+
     </div>
   )
 }

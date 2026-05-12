@@ -3,12 +3,14 @@ import { RoomRenderer } from '~/renderer/RoomRenderer.js'
 import { createTerrainLayer } from '~/renderer/TerrainLayer.js'
 import { ObjectLayer } from '~/renderer/ObjectLayer.js'
 import { client } from '~/stores/clientStore.js'
+import { parseRoomName, formatRoomName } from '~/utils/roomName.js'
 import type { RoomTerrain, RoomObjectMap } from 'screeps-connectivity'
 import { SubscriptionGroup } from 'screeps-connectivity'
 
 interface RoomViewerProps {
   room: string
   shard: string
+  onNavigate?: (room: string, shard: string) => void
 }
 
 export function RoomViewer(props: RoomViewerProps) {
@@ -46,8 +48,20 @@ export function RoomViewer(props: RoomViewerProps) {
     setObjects(null)
     setGameTime(null)
     r.clear()
+    r.resetView()
     objLayer?.destroy()
     objLayer = null
+
+    // Setup navigation zones
+    const coord = parseRoomName(room)
+    if (coord && props.onNavigate) {
+      r.setupNavigationZones({
+        west: () => props.onNavigate!(formatRoomName(coord.x - 1, coord.y), shard),
+        east: () => props.onNavigate!(formatRoomName(coord.x + 1, coord.y), shard),
+        north: () => props.onNavigate!(formatRoomName(coord.x, coord.y - 1), shard),
+        south: () => props.onNavigate!(formatRoomName(coord.x, coord.y + 1), shard),
+      })
+    }
 
     const group = new SubscriptionGroup()
 
@@ -81,6 +95,7 @@ export function RoomViewer(props: RoomViewerProps) {
 
     const layer = createTerrainLayer(t)
     r.world.addChild(layer)
+    r.bringNavOverlayToTop()
   })
 
   // Render objects when they update
@@ -93,6 +108,7 @@ export function RoomViewer(props: RoomViewerProps) {
       objLayer = new ObjectLayer(r.app.ticker)
       objLayer.container.label = 'objects'
       r.world.addChild(objLayer.container)
+      r.bringNavOverlayToTop()
     }
     objLayer.update(objs)
   })

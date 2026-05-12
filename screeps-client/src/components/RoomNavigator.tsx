@@ -1,4 +1,4 @@
-import { createSignal } from 'solid-js'
+import { createEffect, createSignal } from 'solid-js'
 
 interface RoomNavigatorProps {
   onNavigate: (room: string, shard: string) => void
@@ -9,6 +9,9 @@ interface RoomNavigatorProps {
 export function RoomNavigator(props: RoomNavigatorProps) {
   const [room, setRoom] = createSignal(props.currentRoom ?? 'W1N1')
   const [shard, setShard] = createSignal(props.currentShard ?? 'shard0')
+
+  createEffect(() => setRoom(props.currentRoom ?? 'W1N1'))
+  createEffect(() => setShard(props.currentShard ?? 'shard0'))
 
   const handleSubmit = (e: Event) => {
     e.preventDefault()

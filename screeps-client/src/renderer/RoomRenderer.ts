@@ -1,4 +1,4 @@
-import { Application, Container, Point } from 'pixi.js'
+import { Application, Container, Graphics, Point, Rectangle } from 'pixi.js'
 
 export const TILE_SIZE = 12
 export const ROOM_SIZE = 50 * TILE_SIZE
@@ -14,16 +14,28 @@ export class RoomRenderer {
   private resizeObserver: ResizeObserver | null = null
   private bounceRaf: number | null = null
   private wheelTimeout: number | null = null
+  private navOverlay: Container
+  private lastMouseX = 0
+  private lastMouseY = 0
 
   private constructor(app: Application, container: HTMLElement) {
     this.app = app
     this.container = container
     this.world = new Container()
     this.app.stage.addChild(this.world)
+    this.navOverlay = new Container()
+    this.world.addChild(this.navOverlay)
     this.setupCamera()
     this.centerView()
     this.clampView()
     this.setupResizeObserver()
+  }
+
+  bringNavOverlayToTop(): void {
+    if (this.navOverlay.parent === this.world) {
+      this.world.removeChild(this.navOverlay)
+      this.world.addChild(this.navOverlay)
+    }
   }
 
   static async create(container: HTMLElement): Promise<RoomRenderer> {
@@ -192,6 +204,9 @@ export class RoomRenderer {
     })
 
     canvas.addEventListener('pointermove', (e) => {
+      const rect = canvas.getBoundingClientRect()
+      this.lastMouseX = e.clientX - rect.left
+      this.lastMouseY = e.clientY - rect.top
       if (!dragging || !this.canDrag) return
       const dx = e.clientX - lastPos.x
       const dy = e.clientY - lastPos.y
@@ -269,6 +284,14 @@ export class RoomRenderer {
     this.world.y = cy - (ROOM_SIZE * scale) / 2
   }
 
+  resetView(): void {
+    this.cancelBounce()
+    this.cancelWheelTimeout()
+    this.world.scale.set(this.getMinScale())
+    this.centerView()
+    this.clampView()
+  }
+
   private setupResizeObserver(): void {
     // Initial sizing
     const { width, height } = this.container.getBoundingClientRect()
@@ -282,8 +305,121 @@ export class RoomRenderer {
     this.resizeObserver.observe(this.container)
   }
 
+  setupNavigationZones(handlers: {
+    west?: () => void
+    east?: () => void
+    north?: () => void
+    south?: () => void
+  }): void {
+    // Remove existing zones from overlay
+    this.navOverlay.removeChildren()
+
+    const createZone = (
+      x: number,
+      y: number,
+      w: number,
+      h: number,
+      arrow: number[],
+      handler?: () => void,
+    ): void => {
+      if (!handler) return
+
+      const zone = new Graphics()
+      zone.x = x
+      zone.y = y
+      // Invisible hit area so the whole zone is interactive
+      zone.hitArea = new Rectangle(0, 0, w, h)
+      // No background by default — only the arrow
+      zone.fill({ color: 0xffffff, alpha: 0.12 })
+      zone.poly(arrow)
+      zone.fill()
+
+      zone.eventMode = 'static'
+      zone.cursor = 'pointer'
+      zone.alpha = 1
+
+      zone.on('pointerover', () => {
+        zone.clear()
+        zone.fill({ color: 0xffffff, alpha: 0.06 })
+        zone.rect(0, 0, w, h)
+        zone.fill()
+        zone.fill({ color: 0xffffff, alpha: 0.35 })
+        zone.poly(arrow)
+        zone.fill()
+      })
+
+      zone.on('pointerout', () => {
+        zone.clear()
+        zone.fill({ color: 0xffffff, alpha: 0.12 })
+        zone.poly(arrow)
+        zone.fill()
+      })
+
+      zone.on('pointerdown', handler)
+
+      this.navOverlay.addChild(zone)
+    }
+
+    const cx = ROOM_SIZE / 2
+    const cy = ROOM_SIZE / 2
+    const ah = 18  // half-height of arrow base (36px total height)
+
+    // West arrow (pointing left) — 12px wide, 36px tall (1:3)
+    createZone(-PADDING, 0, PADDING, ROOM_SIZE, [
+      18, cy,
+      PADDING - 6, cy - ah,
+      PADDING - 6, cy + ah,
+    ], handlers.west)
+
+    // East arrow (pointing right) — 12px wide, 36px tall (1:3)
+    createZone(ROOM_SIZE, 0, PADDING, ROOM_SIZE, [
+      PADDING - 18, cy,
+      6, cy - ah,
+      6, cy + ah,
+    ], handlers.east)
+
+    // North arrow (pointing up) — 36px wide, 12px tall (3:1)
+    createZone(0, -PADDING, ROOM_SIZE, PADDING, [
+      cx, 18,
+      cx - ah, PADDING - 6,
+      cx + ah, PADDING - 6,
+    ], handlers.north)
+
+    // South arrow (pointing down) — 36px wide, 12px tall (3:1)
+    createZone(0, ROOM_SIZE, ROOM_SIZE, PADDING, [
+      cx, PADDING - 18,
+      cx - ah, 6,
+      cx + ah, 6,
+    ], handlers.south)
+
+    // Trigger pointerover for zones already under the mouse
+    for (const child of this.navOverlay.children) {
+      const zone = child as Graphics
+      const hitArea = zone.hitArea as Rectangle
+      const sx = this.world.x + zone.x * this.world.scale.x
+      const sy = this.world.y + zone.y * this.world.scale.y
+      const sw = hitArea.width * this.world.scale.x
+      const sh = hitArea.height * this.world.scale.y
+      if (
+        this.lastMouseX >= sx &&
+        this.lastMouseX <= sx + sw &&
+        this.lastMouseY >= sy &&
+        this.lastMouseY <= sy + sh
+      ) {
+        ;(zone as any).emit('pointerover')
+      }
+    }
+  }
+
   clear(): void {
-    this.world.removeChildren()
+    // Remove all children except navOverlay
+    for (let i = this.world.children.length - 1; i >= 0; i--) {
+      const child = this.world.children[i]
+      if (child !== this.navOverlay) {
+        this.world.removeChild(child)
+      }
+    }
+    this.navOverlay.removeChildren()
     this.world.scale.set(1)
     this.cancelBounce()
     this.cancelWheelTimeout()

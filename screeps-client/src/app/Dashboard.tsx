@@ -139,7 +139,7 @@ export function Dashboard() {
         >
           {/* Canvas */}
           <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-            <RoomViewer room={room()} shard={shard()} />
+            <RoomViewer room={room()} shard={shard()} onNavigate={handleNavigate} />
           </div>
 
           {/* Bottom Console */}
