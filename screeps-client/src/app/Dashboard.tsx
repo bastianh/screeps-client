@@ -5,6 +5,7 @@ import { RoomViewer } from '~/components/RoomViewer.js'
 import { ConsolePanel } from '~/components/ConsolePanel.js'
 import { Sidebar } from '~/components/Sidebar.js'
 import { StatsBar } from '~/components/StatsBar.js'
+import { disconnect } from '~/stores/clientStore.js'
 
 export function Dashboard() {
   const [room, setRoom] = createSignal(localStorage.getItem('screeps:room') ?? 'W1N1')
@@ -99,18 +100,30 @@ export function Dashboard() {
       }}
     >
       {/* Header */}
-      <div style={{ display: 'flex', 'border-bottom': '1px solid #30363d' }}>
+      <div style={{ display: 'flex', 'border-bottom': '1px solid #30363d', 'align-items': 'center' }}>
         <ConnectionStatus />
         <StatsBar />
-      </div>
-
-      {/* Nav */}
-      <div style={{ 'border-bottom': '1px solid #30363d' }}>
+        <div style={{ flex: 1 }} />
         <RoomNavigator
           onNavigate={handleNavigate}
           currentRoom={room()}
           currentShard={shard()}
         />
+        <button
+          onClick={disconnect}
+          style={{
+            padding: '6px 14px',
+            'border-radius': '4px',
+            border: 'none',
+            background: '#da3633',
+            color: '#fff',
+            'font-size': '13px',
+            cursor: 'pointer',
+            margin: '0 16px 0 8px',
+          }}
+        >
+          Logout
+        </button>
       </div>
 
       {/* Main body */}

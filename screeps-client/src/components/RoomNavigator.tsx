@@ -22,7 +22,6 @@ export function RoomNavigator(props: RoomNavigatorProps) {
         display: 'flex',
         gap: '8px',
         padding: '8px 16px',
-        'border-bottom': '1px solid #30363d',
         'align-items': 'center',
       }}
     >
