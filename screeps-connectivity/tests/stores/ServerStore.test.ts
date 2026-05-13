@@ -32,7 +32,7 @@ describe('ServerStore', () => {
   })
 
   it('emits server:connected when socket fires connected event', () => {
-    const { store, socket } = makeStore()
+    const { socket } = makeStore()
     let connectedCb: (data: unknown) => void = () => {}
     ;(socket.on as ReturnType<typeof vi.fn>).mockImplementation((ch: string, cb: (data: unknown) => void) => {
       if (ch === 'connected') connectedCb = cb

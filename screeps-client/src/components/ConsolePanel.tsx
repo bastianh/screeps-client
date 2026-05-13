@@ -1,4 +1,4 @@
-import { createEffect, createSignal, onCleanup, onMount } from 'solid-js'
+import { createEffect, createSignal, onCleanup, onMount, For } from 'solid-js'
 import { client } from '~/stores/clientStore.js'
 import { SubscriptionGroup } from 'screeps-connectivity'
 import type { ConsoleMessage } from 'screeps-connectivity'
@@ -170,8 +170,8 @@ export function ConsolePanel(props: { shard?: string; isCollapsed?: boolean; onT
             {logLines().length === 0 && (
               <div style={{ color: '#484f58', 'font-style': 'italic' }}>No console output yet…</div>
             )}
-            {entries().map((entry) =>
-              entry.log.map((line) => (
+            <For each={logLines()}>
+              {(line) => (
                 <div style={{ 'margin-bottom': '4px' }}>
                   <div
                     style={{
@@ -179,11 +179,12 @@ export function ConsolePanel(props: { shard?: string; isCollapsed?: boolean; onT
                       'white-space': 'pre-wrap',
                       'word-break': 'break-word',
                     }}
+                    /* eslint-disable-next-line solid/no-innerhtml */
                     innerHTML={line}
                   />
                 </div>
-              )),
-            )}
+              )}
+            </For>
           </div>
         ) : (
           <>
@@ -206,8 +207,8 @@ export function ConsolePanel(props: { shard?: string; isCollapsed?: boolean; onT
               {resultLines().length === 0 && (
                 <div style={{ color: '#484f58', 'font-style': 'italic' }}>No command results yet…</div>
               )}
-              {entries().map((entry) =>
-                entry.results.map((line) => (
+              <For each={resultLines()}>
+                {(line) => (
                   <div style={{ 'margin-bottom': '4px' }}>
                     <div
                       style={{
@@ -215,11 +216,12 @@ export function ConsolePanel(props: { shard?: string; isCollapsed?: boolean; onT
                         'white-space': 'pre-wrap',
                         'word-break': 'break-word',
                       }}
+                      /* eslint-disable-next-line solid/no-innerhtml */
                       innerHTML={line}
                     />
                   </div>
-                )),
-              )}
+                )}
+              </For>
             </div>
             <form
               onSubmit={handleSubmit}

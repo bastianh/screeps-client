@@ -12,7 +12,10 @@ async function gzipEncode(json: unknown): Promise<string> {
   const chunks: Buffer[] = []
   const gz = createGzip()
   await pipelineAsync(Readable.from(input), gz, async function*(source) {
-    for await (const chunk of source) chunks.push(chunk as Buffer)
+    for await (const chunk of source) {
+      chunks.push(chunk as Buffer)
+      yield chunk
+    }
   })
   return 'gz:' + Buffer.concat(chunks).toString('base64')
 }
@@ -22,7 +25,10 @@ async function zlibEncode(json: unknown): Promise<string> {
   const chunks: Buffer[] = []
   const def = createDeflate()
   await pipelineAsync(Readable.from(input), def, async function*(source) {
-    for await (const chunk of source) chunks.push(chunk as Buffer)
+    for await (const chunk of source) {
+      chunks.push(chunk as Buffer)
+      yield chunk
+    }
   })
   return 'gz:' + Buffer.concat(chunks).toString('base64')
 }
