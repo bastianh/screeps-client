@@ -83,45 +83,53 @@ export class RoomStore extends TypedStore<RoomStoreEvents> {
 
   async terrainBulk(rooms: string[], shard: string | null): Promise<Map<string, RoomTerrain>> {
     const result = new Map<string, RoomTerrain>()
-    const needPersistentCheck: string[] = []
+    const fetchPromises: Promise<void>[] = []
+    const needFetch: string[] = []
 
-    for (const room of rooms) {
-      const cached = this.cache.get<RoomTerrain>(`terrain/${shard}/${room}`)
+    for (let i = 0; i < rooms.length; i++) {
+      const room = rooms[i]
+      const key = `terrain/${shard}/${room}`
+      const cached = this.cache.get<RoomTerrain>(key)
       if (cached) {
         result.set(room, cached)
       } else {
-        needPersistentCheck.push(room)
+        fetchPromises.push(
+          this.cache.getPersistent(key).then((persisted) => {
+            if (persisted) {
+              const terrain = new RoomTerrain(persisted)
+              this.cache.set(key, terrain)
+              result.set(room, terrain)
+            } else {
+              needFetch.push(room)
+            }
+          })
+        )
       }
     }
 
-    if (needPersistentCheck.length === 0) return result
-
-    const needFetch: string[] = []
-    await Promise.all(needPersistentCheck.map(async (room) => {
-      const key = `terrain/${shard}/${room}`
-      const persisted = await this.cache.getPersistent(key)
-      if (persisted) {
-        const terrain = new RoomTerrain(persisted)
-        this.cache.set(key, terrain)
-        result.set(room, terrain)
-      } else {
-        needFetch.push(room)
-      }
-    }))
+    if (fetchPromises.length > 0) {
+      await Promise.all(fetchPromises)
+    }
 
     if (needFetch.length === 0) return result
 
     this.logger.log('terrainBulk', `fetching ${needFetch.length} rooms`, shard)
     const res = await this.http.game.roomsTerrain(needFetch, shard ?? undefined)
 
-    await Promise.all(res.rooms.map(async (entry) => {
+    const persistPromises: Promise<void>[] = []
+    for (let i = 0; i < res.rooms.length; i++) {
+      const entry = res.rooms[i]
       const terrain = RoomTerrain.fromEncodedString(entry.terrain)
       const key = `terrain/${shard}/${entry.room}`
       this.cache.set(key, terrain)
-      await this.cache.setPersistent(key, terrain.raw)
+      persistPromises.push(this.cache.setPersistent(key, terrain.raw))
       this.emit('room:terrainavailable', { room: entry.room, shard, terrain })
       result.set(entry.room, terrain)
-    }))
+    }
+
+    if (persistPromises.length > 0) {
+      await Promise.all(persistPromises)
+    }
 
     return result
   }
