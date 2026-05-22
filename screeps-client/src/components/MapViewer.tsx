@@ -1,9 +1,9 @@
 import { createEffect, createSignal, onCleanup, onMount } from 'solid-js'
 import { MapRenderer } from '~/renderer/MapRenderer.js'
 import { client, userInfo, worldBounds, setWorldBounds } from '~/stores/clientStore.js'
-import { showMapRoomNames } from '~/stores/settingsStore.js'
+import { showMapRoomNames, showUnclaimableRooms } from '~/stores/settingsStore.js'
 import { mapOverlayMode } from '~/stores/mapOverlayStore.js'
-import { parseRoomName, formatRoomName, isRoomInWorld } from '~/utils/roomName.js'
+import { parseRoomName, formatRoomName, isRoomInWorld, isBusRoom, isCenterRoom } from '~/utils/roomName.js'
 import { useRoomNavigationKeys } from '~/utils/useRoomNavigationKeys.js'
 import { createLogger } from '~/utils/log.js'
 import type { Map2Subscription } from 'screeps-connectivity'
@@ -274,6 +274,11 @@ export function MapViewer(props: MapViewerProps) {
     if (renderer) renderer.currentShard = props.shard ?? 'shard0'
   })
 
+  // Sync unclaimable overlay visibility when the setting changes
+  createEffect(() => {
+    renderer?.setUnclaimableOverlayVisible(showUnclaimableRooms())
+  })
+
   // Sync overlay mode (owner / mineral / none)
   createEffect(() => {
     renderer?.setOverlayMode(mapOverlayMode())
@@ -338,9 +343,14 @@ export function MapViewer(props: MapViewerProps) {
     // eslint-disable-next-line solid/reactivity
     const sub = c.stores.mapStats.on('mapStats:room', ({ room, stat }) => {
       roomStats.set(room, stat)
-      const owned = !!(stat.own && stat.own.user !== me)
+      const coord = parseRoomName(room)
+      const structurallyUnclaimable = coord ? (isBusRoom(coord.x, coord.y) || isCenterRoom(coord.x, coord.y)) : false
+      const prohibited = stat.status === 'out of borders'
+      const ownRoom = !!(stat.own && stat.own.user === me)
+      const enemyOwned = !!(stat.own && stat.own.user !== me)
+      const isUnclaimable = structurallyUnclaimable || prohibited || ownRoom || enemyOwned
       if (visibleSet.has(room)) {
-        renderer?.setRoomOwned(room, owned)
+        renderer?.setRoomOwned(room, isUnclaimable)
         renderer?.setRoomSafeMode(room, !!stat.safeMode)
       }
 

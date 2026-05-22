@@ -10,6 +10,7 @@ export interface MapStatsRoomData {
   username?: string
   safeMode?: boolean
   badge?: ApiMapStatsBadge
+  status?: string
 }
 
 export interface MapStatsStoreEvents {
@@ -110,6 +111,7 @@ export class MapStatsStore extends TypedStore<MapStatsStoreEvents> {
       username: ownerId ? userMap[ownerId]?.username : undefined,
       safeMode: stat.safeMode,
       badge: ownerId ? userMap[ownerId]?.badge : undefined,
+      status: stat.status,
     }
   }
 }

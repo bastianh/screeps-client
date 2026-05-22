@@ -31,3 +31,17 @@ export function formatRoomName(x: number, y: number): string {
   const nsNum = y < 0 ? (-y - 1) : y
   return `${ew}${ewNum}${ns}${nsNum}`
 }
+
+export function isBusCoord(coord: number): boolean {
+  return coord === 0 || (coord < 0 && (coord + 1) % 10 === 0) || (coord > 0 && coord % 10 === 0)
+}
+
+export function isBusRoom(x: number, y: number): boolean {
+  return isBusCoord(x) || isBusCoord(y)
+}
+
+export function isCenterRoom(x: number, y: number): boolean {
+  const cx = x < 0 ? Math.abs(x + 1) % 10 : Math.abs(x) % 10
+  const cy = y < 0 ? Math.abs(y + 1) % 10 : Math.abs(y) % 10
+  return cx >= 4 && cx <= 6 && cy >= 4 && cy <= 6
+}

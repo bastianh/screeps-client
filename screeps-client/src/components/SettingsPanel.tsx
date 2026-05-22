@@ -3,6 +3,7 @@ import {
   widescreenMode, setWidescreenMode,
   showCreepLabels, setShowCreepLabels,
   showMapRoomNames, setShowMapRoomNames,
+  showUnclaimableRooms, setShowUnclaimableRooms,
 } from '~/stores/settingsStore.js'
 
 interface ToggleProps {
@@ -152,6 +153,12 @@ export function SettingsPanel(props: { onClose: () => void }) {
               description="Render a small room name in the top-left corner of each map tile."
               value={showMapRoomNames()}
               onChange={setShowMapRoomNames}
+            />
+            <Toggle
+              label="Show unclaimable rooms"
+              description="Highlight rooms where you cannot claim a controller: corridors, sector centres, rooms already owned, and restricted areas."
+              value={showUnclaimableRooms()}
+              onChange={setShowUnclaimableRooms}
             />
           </Section>
 

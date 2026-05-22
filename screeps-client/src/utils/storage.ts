@@ -11,6 +11,7 @@ export const LS = {
   widescreenMode: 'screeps:settings:widescreenMode',
   showCreepLabels: 'screeps:settings:showCreepLabels',
   showMapRoomNames: 'screeps:settings:showMapRoomNames',
+  showUnclaimableRooms: 'screeps:settings:showUnclaimableRooms',
 } as const
 
 export const SS = {

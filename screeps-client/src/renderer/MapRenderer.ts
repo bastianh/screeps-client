@@ -103,6 +103,7 @@ export class MapRenderer {
   private isAnimating = false
 
   private overlayMode: MapOverlayMode = 'owner'
+  private showUnclaimableOverlay = true
   private isDragging = false
   private hasDragged = false
   private dragStartX = 0
@@ -438,6 +439,15 @@ export class MapRenderer {
     if (owned) {
       g.rect(0, 0, MAP_ROOM_SIZE, MAP_ROOM_SIZE)
       g.fill({ color: 0x990000, alpha: 0.18 })
+    }
+    g.visible = this.showUnclaimableOverlay
+  }
+
+  setUnclaimableOverlayVisible(show: boolean): void {
+    if (this.showUnclaimableOverlay === show) return
+    this.showUnclaimableOverlay = show
+    for (const entry of this.activeRooms.values()) {
+      entry.ownerOverlay.visible = show
     }
   }
 
