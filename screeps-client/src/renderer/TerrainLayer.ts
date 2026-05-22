@@ -43,10 +43,8 @@ function drawTerrainQuadrants(
           g.arc(cx, cy, R, -Math.PI / 2, Math.PI, true)
           g.lineTo(cx, cy)
           g.closePath()
-          apply(g)
         } else {
           g.rect(x * T, y * T, R, R)
-          apply(g)
         }
       } else {
         if (top && left && terrain.get(x - 1, y - 1) === targetType) {
@@ -55,7 +53,6 @@ function drawTerrainQuadrants(
           g.lineTo(x * T, cy)
           g.arc(cx, cy, R, Math.PI, -Math.PI / 2, false)
           g.closePath()
-          apply(g)
         }
       }
 
@@ -66,10 +63,8 @@ function drawTerrainQuadrants(
           g.arc(cx, cy, R, -Math.PI / 2, 0, false)
           g.lineTo(cx, cy)
           g.closePath()
-          apply(g)
         } else {
           g.rect(cx, y * T, R, R)
-          apply(g)
         }
       } else {
         if (top && right && terrain.get(x + 1, y - 1) === targetType) {
@@ -78,7 +73,6 @@ function drawTerrainQuadrants(
           g.lineTo(x * T + T, cy)
           g.arc(cx, cy, R, 0, -Math.PI / 2, true)
           g.closePath()
-          apply(g)
         }
       }
 
@@ -89,10 +83,8 @@ function drawTerrainQuadrants(
           g.arc(cx, cy, R, Math.PI, Math.PI / 2, true)
           g.lineTo(cx, cy)
           g.closePath()
-          apply(g)
         } else {
           g.rect(x * T, cy, R, R)
-          apply(g)
         }
       } else {
         if (bottom && left && terrain.get(x - 1, y + 1) === targetType) {
@@ -101,7 +93,6 @@ function drawTerrainQuadrants(
           g.lineTo(cx, y * T + T)
           g.arc(cx, cy, R, Math.PI / 2, Math.PI, false)
           g.closePath()
-          apply(g)
         }
       }
 
@@ -112,10 +103,8 @@ function drawTerrainQuadrants(
           g.arc(cx, cy, R, Math.PI / 2, 0, true)
           g.lineTo(cx, cy)
           g.closePath()
-          apply(g)
         } else {
           g.rect(cx, cy, R, R)
-          apply(g)
         }
       } else {
         if (bottom && right && terrain.get(x + 1, y + 1) === targetType) {
@@ -124,11 +113,13 @@ function drawTerrainQuadrants(
           g.lineTo(x * T + T, cy)
           g.arc(cx, cy, R, 0, Math.PI / 2, false)
           g.closePath()
-          apply(g)
         }
       }
     }
   }
+  // Apply stroke/fill once for the entire terrain type to avoid PixiJS batching
+  // artifacts from calling stroke()/fill() thousands of times in a loop.
+  apply(g)
 }
 
 function drawExits(g: Graphics, terrain: RoomTerrain) {
@@ -139,8 +130,6 @@ function drawExits(g: Graphics, terrain: RoomTerrain) {
     const cx = x * T + T / 2
     const cy = y * T + T / 2
     const size = T * 0.3
-
-    g.moveTo(cx, cy)
 
     if (dir === 'up') {
       g.moveTo(cx, cy - size)
