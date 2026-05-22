@@ -6,7 +6,7 @@ import { getTerrainCacheBlob, saveTerrainCacheBlob, blobToImageBitmap, imageBitm
 import TerrainWorker from './terrain.worker.ts?worker'
 import {
   TERRAIN_WALL, TERRAIN_ROAD, TERRAIN_BORDER,
-  OBJ_BLUE, OBJ_CYAN, OBJ_ORANGE, ENERGY_FILL,
+  OBJ_CYAN, OBJ_ORANGE, ENERGY_FILL,
 } from '~/renderer/colors.js'
 import { createLogger } from '~/utils/log.js'
 
@@ -25,6 +25,7 @@ export const BADGE_SIZES = [50, 60, 70, 80, 90, 100, 110]
 // LOD 1 (zoom ≥ 1): zoomed in, crisp at native and above
 // LOD_TEXTURE_SIZES moved to worker
 const LOD_ZOOM_THRESHOLD = 1
+export const NAME_ZOOM_THRESHOLD = 0.5
 // Rooms within this many cells beyond the visible viewport are kept in memory (scroll buffer)
 const CLEAR_PADDING = 50
 const POOL_SIZE = 2600 // max visible rooms plus padding
@@ -35,7 +36,7 @@ const MIN_ZOOM = 0.2
 const MAX_ZOOM = 5
 
 const COLOR_SOURCE     = ENERGY_FILL // sources
-const COLOR_CONTROLLER = OBJ_BLUE    // controllers
+const COLOR_CONTROLLER = 0xffffff    // controllers
 const COLOR_MINERAL    = OBJ_CYAN    // minerals
 const COLOR_KEEPER     = OBJ_ORANGE  // source keeper lairs
 const COLOR_USER       = 0x4488ff    // player creeps/structures
@@ -199,14 +200,15 @@ export class MapRenderer {
     const wy = (cy - this.world.y) / scale
 
     const prevLOD = this.getLOD()
-    const prevZoomAboveThreshold = this.zoom >= LOD_ZOOM_THRESHOLD
+    const prevAboveLOD = this.zoom >= LOD_ZOOM_THRESHOLD
+    const prevAboveName = this.zoom >= NAME_ZOOM_THRESHOLD
 
     this.world.scale.set(next)
     this.world.x = cx - wx * next
     this.world.y = cy - wy * next
 
     if (this.getLOD() !== prevLOD) this.applyLOD()
-    if ((next >= LOD_ZOOM_THRESHOLD) !== prevZoomAboveThreshold) this.updateAllNameLabels()
+    if ((next >= LOD_ZOOM_THRESHOLD) !== prevAboveLOD || (next >= NAME_ZOOM_THRESHOLD) !== prevAboveName) this.updateAllNameLabels()
     this.updateAllRoomScales(next)
     this.callbacks.onZoomChanged?.(next)
     this.setSelectedRoom(this.selectedRoom)
@@ -822,7 +824,7 @@ export class MapRenderer {
     entry.container.y = coord.y * MAP_ROOM_SIZE
     entry.container.visible = true
     entry.nameLabel.text = roomName
-    entry.nameLabel.visible = this.showRoomNames && this.zoom >= LOD_ZOOM_THRESHOLD && this.nameLabelShouldShow(coord.x, coord.y)
+    entry.nameLabel.visible = this.showRoomNames && this.zoom >= NAME_ZOOM_THRESHOLD && this.nameLabelShouldShow(coord.x, coord.y)
     this.updateNameLabelScale(entry, this.zoom)
 
     // Reset pooled badge sprite so a stale badge from a previous room doesn't leak through
@@ -869,7 +871,7 @@ export class MapRenderer {
 
   private updateAllNameLabels(): void {
     // Hoist the global checks out of the per-room loop
-    const globalShow = this.showRoomNames && this.zoom >= LOD_ZOOM_THRESHOLD
+    const globalShow = this.showRoomNames && this.zoom >= NAME_ZOOM_THRESHOLD
 
     for (const [name, entry] of this.activeRooms) {
       if (!globalShow) {
@@ -960,12 +962,13 @@ export class MapRenderer {
       const wx     = (e.offsetX - this.world.x) / scale
       const wy     = (e.offsetY - this.world.y) / scale
       const prevLOD = this.getLOD()
-      const prevZoomAboveThreshold = this.zoom >= LOD_ZOOM_THRESHOLD
+      const prevAboveLOD = this.zoom >= LOD_ZOOM_THRESHOLD
+      const prevAboveName = this.zoom >= NAME_ZOOM_THRESHOLD
       this.world.scale.set(next)
       this.world.x = e.offsetX - wx * next
       this.world.y = e.offsetY - wy * next
       if (this.getLOD() !== prevLOD) this.applyLOD()
-      if ((next >= LOD_ZOOM_THRESHOLD) !== prevZoomAboveThreshold) this.updateAllNameLabels()
+      if ((next >= LOD_ZOOM_THRESHOLD) !== prevAboveLOD || (next >= NAME_ZOOM_THRESHOLD) !== prevAboveName) this.updateAllNameLabels()
       this.updateAllRoomScales(next)
       this.callbacks.onZoomChanged?.(next)
       this.setSelectedRoom(this.selectedRoom)

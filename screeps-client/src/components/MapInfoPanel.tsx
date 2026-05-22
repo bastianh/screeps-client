@@ -1,6 +1,7 @@
 import { For } from 'solid-js'
 import { showMapRoomNames, setShowMapRoomNames, showUnclaimableRooms, setShowUnclaimableRooms } from '~/stores/settingsStore.js'
 import { mapOverlayMode, setMapOverlayMode, type MapOverlayMode } from '~/stores/mapOverlayStore.js'
+import { NAME_ZOOM_THRESHOLD } from '~/renderer/MapRenderer.js'
 
 interface MapInfoPanelProps {
   zoom?: number | null
@@ -14,6 +15,7 @@ const OVERLAY_MODES: Array<{ mode: MapOverlayMode; label: string }> = [
 ]
 
 export function MapInfoPanel(props: MapInfoPanelProps) {
+  const namesEnabled = () => (props.zoom ?? 1) >= NAME_ZOOM_THRESHOLD
   return (
     <div style={{ padding: '8px', 'border-bottom': '1px solid #30363d', 'flex-shrink': 0 }}>
       <div
@@ -58,14 +60,15 @@ export function MapInfoPanel(props: MapInfoPanelProps) {
             'align-items': 'center',
             'justify-content': 'space-between',
             'font-size': '11px',
-            color: '#c9d1d9',
-            cursor: 'pointer',
+            color: namesEnabled() ? '#c9d1d9' : '#484f58',
+            cursor: namesEnabled() ? 'pointer' : 'default',
           }}
         >
           <span>Show room names</span>
           <input
             type="checkbox"
             checked={showMapRoomNames()}
+            disabled={!namesEnabled()}
             onChange={(e) => setShowMapRoomNames(e.currentTarget.checked)}
           />
         </label>
