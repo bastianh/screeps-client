@@ -600,8 +600,9 @@ export class MapRenderer {
   }
 
   private updateNameLabelScale(entry: RoomEntry, zoom: number): void {
-    const baseScale = 0.5
-    entry.nameLabel.scale.set(baseScale / zoom)
+    // screen size = 36 * (0.3 / sqrt(zoom)) * zoom = 10.8 * sqrt(zoom) px
+    // → ~7.6px at min zoom 0.5, ~10.8px at zoom 1, scales up gradually when close
+    entry.nameLabel.scale.set(0.3 / Math.sqrt(zoom))
   }
 
   // Combine zooming scaling operations over activeRooms to reduce overhead on every zoom frame
