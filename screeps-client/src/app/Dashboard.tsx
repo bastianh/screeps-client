@@ -1,14 +1,19 @@
-import { createEffect, createSignal, onCleanup, onMount, Show, type JSX } from 'solid-js'
+import { createEffect, createSignal, lazy, onCleanup, onMount, Show, type JSX } from 'solid-js'
 import { ConnectionStatus } from '~/components/ConnectionStatus.js'
 import { RoomViewer } from '~/components/RoomViewer.js'
-import { MapViewer } from '~/components/MapViewer.js'
 import { ToastContainer } from '~/components/ToastContainer.js'
 import type { RoomInfo } from '~/components/MapViewer.js'
 import { ConsolePanel } from '~/components/ConsolePanel.js'
 import { Sidebar } from '~/components/Sidebar/index.js'
 import { StatsBar } from '~/components/StatsBar.js'
 import { SettingsPanel } from '~/components/SettingsPanel.js'
-import { CodePanel } from '~/components/CodePanel.js'
+
+const CodePanel = lazy(() =>
+  import('~/components/CodePanel.js').then((m) => ({ default: m.CodePanel })),
+)
+const MapViewer = lazy(() =>
+  import('~/components/MapViewer.js').then((m) => ({ default: m.MapViewer })),
+)
 import { client, disconnect, isGuest } from '~/stores/clientStore.js'
 import { widescreenMode } from '~/stores/settingsStore.js'
 import { toggleShowLog, toggleShowConsole } from '~/stores/consoleStore.js'

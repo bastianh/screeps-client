@@ -19,6 +19,21 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir,
       emptyOutDir: true,
+      chunkSizeWarningLimit: 600,
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes('/node_modules/pixi.js/')) return 'vendor-pixi'
+            if (
+              id.includes('/node_modules/codemirror/') ||
+              id.includes('/node_modules/@codemirror/') ||
+              id.includes('/node_modules/solid-codemirror/')
+            ) {
+              return 'vendor-codemirror'
+            }
+          },
+        },
+      },
     },
     server: proxyTarget ? {
       proxy: {
