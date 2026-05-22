@@ -87,7 +87,8 @@ export class SocketClient {
       }
       this.ws.onmessage = (event) => {
         this.handleMessage(event).catch(err => {
-          this.logger.log('message parse error', err)
+          const raw = typeof event.data === 'string' ? event.data.slice(0, 200) : '(binary)'
+          this.logger.log('message parse error', err instanceof Error ? err.stack ?? err.message : String(err), 'raw:', raw)
           this.emit('socket:error', err instanceof Error ? err : new Error(String(err)))
         })
       }
@@ -157,7 +158,16 @@ export class SocketClient {
   }
 
   private emit(channel: string, data: unknown): void {
-    this.listeners.get(channel)?.forEach(cb => cb(data))
+    this.listeners.get(channel)?.forEach(cb => {
+      try {
+        cb(data)
+      } catch (err) {
+        // A listener error on one channel must not prevent other listeners from
+        // running, and must not be rethrown into handleMessage's .catch() where
+        // it would be treated as a fatal socket error and kick the user out.
+        this.logger.log('listener error on channel', channel, err instanceof Error ? err.stack ?? err.message : String(err))
+      }
+    })
   }
 
   private async handleMessage(event: MessageEvent): Promise<void> {

@@ -175,21 +175,30 @@ export class RoomStore extends TypedStore<RoomStoreEvents> {
     })
 
     const listenerSub = this.socket.on(channel, (data) => {
-      const update = data as { objects: RoomObjectDiff; gameTime?: number; visual?: string; flags?: string; users?: Record<string, { _id: string; username: string }> }
+      const update = data as { objects?: RoomObjectDiff | null; gameTime?: number; visual?: string; flags?: string; users?: Record<string, { _id: string; username: string }> }
       const current: RoomObjectMap = { ...(this.roomObjects.get(mapKey) ?? {}) }
 
-      for (const [id, obj] of Object.entries(update.objects)) {
-        if (obj === null) {
-          delete current[id]
-        } else if (current[id]) {
-          current[id] = { ...current[id], ...obj } as RoomObject
-        } else {
-          current[id] = obj as RoomObject
+      if (update.objects == null) {
+        // Some server implementations send tick messages without an objects field
+        // (e.g. heartbeat/visual-only ticks). Log it so it is visible in debug
+        // output but do not crash — we still process gameTime, visual and flags.
+        if (update.objects === null) {
+          this.logger.log('room update has null objects field', room, shard, `gameTime: ${update.gameTime}`)
+        }
+      } else {
+        for (const [id, obj] of Object.entries(update.objects)) {
+          if (obj === null) {
+            delete current[id]
+          } else if (current[id]) {
+            current[id] = { ...current[id], ...obj } as RoomObject
+          } else {
+            current[id] = obj as RoomObject
+          }
         }
       }
 
       // Build diff that includes flags so ObjectLayer can incremental-update them
-      const diff: RoomObjectDiff = { ...update.objects }
+      const diff: RoomObjectDiff = { ...(update.objects ?? {}) }
 
       // Parse and inject flags from the dedicated flags field — only when the
       // server-sent flag string actually changed. The flags field is included
