@@ -1,5 +1,5 @@
-import { For } from 'solid-js'
-import { gameTime, tickDuration } from '~/stores/clientStore.js'
+import { For, Show } from 'solid-js'
+import { gameTime, tickDuration, isGuest } from '~/stores/clientStore.js'
 import { roomObjectCount, roomOwner } from '~/stores/roomDataStore.js'
 import { roomViewMode, setRoomViewMode, type RoomViewMode } from '~/stores/roomViewStore.js'
 
@@ -52,37 +52,39 @@ export function RoomInfoPanel(props: RoomInfoPanelProps) {
         <div style={{ padding: '3px 0', color: '#c9d1d9' }}>{roomOwner()?.username ?? '—'}</div>
       </div>
     </div>
-    <div
-      style={{
-        display: 'grid',
-        'grid-template-columns': 'repeat(3, 1fr)',
-        gap: '4px',
-        'margin-top': '8px',
-      }}
-    >
-      <For each={ROOM_VIEW_MODES}>
-        {(entry) => {
-          const active = () => roomViewMode() === entry.mode
-          return (
-            <button
-              type="button"
-              onClick={() => setRoomViewMode(entry.mode)}
-              style={{
-                padding: '5px 8px',
-                'border-radius': '6px',
-                border: `1px solid ${active() ? '#58a6ff' : '#30363d'}`,
-                background: active() ? '#1f6feb33' : '#161b22',
-                color: active() ? '#c9d1d9' : '#8b949e',
-                cursor: 'pointer',
-                'font-size': '11px',
-                'font-weight': 600,
-              }}
-            >
-              {entry.label}
-            </button>
-          )
+    <Show when={!isGuest()}>
+      <div
+        style={{
+          display: 'grid',
+          'grid-template-columns': 'repeat(3, 1fr)',
+          gap: '4px',
+          'margin-top': '8px',
         }}
-      </For>
-    </div>
+      >
+        <For each={ROOM_VIEW_MODES}>
+          {(entry) => {
+            const active = () => roomViewMode() === entry.mode
+            return (
+              <button
+                type="button"
+                onClick={() => setRoomViewMode(entry.mode)}
+                style={{
+                  padding: '5px 8px',
+                  'border-radius': '6px',
+                  border: `1px solid ${active() ? '#58a6ff' : '#30363d'}`,
+                  background: active() ? '#1f6feb33' : '#161b22',
+                  color: active() ? '#c9d1d9' : '#8b949e',
+                  cursor: 'pointer',
+                  'font-size': '11px',
+                  'font-weight': 600,
+                }}
+              >
+                {entry.label}
+              </button>
+            )
+          }}
+        </For>
+      </div>
+    </Show>
   </div>)
 }

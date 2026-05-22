@@ -109,6 +109,12 @@ export function Dashboard() {
     setSuppressSidebarTransition(true)
     Promise.resolve().then(() => setSuppressSidebarTransition(false))
   })
+
+  // Guest sessions are read-only: force the room view back to 'view' so the
+  // (now hidden) flag/build modes can't linger from a previous owned session.
+  createEffect(() => {
+    if (isGuest()) setRoomViewMode('view')
+  })
   const [mapOriginRoom, setMapOriginRoom] = createSignal<string | undefined>(undefined)
   const [hoveredRoomInfo, setHoveredRoomInfo] = createSignal<RoomInfo | null>(null)
   const [selectedRoomInfo, setSelectedRoomInfo] = createSignal<RoomInfo | null>(null)
@@ -268,8 +274,10 @@ export function Dashboard() {
       }
       if (!mapMode()) {
         if (e.key === '1') setRoomViewMode('view')
-        if (e.key === '2') setRoomViewMode('flag')
-        if (e.key === '3') setRoomViewMode('build')
+        if (!isGuest()) {
+          if (e.key === '2') setRoomViewMode('flag')
+          if (e.key === '3') setRoomViewMode('build')
+        }
         if (e.key === 'm') openMap(room())
       }
     }
