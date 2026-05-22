@@ -1,0 +1,64 @@
+name: PR checks
+
+on:
+  pull_request:
+
+# Only run the latest commit for any given PR; cancel older runs.
+concurrency:
+  group: pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+
+jobs:
+  checks:
+    name: Lint & test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # reviewdog posts ESLint findings inline as PR review comments.
+      # `fail_level: any` makes the action fail the check on any finding,
+      # which gives the PR a red ✕ status if lint regresses.
+      - name: ESLint — screeps-connectivity
+        uses: reviewdog/action-eslint@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          reporter: github-pr-review
+          fail_level: any
+          workdir: screeps-connectivity
+          eslint_flags: 'src tests'
+
+      - name: ESLint — screeps-client
+        uses: reviewdog/action-eslint@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          reporter: github-pr-review
+          fail_level: any
+          workdir: screeps-client
+          eslint_flags: 'src'
+
+      # Vitest's `github-actions` reporter emits ::error annotations that
+      # GitHub renders inline on the failing file/line in the Files changed view.
+      - name: Test — screeps-connectivity
+        run: pnpm --filter screeps-connectivity exec vitest run --reporter=default --reporter=github-actions
+
+      # tsc --noEmit catches type errors that Vite won't flag at build time.
+      - name: Typecheck — screeps-client
+        run: pnpm --filter screeps-client exec tsc --noEmit
