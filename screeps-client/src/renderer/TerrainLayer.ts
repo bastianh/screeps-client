@@ -191,5 +191,9 @@ export function createTerrainLayer(terrain: RoomTerrain): Graphics {
   g.rect(0, 0, 50 * TILE_SIZE, 50 * TILE_SIZE)
   g.stroke({ width: 1, color: TERRAIN_BORDER })
 
+  // The terrain layer is static — cache it as a GPU texture so subsequent frames
+  // cost a single draw call instead of re-processing every Graphics instruction.
+  g.cacheAsTexture(true)
+
   return g
 }
