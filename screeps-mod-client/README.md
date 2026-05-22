@@ -35,10 +35,6 @@ docker run -e SCREEPS_MOD_CLIENT_MOUNT_PATH=/play \
            screeps/private-server
 ```
 
-## Build
+## How it works
 
-```sh
-pnpm --filter screeps-mod-client build
-```
-
-This builds `screeps-client` in embedded mode (`base=/client/`) and copies the artifacts into `dist/`.
+The mod resolves the client bundle from its [`screeps-client`](../screeps-client) dependency at runtime — no separate build step is needed. The bundle is built with `base=/client/`, so the mount path must match.

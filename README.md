@@ -48,8 +48,18 @@ Open [http://localhost:5173](http://localhost:5173) and enter your Screeps serve
 
 ```sh
 pnpm build
-# Output: screeps-client/dist/
+# Output: screeps-client/dist/standalone/
 ```
+
+`screeps-client` ships three build variants under its `dist/`, one per consumer:
+
+| Variant | Script | `base` | Used by |
+|---|---|---|---|
+| `dist/standalone/` | `pnpm build` | `/` | Plain static hosting |
+| `dist/embedded/` | `pnpm build:embedded` | `/client/` | `screepsmod-client-new` |
+| `dist/xxscreeps-mod/` | `pnpm build:embedded:xxscreeps` | `/` | `xxscreeps-mod-client` |
+
+`pnpm --filter screeps-client build:all` builds all three. The release pipeline does this automatically before publishing — the two mod packages depend on `screeps-client` and resolve the right variant from its `dist/` at runtime, so they have no separate build step.
 
 ## Development
 
@@ -69,9 +79,10 @@ npm run lint        # ESLint
 ```sh
 cd screeps-client
 
-npm run dev    # Vite dev server (hot reload)
-npm run build  # tsc + vite build
-npm run lint   # ESLint
+npm run dev          # Vite dev server (hot reload)
+npm run build        # tsc + vite build → dist/standalone/
+npm run build:all    # build all three variants (standalone + embedded + xxscreeps-mod)
+npm run lint         # ESLint
 ```
 
 ## Architecture
@@ -174,7 +185,7 @@ The CLI asks which packages changed and at what semver level, then writes a mark
 On push to `main`, `.github/workflows/release.yml` does one of:
 
 - **Unreleased changesets present** — opens (or updates) a *"chore: version packages"* PR that bumps `package.json` versions and updates `CHANGELOG.md`. Merging that PR triggers the publish run.
-- **No pending changesets** — builds all four packages and runs `changeset publish`, which only pushes versions that aren't already on npm.
+- **No pending changesets** — builds `screeps-connectivity` and all three `screeps-client` variants, then runs `changeset publish`, which only pushes versions that aren't already on npm.
 
 CI requires the `NPM_TOKEN` repository secret, and Settings → Actions → General → *Workflow permissions* must allow Actions to create pull requests.
 

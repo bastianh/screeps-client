@@ -4,8 +4,8 @@
   "scripts": {
     "dev": "pnpm --filter screeps-client dev",
     "build": "pnpm --filter screeps-connectivity build && pnpm --filter screeps-client build",
-    "build:mod": "pnpm --filter screeps-connectivity build && pnpm --filter screeps-mod-client build",
-    "build:release": "pnpm --filter screeps-connectivity build && pnpm --filter screeps-client build && pnpm --filter screepsmod-client-new build && pnpm --filter xxscreeps-mod-client build",
+    "build:mod": "pnpm --filter screeps-connectivity build && pnpm --filter screeps-client build:embedded",
+    "build:release": "pnpm --filter screeps-connectivity build && pnpm --filter screeps-client build:all",
     "test": "pnpm -r test",
     "lint": "pnpm -r lint",
     "changeset": "changeset",

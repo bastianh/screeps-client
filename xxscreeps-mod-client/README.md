@@ -23,7 +23,7 @@ Environment variables:
 | Mount path | `SCREEPS_MOD_CLIENT_MOUNT_PATH` | `/` |
 | Redirect `/` → mount path | `SCREEPS_MOD_CLIENT_ROOT_REDIRECT` | `true` if `mountPath !== '/'`, else `false` |
 
-When mounted at `/`, the mod only serves paths that map to an existing file in `dist/` or that look like an SPA route (no file extension). Requests to xxscreeps' own endpoints (`/api/`, `/socket/`, …) are passed through to subsequent middleware.
+When mounted at `/`, the mod only serves paths that map to an existing file in the client bundle or that look like an SPA route (no file extension). Requests to xxscreeps' own endpoints (`/api/`, `/socket/`, …) are passed through to subsequent middleware.
 
 ### Example
 
@@ -31,18 +31,9 @@ When mounted at `/`, the mod only serves paths that map to an existing file in `
 SCREEPS_MOD_CLIENT_MOUNT_PATH=/play npx xxscreeps start
 ```
 
-## Build
+## How it works
 
-```sh
-pnpm --filter xxscreeps-mod-client build
-```
-
-This builds `screeps-client` with `base=/` (absolute asset URLs at the server root) and copies the artifacts into `dist/`. The shipped bundle is tied to its build-time base path — overriding `SCREEPS_MOD_CLIENT_MOUNT_PATH` at runtime requires a rebuild with a matching base:
-
-```sh
-SCREEPS_MOD_CLIENT_BUILD_BASE=/play/ pnpm --filter xxscreeps-mod-client build
-SCREEPS_MOD_CLIENT_MOUNT_PATH=/play npx xxscreeps start
-```
+The mod resolves the client bundle from its [`screeps-client`](../screeps-client) dependency at runtime — no separate build step is needed. The shipped bundle is built with `base=/` (absolute asset URLs at the server root), which means non-default mount paths require a custom build of `screeps-client` with a matching base.
 
 ## xxscreeps mode
 

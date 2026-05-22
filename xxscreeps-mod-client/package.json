@@ -10,8 +10,7 @@
   },
   "files": [
     "index.js",
-    "backend.js",
-    "dist/"
+    "backend.js"
   ],
   "repository": {
     "type": "git",
@@ -20,12 +19,11 @@
   "publishConfig": {
     "registry": "https://registry.npmjs.org"
   },
-  "scripts": {
-    "build": "node ./scripts/build-client.js && node ./scripts/copy-dist.js",
-    "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\""
-  },
   "engines": {
     "node": ">=20"
+  },
+  "dependencies": {
+    "screeps-client": "workspace:^"
   },
   "peerDependencies": {
     "xxscreeps": "*"

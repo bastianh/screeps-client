@@ -108,9 +108,17 @@ importers:
         specifier: ^4.1.6
         version: 4.1.7(@types/node@25.9.1)(jsdom@29.1.1)(vite@6.4.2(@types/node@25.9.1))
 
-  screeps-mod-client: {}
+  screeps-mod-client:
+    dependencies:
+      screeps-client:
+        specifier: workspace:^
+        version: link:../screeps-client
 
-  xxscreeps-mod-client: {}
+  xxscreeps-mod-client:
+    dependencies:
+      screeps-client:
+        specifier: workspace:^
+        version: link:../screeps-client
 
 packages:
 

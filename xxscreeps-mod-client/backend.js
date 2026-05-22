@@ -1,10 +1,11 @@
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { createRequire } from 'node:module'
 import { createReadStream, existsSync, statSync } from 'node:fs'
 import { hooks } from 'xxscreeps/backend/index.js'
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const distDir = path.join(__dirname, 'dist')
+const require = createRequire(import.meta.url)
+const clientPkgPath = require.resolve('screeps-client/package.json')
+const distDir = path.join(path.dirname(clientPkgPath), 'dist', 'xxscreeps-mod')
 const indexFile = path.join(distDir, 'index.html')
 
 const CONTENT_TYPES = {
@@ -64,7 +65,7 @@ function sendFile(ctx, filePath, stat) {
 
 hooks.register('middleware', koa => {
   if (!existsSync(indexFile)) {
-    console.error(`[xxscreeps-mod-client] dist/index.html not found at ${indexFile}. Run "pnpm --filter xxscreeps-mod-client build" first.`)
+    console.error(`[xxscreeps-mod-client] client bundle not found at ${indexFile}. Run "pnpm --filter screeps-client build:embedded:xxscreeps" first.`)
     return
   }
 

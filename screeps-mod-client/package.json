@@ -5,8 +5,7 @@
   "type": "commonjs",
   "main": "index.js",
   "files": [
-    "index.js",
-    "dist/"
+    "index.js"
   ],
   "repository": {
     "type": "git",
@@ -15,12 +14,11 @@
   "publishConfig": {
     "registry": "https://registry.npmjs.org"
   },
-  "scripts": {
-    "build": "pnpm --filter screeps-client build:embedded && node ./scripts/copy-dist.js",
-    "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\""
-  },
   "engines": {
     "node": ">=18"
+  },
+  "dependencies": {
+    "screeps-client": "workspace:^"
   },
   "peerDependencies": {
     "express": ">=4"

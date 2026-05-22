@@ -27,7 +27,8 @@ module.exports = function (config) {
   mountPath = mountPath.replace(/\/+$/, '') || '/'
 
   const rootRedirect = readBool('SCREEPS_MOD_CLIENT_ROOT_REDIRECT', modCfg.rootRedirect, true)
-  const distDir = path.join(__dirname, 'dist')
+  const clientPkgPath = require.resolve('screeps-client/package.json')
+  const distDir = path.join(path.dirname(clientPkgPath), 'dist', 'embedded')
 
   const indexFile = path.join(distDir, 'index.html')
 
