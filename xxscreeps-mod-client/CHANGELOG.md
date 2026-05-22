@@ -1,5 +1,26 @@
 # xxscreeps-mod-client
 
+## 0.2.2
+
+### Patch Changes
+
+- 464f9c3: Mods now depend on `screeps-client` instead of bundling their own copy of the client bundle.
+
+  `screeps-client` ships three build variants under its published `dist/`:
+
+  - `dist/standalone/` — `base=/`, no embedded flag (used for plain hosting)
+  - `dist/embedded/` — `base=/client/`, embedded mode (used by `screepsmod-client-new`)
+  - `dist/xxscreeps-mod/` — `base=/`, embedded + xxscreeps mode (used by `xxscreeps-mod-client`)
+
+  `screepsmod-client-new` and `xxscreeps-mod-client` resolve the appropriate variant from the installed `screeps-client` package at runtime — they no longer carry their own `dist/` directory or build step. This removes the duplicate copy-into-mod step and makes the version coupling explicit.
+
+- Updated dependencies [e761c02]
+- Updated dependencies [421b330]
+- Updated dependencies [bb05c68]
+- Updated dependencies [464f9c3]
+- Updated dependencies [3043eac]
+  - screeps-client@0.3.0
+
 ## 0.2.1
 
 ### Patch Changes
