@@ -12,10 +12,10 @@ export const TERRAIN_ROAD   = 0x6B6969           // also used for room exits
 export const TERRAIN_BORDER = 0x30363d
 
 // In-room terrain fill + outer border (border drawn with stroke alignment=0 / outside)
-export const TERRAIN_WALL_FILL    = 0x1A1F26
-export const TERRAIN_WALL_BORDER  = 0x0A0D11
-export const TERRAIN_SWAMP_FILL   = 0x223822
-export const TERRAIN_SWAMP_BORDER = 0x132213
+export const TERRAIN_WALL_FILL    = 0x181818
+export const TERRAIN_WALL_BORDER  = 0x000000
+export const TERRAIN_SWAMP_FILL   = 0x282D1A
+export const TERRAIN_SWAMP_BORDER = 0x26271F
 
 // ── Body parts ─────────────────────────────────────────────────────────────
 export const BP_TOUGH         = 0x4c4c4c

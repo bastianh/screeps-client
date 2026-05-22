@@ -10,7 +10,7 @@ import {
 type ApplyStyle = (g: Graphics) => void
 
 // Border widths (relative to TILE_SIZE = 12). Swamp is thicker per design.
-const WALL_BORDER_W  = TILE_SIZE * 0.125
+const WALL_BORDER_W  = TILE_SIZE * 0.05
 const SWAMP_BORDER_W = TILE_SIZE * 0.20
 
 // Walks every quadrant of every tile of `targetType` and calls `apply(g)`

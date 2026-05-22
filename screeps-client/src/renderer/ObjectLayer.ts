@@ -30,9 +30,32 @@ const EXT_OUTER_R = TILE_SIZE * 0.42
 const EXT_INNER_R = TILE_SIZE * 0.30
 const EXT_STROKE_W = Math.max(1, TILE_SIZE * 0.08)
 
+// ── Mineral helpers ────────────────────────────────────────────────────────
+// Canonical Screeps mineral palette (disc fill + letter glyph).
+const MINERAL_COLORS: Record<string, number> = {
+  H: 0xCCCCCC,  // hydrogen — light gray
+  O: 0xFFFFFF,  // oxygen — white
+  U: 0x58D7F9,  // utrium — cyan
+  L: 0x00F4A2,  // lemergium — mint
+  K: 0xA071FF,  // keanium — purple
+  Z: 0xFDC78E,  // zynthium — tan
+  X: 0xB084FB,  // catalyst — lavender
+}
+// Letter color: dark for very light discs (H, O), white otherwise.
+const MINERAL_TEXT_COLORS: Record<string, number> = {
+  H: 0x222222,
+  O: 0x222222,
+}
+const MINERAL_R = TILE_SIZE * 0.42
+const MINERAL_GLYPH_FONT = 32
+const MINERAL_GLYPH_SCALE = 9 / MINERAL_GLYPH_FONT  // glyph ~9px tall in tile space
+
 // Source: shrinks with energy level, but stays visible as a small spot when empty
 const SRC_MAX_SIZE = TILE_SIZE - 4
 const SRC_MIN_SIZE = TILE_SIZE * 0.28
+// Color pulse: ST_ENERGY → near-white at peak, sine over SRC_PULSE_MS
+const SRC_PULSE_MS = 1600
+const SRC_PULSE_PEAK = 0xFFFCEC
 
 function calcSourceSize(energy: number, capacity: number): number {
   if (capacity <= 0) return SRC_MAX_SIZE
@@ -40,20 +63,28 @@ function calcSourceSize(energy: number, capacity: number): number {
   return SRC_MIN_SIZE + (SRC_MAX_SIZE - SRC_MIN_SIZE) * ratio
 }
 
-function drawSourceVisual(g: Graphics, size: number): void {
+function drawSourceVisual(g: Graphics, size: number, color: number = ST_ENERGY): void {
   const half = size / 2
   const cx = TILE_SIZE / 2
   const cy = TILE_SIZE / 2
   const radius = size * 0.25
   g.clear()
   g.roundRect(cx - half, cy - half, size, size, radius)
-  g.fill(ST_ENERGY)
+  g.fill(color)
 }
 
 function updateSourceVisual(visual: ContainerWithTarget, size: number): void {
   const g = visual.__sourceGraphics
   if (!g) return
-  drawSourceVisual(g, size)
+  visual.__sourceSize = size
+  drawSourceVisual(g, size, currentSourceColor(performance.now()))
+}
+
+function currentSourceColor(now: number): number {
+  // 0..1..0 triangle via cosine; t=0 → ST_ENERGY, t=1 → SRC_PULSE_PEAK
+  const phase = (now % SRC_PULSE_MS) / SRC_PULSE_MS
+  const t = 0.5 - 0.5 * Math.cos(phase * Math.PI * 2)
+  return lerpColor(ST_ENERGY, SRC_PULSE_PEAK, t)
 }
 
 function getSourceEnergy(obj: RoomObject): { energy: number; capacity: number } {
@@ -509,12 +540,14 @@ function createObjectVisual(
     }
     case 'source': {
       const { energy, capacity } = getSourceEnergy(obj)
+      const size = calcSourceSize(energy, capacity)
       const srcG = new Graphics()
-      drawSourceVisual(srcG, calcSourceSize(energy, capacity))
+      drawSourceVisual(srcG, size, currentSourceColor(performance.now()))
       container.addChild(srcG)
       ;(container as ContainerWithTarget).__sourceGraphics = srcG
       ;(container as ContainerWithTarget).__sourceEnergy = energy
       ;(container as ContainerWithTarget).__sourceCapacity = capacity
+      ;(container as ContainerWithTarget).__sourceSize = size
       break
     }
     case 'constructionSite': {
@@ -551,7 +584,26 @@ function createObjectVisual(
       ;(container as ContainerWithTarget).__csColorLight    = csLight
       break
     }
-    case 'mineral':
+    case 'mineral': {
+      const mtype = typeof obj.mineralType === 'string' ? obj.mineralType : '?'
+      const mcolor = MINERAL_COLORS[mtype] ?? OBJ_CYAN
+      const textColor = MINERAL_TEXT_COLORS[mtype] ?? 0xFFFFFF
+
+      const discG = new Graphics()
+      discG.circle(cx, cy, MINERAL_R)
+      discG.fill(mcolor)
+      container.addChild(discG)
+
+      const glyph = new Text({
+        text: mtype,
+        style: { fontSize: MINERAL_GLYPH_FONT, fill: textColor, fontWeight: 'bold' },
+      })
+      glyph.anchor.set(0.5, 0.5)
+      glyph.scale.set(MINERAL_GLYPH_SCALE)
+      glyph.position.set(cx, cy)
+      container.addChild(glyph)
+      break
+    }
     case 'deposit': {
       g.rect(2, 2, TILE_SIZE - 4, TILE_SIZE - 4)
       g.fill(color)
@@ -562,7 +614,11 @@ function createObjectVisual(
       const progress     = typeof obj.progress      === 'number' ? obj.progress      : 0
       const progressTotal = typeof obj.progressTotal === 'number' ? obj.progressTotal : 0
 
-      // Octagon background
+      const ctrlUserId = typeof obj.user === 'string' ? obj.user : undefined
+      const ctrlBadge = ctrlUserId ? users?.[ctrlUserId]?.badge : undefined
+
+      // Octagon background. Lifted fill + brighter stroke so unowned controllers
+      // (no segments / no badge on top) remain visible against the dark terrain.
       const octoG = new Graphics()
       const octopts: number[] = []
       for (let i = 0; i < 8; i++) {
@@ -570,9 +626,9 @@ function createObjectVisual(
         octopts.push(cx + CTRL_OCTO_R * Math.cos(angle), cy + CTRL_OCTO_R * Math.sin(angle))
       }
       octoG.poly(octopts)
-      octoG.fill(ST_DARK)
+      octoG.fill(0x222831)
       octoG.poly(octopts)
-      octoG.stroke({ width: TILE_SIZE * 0.05, color: 0x484848 })
+      octoG.stroke({ width: TILE_SIZE * 0.07, color: 0x7A7E85 })
       container.addChild(octoG)
 
       // Level / progress segments (dynamic)
@@ -584,15 +640,24 @@ function createObjectVisual(
       ;(container as ContainerWithTarget).__ctrlProgress      = progress
       ;(container as ContainerWithTarget).__ctrlProgressTotal = progressTotal
 
-      // Inner dark circle — fills exactly to segment inner edge
+      // Inner circle — backdrop behind badge (owned) or neutral disc + center
+      // dot (unowned). Unowned gets a brighter fill and a small dot so it reads
+      // as a controller rather than a vague dark blob.
       const innerCircleG = new Graphics()
-      innerCircleG.circle(cx, cy, CTRL_SEG_IN)
-      innerCircleG.fill(ST_DARK)
+      if (ctrlBadge) {
+        innerCircleG.circle(cx, cy, CTRL_SEG_IN)
+        innerCircleG.fill(ST_DARK)
+      } else {
+        innerCircleG.circle(cx, cy, CTRL_SEG_IN)
+        innerCircleG.fill(0x2E343F)
+        innerCircleG.circle(cx, cy, CTRL_SEG_IN)
+        innerCircleG.stroke({ width: TILE_SIZE * 0.04, color: 0x7A7E85 })
+        innerCircleG.circle(cx, cy, TILE_SIZE * 0.16)
+        innerCircleG.fill(0x9AA0A8)
+      }
       container.addChild(innerCircleG)
 
       // Owner badge — circular, fills inner area
-      const ctrlUserId = typeof obj.user === 'string' ? obj.user : undefined
-      const ctrlBadge = ctrlUserId ? users?.[ctrlUserId]?.badge : undefined
       if (ctrlBadge && badgeCache) {
         const bs = new Sprite()
         bs.anchor.set(0.5, 0.5)
@@ -837,6 +902,77 @@ function createObjectVisual(
       }
       break
     }
+    case 'ruin': {
+      const rUser = typeof obj.user === 'string' ? obj.user : undefined
+      const isMine = rUser !== undefined && rUser === currentUserId
+      const rColor = isMine ? CS_OWN : OBJ_FOREIGN
+
+      // Broken outer ring — short arc segments with gaps suggest a destroyed structure
+      const ringR = TILE_SIZE * 0.42
+      const segCount = 6
+      const arcLen = Math.PI / 5
+      const ringG = new Graphics()
+      for (let i = 0; i < segCount; i++) {
+        const center = (i * Math.PI * 2) / segCount
+        const start = center - arcLen / 2
+        const end = center + arcLen / 2
+        const sx = cx + ringR * Math.cos(start)
+        const sy = cy + ringR * Math.sin(start)
+        ringG.moveTo(sx, sy)
+        ringG.arc(cx, cy, ringR, start, end)
+        ringG.stroke({ width: TILE_SIZE * 0.09, color: rColor, alpha: 0.75, cap: 'round' })
+      }
+      container.addChild(ringG)
+
+      // Central X — same color
+      const xR = TILE_SIZE * 0.18
+      const xMark = new Graphics()
+      xMark.moveTo(cx - xR, cy - xR)
+      xMark.lineTo(cx + xR, cy + xR)
+      xMark.moveTo(cx + xR, cy - xR)
+      xMark.lineTo(cx - xR, cy + xR)
+      xMark.stroke({ width: TILE_SIZE * 0.11, color: rColor, cap: 'round' })
+      container.addChild(xMark)
+      break
+    }
+    case 'tombstone': {
+      const tsUser = typeof obj.user === 'string' ? obj.user : undefined
+      const isMine = tsUser !== undefined && tsUser === currentUserId
+      const tsColor = isMine ? CS_OWN : OBJ_FOREIGN
+
+      // Tombstone silhouette: rectangle body with a half-circle dome on top
+      const w = TILE_SIZE * 0.62
+      const h = TILE_SIZE * 0.82
+      const x0 = cx - w / 2
+      const y0 = cy - h / 2
+      const r = w / 2
+
+      const tg = new Graphics()
+      tg.moveTo(x0, y0 + r)
+      tg.arc(cx, y0 + r, r, Math.PI, 0, false)
+      tg.lineTo(x0 + w, y0 + h)
+      tg.lineTo(x0, y0 + h)
+      tg.closePath()
+      tg.fill(ST_DARK)
+      tg.moveTo(x0, y0 + r)
+      tg.arc(cx, y0 + r, r, Math.PI, 0, false)
+      tg.lineTo(x0 + w, y0 + h)
+      tg.lineTo(x0, y0 + h)
+      tg.closePath()
+      tg.stroke({ width: TILE_SIZE * 0.07, color: tsColor, alpha: 0.9 })
+      container.addChild(tg)
+
+      // X mark — cause-of-death glyph in owner color
+      const xR = TILE_SIZE * 0.18
+      const xMark = new Graphics()
+      xMark.moveTo(cx - xR, cy - xR * 0.6)
+      xMark.lineTo(cx + xR, cy + xR * 0.6)
+      xMark.moveTo(cx + xR, cy - xR * 0.6)
+      xMark.lineTo(cx - xR, cy + xR * 0.6)
+      xMark.stroke({ width: TILE_SIZE * 0.09, color: tsColor, cap: 'round' })
+      container.addChild(xMark)
+      break
+    }
     default: {
       // Structures (fallback)
       const size = TILE_SIZE - 2
@@ -845,7 +981,7 @@ function createObjectVisual(
     }
   }
 
-  if (obj.type !== 'extension' && obj.type !== 'road' && obj.type !== 'creep' && obj.type !== 'tower' && obj.type !== 'controller' && obj.type !== 'flag' && obj.type !== 'source' && obj.type !== 'constructionSite') {
+  if (obj.type !== 'extension' && obj.type !== 'road' && obj.type !== 'creep' && obj.type !== 'tower' && obj.type !== 'controller' && obj.type !== 'flag' && obj.type !== 'source' && obj.type !== 'constructionSite' && obj.type !== 'mineral' && obj.type !== 'tombstone' && obj.type !== 'ruin') {
     container.addChild(g)
   }
 
@@ -908,6 +1044,7 @@ type ContainerWithTarget = Container & {
   __sourceGraphics?: Graphics
   __sourceEnergy?: number
   __sourceCapacity?: number
+  __sourceSize?: number
   __csBuildGlow?: Graphics
   __csFillGraphics?: Graphics
   __csRingGraphics?: Graphics
@@ -1048,6 +1185,15 @@ export class ObjectLayer {
       const ease = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2
       updateSourceVisual(anim.visual, anim.fromRadius + (anim.toRadius - anim.fromRadius) * ease)
       if (t >= 1) this.sourceAnimations.delete(id)
+    }
+
+    // Source color pulse: every tick, repaint each source with the current pulse color.
+    // Size animation (above) already wrote into __sourceSize when active; we re-use it here.
+    const pulseColor = currentSourceColor(now)
+    for (const visual of this.objects.values()) {
+      const g = visual.__sourceGraphics
+      if (!g) continue
+      drawSourceVisual(g, visual.__sourceSize ?? SRC_MAX_SIZE, pulseColor)
     }
 
     // Construction-site build glow: fade in during beam build phase, hold, fade out
