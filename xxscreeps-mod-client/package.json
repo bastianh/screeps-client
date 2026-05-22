@@ -29,5 +29,8 @@
   },
   "peerDependencies": {
     "xxscreeps": "*"
+  },
+  "peerDependenciesMeta": {
+    "xxscreeps": { "optional": true }
   }
 }

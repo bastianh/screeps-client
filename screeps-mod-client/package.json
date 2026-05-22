@@ -24,5 +24,8 @@
   },
   "peerDependencies": {
     "express": ">=4"
+  },
+  "peerDependenciesMeta": {
+    "express": { "optional": true }
   }
 }
