@@ -600,9 +600,13 @@ export class MapRenderer {
   }
 
   private updateNameLabelScale(entry: RoomEntry, zoom: number): void {
-    // screen size = 36 * (0.3 / sqrt(zoom)) * zoom = 10.8 * sqrt(zoom) px
-    // → ~7.6px at min zoom 0.5, ~10.8px at zoom 1, scales up gradually when close
-    entry.nameLabel.scale.set(0.3 / Math.sqrt(zoom))
+    // Desired: screen size grows with sqrt(zoom) so text shrinks relative to room tiles when zoomed out.
+    // Clamped at 12px minimum so it stays readable down to NAME_ZOOM_THRESHOLD.
+    // Crossover: below zoom ≈ 1.24 the 12px floor applies; above it sqrt(zoom) takes over.
+    const MIN_PX = 12
+    const sqrtScale = 0.3 / Math.sqrt(zoom)       // → 10.8·√zoom px on screen
+    const minScale  = MIN_PX / (36 * zoom)         // → 12px on screen
+    entry.nameLabel.scale.set(Math.max(sqrtScale, minScale))
   }
 
   // Combine zooming scaling operations over activeRooms to reduce overhead on every zoom frame
