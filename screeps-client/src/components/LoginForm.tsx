@@ -271,7 +271,7 @@ export function LoginForm() {
   const xxscreeps = isXxscreepsMode()
   const [mode, setMode] = createSignal<'login' | 'register'>('login')
   const [authType, setAuthType] = createSignal<'password' | 'token'>('password')
-  const [url, setUrl] = createSignal(embedded ? embeddedServerUrl() : 'http://localhost:21025')
+  const [url, setUrl] = createSignal(embedded ? embeddedServerUrl() : window.location.origin)
   const [email, setEmail] = createSignal('')
   const [password, setPassword] = createSignal('')
   const [token, setToken] = createSignal('')
