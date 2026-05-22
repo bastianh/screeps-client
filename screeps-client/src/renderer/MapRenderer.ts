@@ -433,7 +433,8 @@ export class MapRenderer {
   }
 
   setRoomOwned(roomName: string, owned: boolean): void {
-    const entry = this.getOrCreate(roomName)
+    const entry = this.activeRooms.get(roomName)
+    if (!entry) return
     const g = entry.ownerOverlay
     g.clear()
     if (owned) {

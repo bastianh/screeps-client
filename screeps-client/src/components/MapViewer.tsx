@@ -45,6 +45,9 @@ export function MapViewer(props: MapViewerProps) {
   // Per-room stats received from the library's mapStats store via events
   const roomStats = new Map<string, { own?: { user: string; level: number }; mineral?: string; density?: number; username?: string; safeMode?: boolean; badge?: import('screeps-connectivity').Badge }>()
 
+  // Precomputed unclaimable flag per room — survives the stats-before-terrain race.
+  const roomUnclaimable = new Map<string, boolean>()
+
   // Fast change-detection for badges: roomName → JSON key of last seen badge.
   // If the key hasn't changed we skip re-rendering the badge entirely.
   const roomBadgeKeys = new Map<string, string>()
@@ -82,7 +85,11 @@ export function MapViewer(props: MapViewerProps) {
     const batch = terrainQueue.splice(0, TERRAIN_BATCH_SIZE)
     c.stores.room.terrainBulk(batch, props.shard)
       .then(terrainMap => {
-        for (const [room, terrain] of terrainMap) renderer?.setRoomTerrain(room, terrain)
+        for (const [room, terrain] of terrainMap) {
+          renderer?.setRoomTerrain(room, terrain)
+          const unclaimable = roomUnclaimable.get(room)
+          if (unclaimable !== undefined) renderer?.setRoomOwned(room, unclaimable)
+        }
       })
       .catch(err => error('terrain fetch failed:', err))
       .finally(() => { if (terrainQueue.length > 0) terrainTimer = setTimeout(drainTerrain, TERRAIN_BATCH_MS) })
@@ -93,6 +100,7 @@ export function MapViewer(props: MapViewerProps) {
     client()
     void props.shard
     roomStats.clear()
+    roomUnclaimable.clear()
   })
 
   onMount(() => {
@@ -349,6 +357,7 @@ export function MapViewer(props: MapViewerProps) {
       const ownRoom = !!(stat.own && stat.own.user === me)
       const enemyOwned = !!(stat.own && stat.own.user !== me)
       const isUnclaimable = structurallyUnclaimable || prohibited || ownRoom || enemyOwned
+      roomUnclaimable.set(room, isUnclaimable)
       if (visibleSet.has(room)) {
         renderer?.setRoomOwned(room, isUnclaimable)
         renderer?.setRoomSafeMode(room, !!stat.safeMode)
