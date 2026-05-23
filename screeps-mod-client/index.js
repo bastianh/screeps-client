@@ -1,7 +1,9 @@
 'use strict'
 
 const path = require('node:path')
+const fs = require('node:fs')
 const express = require('express')
+const pkg = require('./package.json')
 
 function readBool(envName, modValue, fallback) {
   const env = process.env[envName]
@@ -15,6 +17,17 @@ function readBool(envName, modValue, fallback) {
 
 function readString(envName, modValue, fallback) {
   return process.env[envName] ?? modValue ?? fallback
+}
+
+function renderInjectedIndex(indexFile) {
+  const metadata = JSON.stringify({
+    kind: 'screeps-mod',
+    packageName: pkg.name,
+    version: pkg.version,
+  }).replace(/</g, '\\u003c')
+  const script = `<script>window.__SCREEPS_CLIENT_EMBEDDED__=${metadata}</script>`
+  const html = fs.readFileSync(indexFile, 'utf8')
+  return html.includes('</head>') ? html.replace('</head>', `${script}</head>`) : script + html
 }
 
 module.exports = function (config) {
@@ -31,14 +44,26 @@ module.exports = function (config) {
   const distDir = path.join(path.dirname(clientPkgPath), 'dist', 'embedded')
 
   const indexFile = path.join(distDir, 'index.html')
+  let injectedIndex
+
+  function sendInjectedIndex(res) {
+    injectedIndex ??= renderInjectedIndex(indexFile)
+    res.type('html').send(injectedIndex)
+  }
 
   config.backend.on('expressPreConfig', (app) => {
-    app.use(mountPath, express.static(distDir, { fallthrough: true }))
+    const indexRoutes = mountPath === '/' ? ['/', '/index.html'] : [mountPath, mountPath + '/', mountPath + '/index.html']
+
+    app.get(indexRoutes, (_req, res) => {
+      sendInjectedIndex(res)
+    })
+
+    app.use(mountPath, express.static(distDir, { fallthrough: true, index: false }))
 
     // SPA fallback: serve index.html for unmatched GET requests under mountPath
     app.use(mountPath, (req, res, next) => {
       if (req.method !== 'GET') return next()
-      res.sendFile(indexFile)
+      sendInjectedIndex(res)
     })
 
     if (rootRedirect && mountPath !== '/') {

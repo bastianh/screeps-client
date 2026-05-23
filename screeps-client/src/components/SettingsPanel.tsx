@@ -5,6 +5,7 @@ import {
   showMapRoomNames, setShowMapRoomNames,
   showUnclaimableRooms, setShowUnclaimableRooms,
 } from '~/stores/settingsStore.js'
+import { clientVersion, embeddedModInfo } from '~/utils/embedded.js'
 
 interface ToggleProps {
   label: string
@@ -84,7 +85,27 @@ function Section(props: { title: string; children: JSX.Element }) {
   )
 }
 
+function InfoRow(props: { label: string; value: string }) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        'align-items': 'center',
+        'justify-content': 'space-between',
+        gap: '24px',
+        padding: '10px 0',
+        'border-bottom': '1px solid #21262d',
+      }}
+    >
+      <div style={{ 'font-size': '13px', color: '#c9d1d9' }}>{props.label}</div>
+      <div style={{ 'font-size': '12px', color: '#8b949e', 'text-align': 'right' }}>{props.value}</div>
+    </div>
+  )
+}
+
 export function SettingsPanel(props: { onClose: () => void }) {
+  const modInfo = embeddedModInfo()
+
   return (
     <div
       style={{
@@ -160,6 +181,16 @@ export function SettingsPanel(props: { onClose: () => void }) {
               value={showUnclaimableRooms()}
               onChange={setShowUnclaimableRooms}
             />
+          </Section>
+
+          <Section title="About">
+            <InfoRow label="Client version" value={clientVersion()} />
+            {modInfo && (
+              <InfoRow
+                label="Mod version"
+                value={`${modInfo.version} (${modInfo.kind})`}
+              />
+            )}
           </Section>
 
         </div>

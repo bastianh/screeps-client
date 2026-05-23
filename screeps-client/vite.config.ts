@@ -1,9 +1,12 @@
 import { defineConfig, loadEnv } from 'vite'
 import solid from 'vite-plugin-solid'
 import devtools from 'solid-devtools/vite'
+import { readFileSync } from 'node:fs'
 
 const base = process.env.VITE_BASE ?? '/'
 const outDir = process.env.VITE_OUT_DIR ?? 'dist/standalone'
+const clientPkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version: string }
+const clientVersion = process.env.VITE_CLIENT_VERSION ?? clientPkg.version
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
@@ -42,6 +45,9 @@ export default defineConfig(({ mode }) => {
           },
         },
       },
+    },
+    define: {
+      'import.meta.env.VITE_CLIENT_VERSION': JSON.stringify(clientVersion),
     },
     server: {
       host: viteHost ? true : undefined,
