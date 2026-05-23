@@ -44,11 +44,9 @@ module.exports = function (config) {
   const distDir = path.join(path.dirname(clientPkgPath), 'dist', 'embedded')
 
   const indexFile = path.join(distDir, 'index.html')
-  let injectedIndex
 
   function sendInjectedIndex(res) {
-    injectedIndex ??= renderInjectedIndex(indexFile)
-    res.type('html').send(injectedIndex)
+    res.type('html').send(renderInjectedIndex(indexFile))
   }
 
   config.backend.on('expressPreConfig', (app) => {

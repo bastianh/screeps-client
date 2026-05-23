@@ -262,6 +262,7 @@ export class RoomStore extends TypedStore<RoomStoreEvents> {
         if (remaining <= 0) {
           this.roomSubCount.delete(mapKey)
           this.roomObjects.delete(mapKey)
+          this.roomUsers.delete(mapKey)
           this.lastFlagsString.delete(mapKey)
           this.logger.log('unsubscribe', room, shard, '(last ref)', 'active:', this.activeRooms())
         } else {

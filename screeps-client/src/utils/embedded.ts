@@ -32,7 +32,7 @@ export function embeddedServerUrl(): string {
 }
 
 export function clientVersion(): string {
-  return import.meta.env.VITE_CLIENT_VERSION
+  return import.meta.env.VITE_CLIENT_VERSION ?? ''
 }
 
 export function embeddedModInfo(): EmbeddedModInfo | null {

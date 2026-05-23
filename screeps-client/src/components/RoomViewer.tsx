@@ -175,16 +175,43 @@ export function RoomViewer(props: RoomViewerProps) {
       r.world.addChildAt(terrainLayerRef, 0)
       r.bringNavOverlayToTop()
     }
+
+    // Re-create navigation zones immediately after clear so arrows are never missing
+    // after a room change. We untrack worldBounds/onNavigate so this effect only runs
+    // when room/shard/renderer changes (matching the clear trigger).
+    const room = props.room
+    const shard = props.shard
+    const coord = parseRoomName(room)
+    const nav = untrack(() => props.onNavigate)
+    const bounds = untrack(worldBounds)
+    if (coord && nav) {
+      const canNavigate = (tx: number, ty: number) =>
+        !bounds || isRoomInWorld(tx, ty, bounds)
+
+      const navTo = (target: string) => {
+        log(`navigate requested: ${room} → ${target}`)
+        nav(target, shard)
+      }
+
+      r.setupNavigationZones({
+        west:  canNavigate(coord.x - 1, coord.y) ? () => navTo(formatRoomName(coord.x - 1, coord.y)) : undefined,
+        east:  canNavigate(coord.x + 1, coord.y) ? () => navTo(formatRoomName(coord.x + 1, coord.y)) : undefined,
+        north: canNavigate(coord.x, coord.y - 1) ? () => navTo(formatRoomName(coord.x, coord.y - 1)) : undefined,
+        south: canNavigate(coord.x, coord.y + 1) ? () => navTo(formatRoomName(coord.x, coord.y + 1)) : undefined,
+      })
+    }
   })
 
-  // Setup navigation zones — separate effect so worldBounds updates only re-wire
-  // nav callbacks without triggering a full scene clear
+  // Setup navigation zones — separate effect so worldBounds / onNavigate updates
+  // only re-wire nav callbacks without triggering a full scene clear.
+  // room/shard are read via untrack because the clear-effect above already
+  // rebuilds zones on every room change.
   createEffect(() => {
     const r = renderer()
     if (!r) return
 
-    const room = props.room
-    const shard = props.shard
+    const room = untrack(() => props.room)
+    const shard = untrack(() => props.shard)
     const coord = parseRoomName(room)
 
     if (coord && props.onNavigate) {

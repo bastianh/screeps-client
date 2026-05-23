@@ -44,7 +44,6 @@ function normalizeMount(input) {
 
 const mountPath = normalizeMount(process.env.SCREEPS_MOD_CLIENT_MOUNT_PATH ?? '/')
 const rootRedirect = readBool('SCREEPS_MOD_CLIENT_ROOT_REDIRECT', mountPath !== '/')
-let injectedIndex
 
 function resolveFile(relPath) {
   const rel = relPath.replace(/^\/+/, '')
@@ -77,9 +76,8 @@ function renderInjectedIndex(filePath) {
 }
 
 function sendInjectedIndex(ctx) {
-  injectedIndex ??= renderInjectedIndex(indexFile)
   ctx.type = 'text/html'
-  ctx.body = injectedIndex
+  ctx.body = renderInjectedIndex(indexFile)
 }
 
 hooks.register('middleware', koa => {

@@ -1848,7 +1848,13 @@ export class ObjectLayer {
       visual.__creepBadgeSprite = badgeSprite
       this.badgeCache.getOrCreate(creepBadge as Badge).then((texture) => {
         if (!badgeSprite.destroyed) badgeSprite.texture = texture
-      }).catch(() => {})
+      }).catch(() => {
+        if (!badgeSprite.destroyed) {
+          bodyContainer.removeChild(badgeSprite)
+          badgeSprite.destroy()
+        }
+        visual.__creepBadgeSprite = undefined
+      })
     }
   }
 
