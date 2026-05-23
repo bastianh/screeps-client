@@ -1,5 +1,12 @@
 # screeps-client
 
+## 0.3.1
+
+### Patch Changes
+
+- 90ad28c: Batch terrain stroke/fill into a single call per terrain type to fix rendering artifacts on Firefox Mobile.
+- 8e6e369: Enable antialiasing and render badges and structure textures at device pixel ratio scale for crisp output on HiDPI/retina displays.
+
 ## 0.3.0
 
 ### Minor Changes
