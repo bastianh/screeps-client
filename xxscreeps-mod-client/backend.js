@@ -1,9 +1,10 @@
 import path from 'node:path'
 import { createRequire } from 'node:module'
-import { createReadStream, existsSync, statSync } from 'node:fs'
+import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs'
 import { hooks } from 'xxscreeps/backend/index.js'
 
 const require = createRequire(import.meta.url)
+const pkg = require('./package.json')
 const clientPkgPath = require.resolve('screeps-client/package.json')
 const distDir = path.join(path.dirname(clientPkgPath), 'dist', 'xxscreeps-mod')
 const indexFile = path.join(distDir, 'index.html')
@@ -43,6 +44,7 @@ function normalizeMount(input) {
 
 const mountPath = normalizeMount(process.env.SCREEPS_MOD_CLIENT_MOUNT_PATH ?? '/')
 const rootRedirect = readBool('SCREEPS_MOD_CLIENT_ROOT_REDIRECT', mountPath !== '/')
+let injectedIndex
 
 function resolveFile(relPath) {
   const rel = relPath.replace(/^\/+/, '')
@@ -61,6 +63,23 @@ function sendFile(ctx, filePath, stat) {
   ctx.lastModified = stat.mtime
   ctx.set('Content-Length', String(stat.size))
   ctx.body = createReadStream(filePath)
+}
+
+function renderInjectedIndex(filePath) {
+  const metadata = JSON.stringify({
+    kind: 'xxscreeps-mod',
+    packageName: pkg.name,
+    version: pkg.version,
+  }).replace(/</g, '\\u003c')
+  const script = `<script>window.__SCREEPS_CLIENT_EMBEDDED__=${metadata}</script>`
+  const html = readFileSync(filePath, 'utf8')
+  return html.includes('</head>') ? html.replace('</head>', `${script}</head>`) : script + html
+}
+
+function sendInjectedIndex(ctx) {
+  injectedIndex ??= renderInjectedIndex(indexFile)
+  ctx.type = 'text/html'
+  ctx.body = injectedIndex
 }
 
 hooks.register('middleware', koa => {
@@ -90,6 +109,11 @@ hooks.register('middleware', koa => {
       return next()
     }
 
+    if (relPath === '/' || relPath === '/index.html') {
+      sendInjectedIndex(ctx)
+      return
+    }
+
     // Serve a real file from dist if it exists.
     const found = resolveFile(relPath)
     if (found) {
@@ -104,8 +128,7 @@ hooks.register('middleware', koa => {
     if (ctx.status !== 404) return
     const last = relPath.split('/').pop() ?? ''
     if (last.includes('.')) return
-    const indexStat = statSync(indexFile)
     ctx.status = 200
-    sendFile(ctx, indexFile, indexStat)
+    sendInjectedIndex(ctx)
   })
 })
