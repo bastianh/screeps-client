@@ -45,6 +45,7 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       host: viteHost ? true : undefined,
+      allowedHosts: viteHost ? [viteHost] : undefined,
       hmr: viteHost ? { protocol: 'wss', clientPort: viteHostPort } : undefined,
       proxy: proxyTarget ? {
         '/api': { target: proxyTarget, changeOrigin: true },
