@@ -217,8 +217,18 @@ export class RoomRenderer {
     let dragging = false
     let lastPos = new Point(0, 0)
     let pointerDownPos = new Point(0, 0)
-    const canvas = this.app.canvas
+    const canvas = this.app.canvas as HTMLCanvasElement
     const CLICK_THRESHOLD = 4
+
+    canvas.style.touchAction = 'none'
+    canvas.style.userSelect = 'none'
+
+    const activePointers = new Map<number, { x: number; y: number }>()
+    let pinching = false
+    let pinchPivotWorldX = 0
+    let pinchPivotWorldY = 0
+    let pinchStartDist = 0
+    let pinchStartScale = 0
 
     // Prevent context menu so Ctrl+Click works on macOS
     canvas.addEventListener('contextmenu', (e) => {
@@ -228,10 +238,27 @@ export class RoomRenderer {
     canvas.addEventListener('pointerdown', (e) => {
       this.cancelBounce()
       this.cancelWheelTimeout()
-      dragging = this.canDrag
-      lastPos = new Point(e.clientX, e.clientY)
-      pointerDownPos = new Point(e.clientX, e.clientY)
-      if (this.canDrag) canvas.setPointerCapture(e.pointerId)
+      activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
+      canvas.setPointerCapture(e.pointerId)
+
+      if (activePointers.size >= 2) {
+        // Enter pinch mode, cancel single-finger drag
+        dragging = false
+        pinching = true
+        const pts = [...activePointers.values()]
+        const rect = canvas.getBoundingClientRect()
+        const midX = (pts[0].x + pts[1].x) / 2 - rect.left
+        const midY = (pts[0].y + pts[1].y) / 2 - rect.top
+        pinchStartDist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y)
+        pinchStartScale = this.world.scale.x
+        pinchPivotWorldX = (midX - this.world.x) / pinchStartScale
+        pinchPivotWorldY = (midY - this.world.y) / pinchStartScale
+      } else {
+        pinching = false
+        dragging = this.canDrag
+        lastPos = new Point(e.clientX, e.clientY)
+        pointerDownPos = new Point(e.clientX, e.clientY)
+      }
     })
 
     canvas.addEventListener('pointermove', (e) => {
@@ -239,10 +266,35 @@ export class RoomRenderer {
       this.lastMouseX = e.clientX - rect.left
       this.lastMouseY = e.clientY - rect.top
 
-      // Update hover highlight
-      const tile = this.screenToTile(this.lastMouseX, this.lastMouseY)
-      this.hoverLayer.setHoveredTile(tile?.tx ?? null, tile?.ty ?? null)
-      this.onHoverTile?.(tile?.tx ?? null, tile?.ty ?? null)
+      if (activePointers.has(e.pointerId)) {
+        activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
+      }
+
+      if (pinching && activePointers.size === 2) {
+        const pts = [...activePointers.values()]
+        const newMidX = (pts[0].x + pts[1].x) / 2 - rect.left
+        const newMidY = (pts[0].y + pts[1].y) / 2 - rect.top
+        const newDist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y)
+        const minScale = this.getMinScale()
+        const maxScale = 5
+        const ZOOM_RESISTANCE = 0.6
+        let newScale = pinchStartScale * (newDist / pinchStartDist)
+        if (newScale < minScale) newScale = minScale + (newScale - minScale) * ZOOM_RESISTANCE
+        if (newScale > maxScale) newScale = maxScale + (newScale - maxScale) * ZOOM_RESISTANCE
+        this.cancelBounce()
+        this.world.scale.set(newScale)
+        this.world.x = newMidX - pinchPivotWorldX * newScale
+        this.world.y = newMidY - pinchPivotWorldY * newScale
+        this.clampView(true)
+        return
+      }
+
+      // Update hover highlight when not pinching
+      if (!pinching) {
+        const tile = this.screenToTile(this.lastMouseX, this.lastMouseY)
+        this.hoverLayer.setHoveredTile(tile?.tx ?? null, tile?.ty ?? null)
+        this.onHoverTile?.(tile?.tx ?? null, tile?.ty ?? null)
+      }
 
       if (!dragging || !this.canDrag) return
       const dx = e.clientX - lastPos.x
@@ -254,7 +306,18 @@ export class RoomRenderer {
     })
 
     const onUp = (e: PointerEvent) => {
-      if (this.canDrag) canvas.releasePointerCapture(e.pointerId)
+      canvas.releasePointerCapture(e.pointerId)
+      activePointers.delete(e.pointerId)
+
+      if (pinching) {
+        if (activePointers.size < 2) {
+          pinching = false
+          dragging = false
+          this.springBack()
+        }
+        return
+      }
+
       dragging = false
 
       // Treat as click if pointer barely moved

@@ -111,6 +111,11 @@ export class MapRenderer {
   private dragStartY = 0
   private dragWorldX = 0
   private dragWorldY = 0
+  private isPinching = false
+  private pinchPivotWorldX = 0
+  private pinchPivotWorldY = 0
+  private pinchStartDist = 0
+  private pinchStartScale = 0
   private lastVisibleKey = ''
   private visibleDebounceTimer: ReturnType<typeof setTimeout> | null = null
   private selectedRoom: string | null = null
@@ -191,21 +196,23 @@ export class MapRenderer {
   setZoom(next: number): void {
     if (!this.world) return
     next = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, next))
-    const scale = this.world.scale.x
-    if (next === scale) return
-
+    if (next === this.world.scale.x) return
     const cx = this.app.screen.width / 2
     const cy = this.app.screen.height / 2
-    const wx = (cx - this.world.x) / scale
-    const wy = (cy - this.world.y) / scale
+    this.applyZoomAt(next, cx, cy)
+  }
 
+  private applyZoomAt(next: number, pivotScreenX: number, pivotScreenY: number): void {
+    const scale = this.world.scale.x
     const prevLOD = this.getLOD()
     const prevAboveLOD = this.zoom >= LOD_ZOOM_THRESHOLD
     const prevAboveName = this.zoom >= NAME_ZOOM_THRESHOLD
 
+    const wx = (pivotScreenX - this.world.x) / scale
+    const wy = (pivotScreenY - this.world.y) / scale
     this.world.scale.set(next)
-    this.world.x = cx - wx * next
-    this.world.y = cy - wy * next
+    this.world.x = pivotScreenX - wx * next
+    this.world.y = pivotScreenY - wy * next
 
     if (this.getLOD() !== prevLOD) this.applyLOD()
     if ((next >= LOD_ZOOM_THRESHOLD) !== prevAboveLOD || (next >= NAME_ZOOM_THRESHOLD) !== prevAboveName) this.updateAllNameLabels()
@@ -895,29 +902,44 @@ export class MapRenderer {
     canvas.style.touchAction = 'none'
     canvas.style.userSelect = 'none'
 
+    const activePointers = new Map<number, { x: number; y: number }>()
+
     canvas.addEventListener('pointermove', (e) => {
-      if (this.isDragging) return
-      const rect = canvas.getBoundingClientRect()
-      this.emitHover(e.clientX - rect.left, e.clientY - rect.top)
-    })
+      if (!activePointers.has(e.pointerId)) {
+        if (!this.isDragging && !this.isPinching) {
+          const rect = canvas.getBoundingClientRect()
+          this.emitHover(e.clientX - rect.left, e.clientY - rect.top)
+        }
+        return
+      }
 
-    canvas.addEventListener('pointerleave', () => {
-      if (!this.isDragging) this.callbacks.onRoomHover(null)
-    })
+      activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
 
-    canvas.addEventListener('pointerdown', (e) => {
-      e.preventDefault()
-      this.isAnimating = false
-      this.isDragging = true
-      this.hasDragged = false
-      this.dragStartX = e.clientX
-      this.dragStartY = e.clientY
-      this.dragWorldX = this.world.x
-      this.dragWorldY = this.world.y
+      if (this.isPinching && activePointers.size === 2) {
+        const pts = [...activePointers.values()]
+        const rect = canvas.getBoundingClientRect()
+        const newMidX = (pts[0].x + pts[1].x) / 2 - rect.left
+        const newMidY = (pts[0].y + pts[1].y) / 2 - rect.top
+        const newDist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y)
+        const newScale = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, this.pinchStartScale * (newDist / this.pinchStartDist)))
+        const prevLOD = this.getLOD()
+        const prevAboveLOD = this.zoom >= LOD_ZOOM_THRESHOLD
+        const prevAboveName = this.zoom >= NAME_ZOOM_THRESHOLD
+        this.world.scale.set(newScale)
+        this.world.x = newMidX - this.pinchPivotWorldX * newScale
+        this.world.y = newMidY - this.pinchPivotWorldY * newScale
+        if (this.getLOD() !== prevLOD) this.applyLOD()
+        if ((newScale >= LOD_ZOOM_THRESHOLD) !== prevAboveLOD || (newScale >= NAME_ZOOM_THRESHOLD) !== prevAboveName) this.updateAllNameLabels()
+        this.updateAllRoomScales(newScale)
+        this.callbacks.onZoomChanged?.(newScale)
+        this.setSelectedRoom(this.selectedRoom)
+        this.redrawSafeMode()
+        return
+      }
 
-      const onMove = (ev: PointerEvent) => {
-        const rawDx = ev.clientX - this.dragStartX
-        const rawDy = ev.clientY - this.dragStartY
+      if (this.isDragging) {
+        const rawDx = e.clientX - this.dragStartX
+        const rawDy = e.clientY - this.dragStartY
         if (Math.abs(rawDx) > 3 || Math.abs(rawDy) > 3) this.hasDragged = true
         const b = this.worldBoundsSet
         if (b) {
@@ -934,50 +956,83 @@ export class MapRenderer {
           this.world.y = this.dragWorldY + rawDy
         }
       }
+    })
 
-      const onUp = (ev: PointerEvent) => {
+    canvas.addEventListener('pointerleave', () => {
+      if (!this.isDragging && !this.isPinching) this.callbacks.onRoomHover(null)
+    })
+
+    canvas.addEventListener('pointerdown', (e) => {
+      e.preventDefault()
+      this.isAnimating = false
+      activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
+      canvas.setPointerCapture(e.pointerId)
+
+      if (activePointers.size >= 2) {
+        // Enter pinch mode, cancel single-finger drag
+        this.isDragging = false
+        this.isPinching = true
+        const pts = [...activePointers.values()]
+        const rect = canvas.getBoundingClientRect()
+        const midX = (pts[0].x + pts[1].x) / 2 - rect.left
+        const midY = (pts[0].y + pts[1].y) / 2 - rect.top
+        this.pinchStartDist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y)
+        this.pinchStartScale = this.world.scale.x
+        this.pinchPivotWorldX = (midX - this.world.x) / this.pinchStartScale
+        this.pinchPivotWorldY = (midY - this.world.y) / this.pinchStartScale
+      } else {
+        this.isPinching = false
+        this.isDragging = true
+        this.hasDragged = false
+        this.dragStartX = e.clientX
+        this.dragStartY = e.clientY
+        this.dragWorldX = this.world.x
+        this.dragWorldY = this.world.y
+      }
+    })
+
+    canvas.addEventListener('pointerup', (e) => {
+      activePointers.delete(e.pointerId)
+      canvas.releasePointerCapture(e.pointerId)
+
+      if (this.isPinching) {
+        if (activePointers.size < 2) {
+          this.isPinching = false
+          this.isDragging = false
+          this.springBack()
+        }
+        return
+      }
+
+      if (this.isDragging) {
+        this.isDragging = false
         if (!this.hasDragged) {
           const rect = canvas.getBoundingClientRect()
-          const room = this.screenToRoom(ev.clientX - rect.left, ev.clientY - rect.top)
+          const room = this.screenToRoom(e.clientX - rect.left, e.clientY - rect.top)
           if (room) this.callbacks.onRoomClick(room)
         }
-        stop()
+        this.springBack()
       }
+    })
 
-      const stop = () => {
+    canvas.addEventListener('pointercancel', (e) => {
+      activePointers.delete(e.pointerId)
+      canvas.releasePointerCapture(e.pointerId)
+      if (this.isPinching || this.isDragging) {
+        this.isPinching = false
         this.isDragging = false
         this.springBack()
-        window.removeEventListener('pointermove', onMove)
-        window.removeEventListener('pointerup', onUp)
-        window.removeEventListener('pointercancel', stop)
       }
-
-      window.addEventListener('pointermove', onMove)
-      window.addEventListener('pointerup', onUp)
-      window.addEventListener('pointercancel', stop)
     })
 
     canvas.addEventListener('wheel', (e) => {
       e.preventDefault()
-      if (this.isDragging) return
+      if (this.isDragging || this.isPinching) return
       this.isAnimating = false
       const scale  = this.world.scale.x
       const factor = e.deltaY < 0 ? 1.1 : 0.9
       const next   = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, scale * factor))
-      const wx     = (e.offsetX - this.world.x) / scale
-      const wy     = (e.offsetY - this.world.y) / scale
-      const prevLOD = this.getLOD()
-      const prevAboveLOD = this.zoom >= LOD_ZOOM_THRESHOLD
-      const prevAboveName = this.zoom >= NAME_ZOOM_THRESHOLD
-      this.world.scale.set(next)
-      this.world.x = e.offsetX - wx * next
-      this.world.y = e.offsetY - wy * next
-      if (this.getLOD() !== prevLOD) this.applyLOD()
-      if ((next >= LOD_ZOOM_THRESHOLD) !== prevAboveLOD || (next >= NAME_ZOOM_THRESHOLD) !== prevAboveName) this.updateAllNameLabels()
-      this.updateAllRoomScales(next)
-      this.callbacks.onZoomChanged?.(next)
-      this.setSelectedRoom(this.selectedRoom)
-      this.redrawSafeMode()
+      this.applyZoomAt(next, e.offsetX, e.offsetY)
     }, { passive: false })
   }
 
