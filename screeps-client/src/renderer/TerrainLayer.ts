@@ -24,6 +24,7 @@ function drawTerrainQuadrants(
 ) {
   const T = TILE_SIZE
   const R = T / 2
+  let pathDrawn = false
 
   for (let y = 0; y < 50; y++) {
     for (let x = 0; x < 50; x++) {
@@ -38,6 +39,7 @@ function drawTerrainQuadrants(
 
       // Top-Left Quadrant
       if (center) {
+        pathDrawn = true
         if (!top && !left && y > 0 && x > 0) {
           g.moveTo(cx, y * T)
           g.arc(cx, cy, R, -Math.PI / 2, Math.PI, true)
@@ -48,6 +50,7 @@ function drawTerrainQuadrants(
         }
       } else {
         if (top && left && terrain.get(x - 1, y - 1) === targetType) {
+          pathDrawn = true
           g.moveTo(cx, y * T)
           g.lineTo(x * T, y * T)
           g.lineTo(x * T, cy)
@@ -68,6 +71,7 @@ function drawTerrainQuadrants(
         }
       } else {
         if (top && right && terrain.get(x + 1, y - 1) === targetType) {
+          pathDrawn = true
           g.moveTo(cx, y * T)
           g.lineTo(x * T + T, y * T)
           g.lineTo(x * T + T, cy)
@@ -88,6 +92,7 @@ function drawTerrainQuadrants(
         }
       } else {
         if (bottom && left && terrain.get(x - 1, y + 1) === targetType) {
+          pathDrawn = true
           g.moveTo(x * T, cy)
           g.lineTo(x * T, y * T + T)
           g.lineTo(cx, y * T + T)
@@ -108,6 +113,7 @@ function drawTerrainQuadrants(
         }
       } else {
         if (bottom && right && terrain.get(x + 1, y + 1) === targetType) {
+          pathDrawn = true
           g.moveTo(cx, y * T + T)
           g.lineTo(x * T + T, y * T + T)
           g.lineTo(x * T + T, cy)
@@ -117,9 +123,11 @@ function drawTerrainQuadrants(
       }
     }
   }
-  // Apply stroke/fill once for the entire terrain type to avoid PixiJS batching
-  // artifacts from calling stroke()/fill() thousands of times in a loop.
-  apply(g)
+  // Only apply stroke/fill if at least one path element was drawn.
+  // Calling fill()/stroke() on an empty path in PixiJS 8 can re-apply the
+  // style to the previous path (the base plain rect), painting rooms that
+  // have no swamp/wall tiles with the wrong color.
+  if (pathDrawn) apply(g)
 }
 
 function drawExits(g: Graphics, terrain: RoomTerrain) {
