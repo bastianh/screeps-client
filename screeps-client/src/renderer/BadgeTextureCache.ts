@@ -54,8 +54,16 @@ export class BadgeTextureCache {
     const url = URL.createObjectURL(blob)
 
     try {
+      // Render at 2× the native device pixel ratio for crisp badges at all zoom levels.
+      const dpr = window.devicePixelRatio || 1
+      const SIZE = 128 * Math.max(2, dpr)
       const img = await loadImage(url)
-      const texture = Texture.from(img)
+      const canvas = document.createElement('canvas')
+      canvas.width = SIZE
+      canvas.height = SIZE
+      const ctx = canvas.getContext('2d')!
+      ctx.drawImage(img, 0, 0, SIZE, SIZE)
+      const texture = Texture.from(canvas)
       this.cache.set(key, texture)
       return texture
     } finally {

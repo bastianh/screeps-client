@@ -37,7 +37,8 @@ export class StructureTextureCache {
     g.circle(center, center, innerR)
     g.fill(ST_LIGHT)
 
-    const texture = this.renderer.generateTexture({ target: g, resolution: 2 })
+    const resolution = Math.max(2, window.devicePixelRatio || 1)
+    const texture = this.renderer.generateTexture({ target: g, resolution })
     g.destroy()
     this.cache.set(key, texture)
     return texture

@@ -54,7 +54,7 @@ export class RoomRenderer {
     const app = new Application()
     await app.init({
       background: '#0d1117',
-      antialias: false,
+      antialias: true,
       resolution: window.devicePixelRatio || 1,
       autoDensity: true,
     })
