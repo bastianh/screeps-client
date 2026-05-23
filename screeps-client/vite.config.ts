@@ -8,7 +8,15 @@ const outDir = process.env.VITE_OUT_DIR ?? 'dist/standalone'
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const proxyTarget = env.VITE_PROXY_TARGET
+  // When serving behind an HTTPS reverse proxy (e.g. tailscale serve 5173),
+  // set VITE_HOST to the external hostname so HMR WebSocket uses wss:// on
+  // the proxy's port instead of Vite's local port.
+  // VITE_HOST_PORT defaults to 443 (tailscale serve default).
+  const viteHost = env.VITE_HOST
+  const viteHostPort = env.VITE_HOST_PORT ? parseInt(env.VITE_HOST_PORT) : 443
+
   console.log('[vite.config] VITE_PROXY_TARGET =', proxyTarget)
+  if (viteHost) console.log('[vite.config] VITE_HOST =', viteHost, 'port', viteHostPort)
 
   return {
     base,
@@ -35,12 +43,14 @@ export default defineConfig(({ mode }) => {
         },
       },
     },
-    server: proxyTarget ? {
-      proxy: {
+    server: {
+      host: viteHost ? true : undefined,
+      hmr: viteHost ? { protocol: 'wss', clientPort: viteHostPort } : undefined,
+      proxy: proxyTarget ? {
         '/api': { target: proxyTarget, changeOrigin: true },
         '/socket': { target: proxyTarget, changeOrigin: true, ws: true },
-      },
-    } : undefined,
+      } : undefined,
+    },
     resolve: {
       conditions: ['development'],
       alias: {
