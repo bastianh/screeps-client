@@ -1,5 +1,16 @@
 # xxscreeps-mod-client
 
+## 0.2.3
+
+### Patch Changes
+
+- 64fcb46: Show the current client version in Settings and expose the embedded wrapper version for screeps-mod and xxscreeps deployments.
+- Updated dependencies [64fcb46]
+- Updated dependencies [f31f69e]
+- Updated dependencies [d86e8df]
+- Updated dependencies [b14a86d]
+  - screeps-client@0.3.2
+
 ## 0.2.2
 
 ### Patch Changes

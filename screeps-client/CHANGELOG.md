@@ -1,5 +1,26 @@
 # screeps-client
 
+## 0.3.2
+
+### Patch Changes
+
+- 64fcb46: Show the current client version in Settings and expose the embedded wrapper version for screeps-mod and xxscreeps deployments.
+- f31f69e: Add two-finger pinch-to-zoom for the room view and world map view on touch devices. Zoom and pan work simultaneously during the pinch gesture. Also enables `touch-action: none` on the room canvas so the browser no longer interferes with pointer events.
+- d86e8df: Fix rooms with no swamp tiles rendering entirely in swamp color.
+
+  Calling `fill()`/`stroke()` on an empty PixiJS 8 path can reapply the style
+  to the previous path context. Added a `pathDrawn` guard so the terrain
+  stroke/fill is only applied when at least one tile was actually drawn.
+
+- b14a86d: Fix foreign creep badge and username display in observed rooms.
+
+  When observing a room from another player, newly spawned creeps weren't showing
+  the owner's badge and displayed player ID instead of username. Fixed by:
+
+  - Merging user data across ticks instead of replacing, preserving player info
+  - Adding `badge?: Badge` to the users type throughout the codebase
+  - Adding `refreshForeignCreepBadges()` to update creep visuals when badge data arrives
+
 ## 0.3.1
 
 ### Patch Changes
