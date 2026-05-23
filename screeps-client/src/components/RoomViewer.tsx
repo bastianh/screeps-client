@@ -12,7 +12,7 @@ import { addToast } from '~/stores/toastStore.js'
 import { setRoomObjectCount, setRoomOwner, setControllerLevel, setStructureCounts } from '~/stores/roomDataStore.js'
 import { parseRoomName, formatRoomName, isRoomInWorld } from '~/utils/roomName.js'
 import { useRoomNavigationKeys } from '~/utils/useRoomNavigationKeys.js'
-import type { RoomTerrain, RoomObjectMap, RoomObjectDiff } from 'screeps-connectivity'
+import type { Badge, RoomTerrain, RoomObjectMap, RoomObjectDiff } from 'screeps-connectivity'
 import { SubscriptionGroup } from 'screeps-connectivity'
 import {flagDraft, roomViewMode, FLAG_COLOR_MAP, pendingTile, setPendingTile, clearPendingTile, setFlagDraft, modeHint, overlayAction, clearOverlayAction, buildDraft, confirmBuild, resetRoomViewMode} from '~/stores/roomViewStore';
 import { createLogger } from '~/utils/log.js'
@@ -33,7 +33,7 @@ export function RoomViewer(props: RoomViewerProps) {
   let terrainLayerRef: ReturnType<typeof createTerrainLayer> | null = null
   const [renderer, setRenderer] = createSignal<RoomRenderer | null>(null)
   const [terrain, setTerrain] = createSignal<{ room: string, data: RoomTerrain } | null>(null)
-  const [objectState, setObjectState] = createSignal<{ objects: RoomObjectMap, diff?: RoomObjectDiff, users?: Record<string, { _id: string; username: string }> } | null>(null)
+  const [objectState, setObjectState] = createSignal<{ objects: RoomObjectMap, diff?: RoomObjectDiff, users?: Record<string, { _id: string; username: string; badge?: Badge }> } | null>(null)
   const [visualState, setVisualState] = createSignal<string>('')
 
   onMount(async () => {

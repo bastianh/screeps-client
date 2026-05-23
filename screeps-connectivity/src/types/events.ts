@@ -1,4 +1,5 @@
 import type {
+    Badge,
     ConsoleMessage,
     CpuStats,
     RoomMap2Data,
@@ -20,7 +21,7 @@ export interface RoomStoreEvents {
         objects: RoomObjectMap;
         diff: RoomObjectDiff;
         visual: string;
-        users?: Record<string, { _id: string; username: string }>
+        users?: Record<string, { _id: string; username: string; badge?: Badge }>
     }
     'room:terrainavailable': { room: string; shard: string | null; terrain: RoomTerrain }
     'room:error': { room: string; shard: string | null; message: string }

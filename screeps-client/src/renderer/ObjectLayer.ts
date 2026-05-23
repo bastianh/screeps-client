@@ -473,6 +473,7 @@ function createObjectVisual(
         badgeSprite.height = size
         badgeSprite.rotation = Math.PI / 2
         bodyContainer.addChild(badgeSprite)
+        ;(container as ContainerWithTarget).__creepBadgeSprite = badgeSprite
         badgeCache.getOrCreate(creepBadge as Badge).then((texture) => {
           if (!badgeSprite.destroyed) {
             badgeSprite.texture = texture
@@ -483,6 +484,7 @@ function createObjectVisual(
         markG.circle(0, 0, CREEP_INNER_R * 0.82)
         markG.fill({ color: OBJ_FOREIGN, alpha: 0.9 })
         bodyContainer.addChild(markG)
+        ;(container as ContainerWithTarget).__creepForeignMark = markG
       }
 
       // Store fill (animated, updated on store changes)
@@ -1031,6 +1033,7 @@ type ContainerWithTarget = Container & {
   __nameLabel?: Text
   __creepBorderG?: Graphics
   __creepBadgeSprite?: Sprite
+  __creepForeignMark?: Graphics
   __towerFillGraphics?: Graphics
   __towerEnergy?: number
   __towerCapacity?: number
@@ -1092,9 +1095,9 @@ export class ObjectLayer {
   private currentUserId?: string
   private badge?: Badge
   private readonly badgeCache = sharedBadgeCache
-  private users?: Record<string, { _id: string; username: string }>
+  private users?: Record<string, { _id: string; username: string; badge?: Badge }>
 
-  constructor(ticker?: Ticker, showLabels = true, currentUserId?: string, badge?: Badge, users?: Record<string, { _id: string; username: string }>) {
+  constructor(ticker?: Ticker, showLabels = true, currentUserId?: string, badge?: Badge, users?: Record<string, { _id: string; username: string; badge?: Badge }>) {
     this.showLabels = showLabels
     this.currentUserId = currentUserId
     this.badge = badge
@@ -1277,7 +1280,7 @@ export class ObjectLayer {
     this.sourceAnimations.set(id, { visual, fromRadius: fromSize, toRadius: toSize, startTime: performance.now() })
   }
 
-  update(objects: RoomObjectMap, diff?: RoomObjectDiff, users?: Record<string, { _id: string; username: string }>): void {
+  update(objects: RoomObjectMap, diff?: RoomObjectDiff, users?: Record<string, { _id: string; username: string; badge?: Badge }>): void {
     if (users) {
       this.users = users
     }
@@ -1572,6 +1575,7 @@ export class ObjectLayer {
       this.redrawRoads()
     }
     this.refreshForeignCreepLabels()
+    this.refreshForeignCreepBadges()
   }
 
   private redrawRoads(): void {
@@ -1806,6 +1810,45 @@ export class ObjectLayer {
       if (visual.__nameLabel.text !== labelText) {
         visual.__nameLabel.text = labelText
       }
+    }
+  }
+
+  /**
+   * Add badge sprites to foreign creeps whose user data (including badge) arrived
+   * after the visual was initially created. Replaces the red foreign-mark fill
+   * with the proper badge once the badge texture is resolved.
+   */
+  private refreshForeignCreepBadges(): void {
+    if (!this.currentUserId) return
+    for (const [id, visual] of this.objects) {
+      const obj = this.rawObjects.get(id)
+      if (!obj || obj.type !== 'creep') continue
+      if (!isForeignCreep(obj, this.currentUserId)) continue
+      if (visual.__creepBadgeSprite) continue  // badge already wired up
+      const creepUserId = typeof obj.user === 'string' ? obj.user : undefined
+      const creepBadge = creepUserId ? this.users?.[creepUserId]?.badge : undefined
+      if (!creepBadge) continue
+      const bodyContainer = visual.__bodyContainer
+      if (!bodyContainer) continue
+
+      // Remove the red foreign-mark placeholder if present
+      if (visual.__creepForeignMark && !visual.__creepForeignMark.destroyed) {
+        bodyContainer.removeChild(visual.__creepForeignMark)
+        visual.__creepForeignMark.destroy()
+        visual.__creepForeignMark = undefined
+      }
+
+      const badgeSprite = new Sprite()
+      badgeSprite.anchor.set(0.5, 0.5)
+      const size = CREEP_INNER_R * 2
+      badgeSprite.width = size
+      badgeSprite.height = size
+      badgeSprite.rotation = Math.PI / 2
+      bodyContainer.addChild(badgeSprite)
+      visual.__creepBadgeSprite = badgeSprite
+      this.badgeCache.getOrCreate(creepBadge as Badge).then((texture) => {
+        if (!badgeSprite.destroyed) badgeSprite.texture = texture
+      }).catch(() => {})
     }
   }
 

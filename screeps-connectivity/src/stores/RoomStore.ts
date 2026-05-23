@@ -2,7 +2,7 @@ import { TypedStore } from './TypedStore.js'
 import { RoomTerrain } from '../types/game.js'
 import type { Logger } from '../logger.js'
 import type { RoomStoreEvents } from '../types/events.js'
-import type { RoomObject, RoomObjectMap, RoomObjectDiff } from '../types/game.js'
+import type { Badge, RoomObject, RoomObjectMap, RoomObjectDiff } from '../types/game.js'
 import type { HttpClient } from '../http/HttpClient.js'
 import type { SocketClient } from '../socket/SocketClient.js'
 import type { Cache } from '../cache/Cache.js'
@@ -13,7 +13,7 @@ export class RoomStore extends TypedStore<RoomStoreEvents> {
   private readonly socket: SocketClient
   private readonly cache: Cache
   private readonly roomObjects = new Map<string, RoomObjectMap>()
-  private readonly roomUsers = new Map<string, Record<string, { _id: string; username: string }>>()
+  private readonly roomUsers = new Map<string, Record<string, { _id: string; username: string; badge?: Badge }>>()
   private readonly roomSubCount = new Map<string, number>()
   private readonly lastFlagsString = new Map<string, string>()
 
@@ -175,7 +175,7 @@ export class RoomStore extends TypedStore<RoomStoreEvents> {
     })
 
     const listenerSub = this.socket.on(channel, (data) => {
-      const update = data as { objects?: RoomObjectDiff | null; gameTime?: number; visual?: string; flags?: string; users?: Record<string, { _id: string; username: string }> }
+      const update = data as { objects?: RoomObjectDiff | null; gameTime?: number; visual?: string; flags?: string; users?: Record<string, { _id: string; username: string; badge?: Badge }> }
       const current: RoomObjectMap = { ...(this.roomObjects.get(mapKey) ?? {}) }
 
       if (update.objects == null) {
@@ -245,7 +245,8 @@ export class RoomStore extends TypedStore<RoomStoreEvents> {
       }
 
       if (update.users) {
-        this.roomUsers.set(mapKey, update.users)
+        const existing = this.roomUsers.get(mapKey) ?? {}
+        this.roomUsers.set(mapKey, { ...existing, ...update.users })
       }
       this.roomObjects.set(mapKey, current)
       const users = this.roomUsers.get(mapKey)
