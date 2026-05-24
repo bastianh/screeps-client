@@ -1,4 +1,4 @@
-import { createSignal, createMemo, createEffect, For } from 'solid-js'
+import { createSignal, createMemo, createEffect, For, untrack } from 'solid-js'
 import { badgeToSvg, BadgeColors } from 'screeps-connectivity'
 import type { Badge } from 'screeps-connectivity'
 import { client } from '~/stores/clientStore.js'
@@ -35,15 +35,15 @@ export function BadgePickerModal(props: {
   badge: Badge
   onClose: () => void
 }) {
-  const [type, setType] = createSignal(typeof props.badge.type === 'number' ? props.badge.type : 1)
-  const [color1, setColor1] = createSignal<string | number>(initColor(props.badge.color1))
-  const [color2, setColor2] = createSignal<string | number>(initColor(props.badge.color2))
-  const [color3, setColor3] = createSignal<string | number>(initColor(props.badge.color3))
-  const [param, setParam] = createSignal(props.badge.param ?? 0)
-  const [flip, setFlip] = createSignal(props.badge.flip ?? false)
+  const [type, setType] = createSignal(untrack(() => typeof props.badge.type === 'number' ? props.badge.type : 1))
+  const [color1, setColor1] = createSignal<string | number>(untrack(() => initColor(props.badge.color1)))
+  const [color2, setColor2] = createSignal<string | number>(untrack(() => initColor(props.badge.color2)))
+  const [color3, setColor3] = createSignal<string | number>(untrack(() => initColor(props.badge.color3)))
+  const [param, setParam] = createSignal(untrack(() => props.badge.param ?? 0))
+  const [flip, setFlip] = createSignal(untrack(() => props.badge.flip ?? false))
   const [activeSlot, setActiveSlot] = createSignal<1 | 2 | 3>(1)
   const [saving, setSaving] = createSignal(false)
-  const [hexDraft, setHexDraft] = createSignal(toDisplayHex(initColor(props.badge.color1)))
+  const [hexDraft, setHexDraft] = createSignal(untrack(() => toDisplayHex(initColor(props.badge.color1))))
 
   const colorForSlot = (slot: 1 | 2 | 3): string | number => {
     if (slot === 1) return color1()
@@ -148,7 +148,7 @@ export function BadgePickerModal(props: {
         >
           <span style={{ 'font-size': '15px', 'font-weight': 600, color: '#c9d1d9' }}>Edit Badge</span>
           <button
-            onClick={props.onClose}
+            onClick={() => props.onClose()}
             style={{
               background: 'transparent',
               border: 'none',
@@ -357,7 +357,7 @@ export function BadgePickerModal(props: {
           }}
         >
           <button
-            onClick={props.onClose}
+            onClick={() => props.onClose()}
             disabled={saving()}
             style={{
               padding: '8px 16px',
