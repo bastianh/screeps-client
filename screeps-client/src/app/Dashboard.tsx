@@ -1,4 +1,5 @@
 import { createEffect, createSignal, lazy, onCleanup, onMount, Show, type JSX } from 'solid-js'
+import { Map, LayoutGrid, Code2, Settings, LogOut, ChevronLeft, ChevronRight } from 'lucide-solid'
 import { ConnectionStatus } from '~/components/ConnectionStatus.js'
 import { RoomViewer } from '~/components/RoomViewer.js'
 import { ToastContainer } from '~/components/ToastContainer.js'
@@ -51,20 +52,23 @@ function parseMapUrl(): { shard: string | null } | null {
 function HeaderButton(props: {
   active?: boolean
   onClick: () => void
+  title: string
   children: JSX.Element
 }) {
   return (
     <button
+      title={props.title}
       onClick={() => props.onClick()}
       style={{
-        padding: '6px 14px',
+        padding: '7px',
         'border-radius': '4px',
         border: `1px solid ${props.active ? '#388bfd' : '#30363d'}`,
         background: props.active ? '#1f3158' : '#21262d',
         color: props.active ? '#58a6ff' : '#c9d1d9',
-        'font-size': '13px',
         cursor: 'pointer',
         margin: '0 4px',
+        display: 'flex',
+        'align-items': 'center',
       }}
     >
       {props.children}
@@ -72,20 +76,22 @@ function HeaderButton(props: {
   )
 }
 
-function NavArrowButton(props: { disabled: boolean; onClick: () => void; children: JSX.Element }) {
+function NavArrowButton(props: { disabled: boolean; onClick: () => void; title: string; children: JSX.Element }) {
   return (
     <button
+      title={props.title}
       disabled={props.disabled}
       onClick={() => props.onClick()}
       style={{
-        padding: '6px 10px',
+        padding: '7px',
         'border-radius': '4px',
         border: '1px solid #30363d',
         background: '#21262d',
         color: props.disabled ? '#484f58' : '#c9d1d9',
-        'font-size': '14px',
         cursor: props.disabled ? 'default' : 'pointer',
         margin: '0 2px',
+        display: 'flex',
+        'align-items': 'center',
       }}
     >
       {props.children}
@@ -387,31 +393,33 @@ export function Dashboard() {
           />
         </Show>
         <div style={{ flex: 1 }} />
-        <NavArrowButton disabled={!canBack()} onClick={() => client()?.stores.navigation.back()}>←</NavArrowButton>
-        <NavArrowButton disabled={!canForward()} onClick={() => client()?.stores.navigation.forward()}>→</NavArrowButton>
-        <HeaderButton active={mapMode()} onClick={toggleMap}>
-          {mapMode() ? 'Room View' : 'Map'}
+        <NavArrowButton title="Back" disabled={!canBack()} onClick={() => client()?.stores.navigation.back()}><ChevronLeft size={16} /></NavArrowButton>
+        <NavArrowButton title="Forward" disabled={!canForward()} onClick={() => client()?.stores.navigation.forward()}><ChevronRight size={16} /></NavArrowButton>
+        <HeaderButton title={mapMode() ? 'Room View' : 'Map'} active={mapMode()} onClick={toggleMap}>
+          {mapMode() ? <LayoutGrid size={16} /> : <Map size={16} />}
         </HeaderButton>
-        <HeaderButton active={showCode()} onClick={() => { setShowCode((v) => !v); setShowSettings(false) }}>
-          Code
+        <HeaderButton title="Code Editor" active={showCode()} onClick={() => { setShowCode((v) => !v); setShowSettings(false) }}>
+          <Code2 size={16} />
         </HeaderButton>
-        <HeaderButton active={showSettings()} onClick={() => { setShowSettings((v) => !v); setShowCode(false) }}>
-          Settings
+        <HeaderButton title="Settings" active={showSettings()} onClick={() => { setShowSettings((v) => !v); setShowCode(false) }}>
+          <Settings size={16} />
         </HeaderButton>
         <button
+          title="Logout"
           onClick={disconnect}
           style={{
-            padding: '6px 14px',
+            padding: '7px',
             'border-radius': '4px',
             border: 'none',
             background: '#da3633',
             color: '#fff',
-            'font-size': '13px',
             cursor: 'pointer',
             margin: '0 16px 0 8px',
+            display: 'flex',
+            'align-items': 'center',
           }}
         >
-          Logout
+          <LogOut size={16} />
         </button>
       </div>
 

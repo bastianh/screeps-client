@@ -2,4 +2,4 @@
 "screeps-client": patch
 ---
 
-Integrate lucide-solid icon library. Replace Unicode fallback glyphs (✕ close buttons in Settings and Badge Picker panels, ✓/✗ field availability indicators in the registration form) with proper SVG icons from Lucide.
+Integrate lucide-solid icon library. Replace Unicode fallback glyphs (✕ close buttons, ✓/✗ field indicators) with proper SVG icons from Lucide. Replace text labels in the dashboard header (Map, Code, Settings, Logout, nav arrows) with icon-only buttons and native browser tooltips.
