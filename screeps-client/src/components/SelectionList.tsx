@@ -726,9 +726,10 @@ function SelectionItem(props: { item: SelectedObject }) {
     setFlagDeleteConfirming(false)
     const c = client()
     if (!c) return
+    const id = props.item.id
     const raw = props.item.raw as Record<string, unknown>
     c.http.game.removeFlag(raw.room as string, raw.name as string)
-      .then(() => deselectItem(props.item.id))
+      .then(() => deselectItem(id))
       .catch(() => {})
   }
 
@@ -743,10 +744,11 @@ function SelectionItem(props: { item: SelectedObject }) {
     setDestroyConfirming(false)
     const c = client()
     if (!c) return
+    const id = props.item.id
     const raw = props.item.raw as Record<string, unknown>
     const room = raw.room as string
-    c.http.game.addObjectIntent('room', room, 'destroyStructure', [{ id: props.item.id, roomName: room, user: raw.user as string }])
-      .then(() => deselectItem(props.item.id))
+    c.http.game.addObjectIntent('room', room, 'destroyStructure', [{ id, roomName: room, user: raw.user as string }])
+      .then(() => deselectItem(id))
       .catch((err: Error) => error('destroyStructure failed:', err))
   }
 
@@ -761,8 +763,9 @@ function SelectionItem(props: { item: SelectedObject }) {
     setSuicideConfirming(false)
     const c = client()
     if (!c) return
-    c.http.game.addObjectIntent(props.item.id, props.item.raw.room as string, 'suicide', {})
-      .then(() => deselectItem(props.item.id))
+    const id = props.item.id
+    c.http.game.addObjectIntent(id, props.item.raw.room as string, 'suicide', {})
+      .then(() => deselectItem(id))
       .catch((err: Error) => error('suicide failed:', err))
   }
 
