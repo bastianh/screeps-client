@@ -152,7 +152,7 @@ export class HoverHighlightLayer {
     for (const [id, g] of this.selectionGraphics) {
       if (this.selectionTypes.get(id) !== 'creep') continue
       const visual = this.selectionVisuals.get(id)
-      if (!visual) continue
+      if (!visual || visual.destroyed) continue
       this.drawCreepRing(g, visual.x, visual.y)
     }
   }
