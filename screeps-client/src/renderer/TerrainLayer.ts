@@ -1,4 +1,4 @@
-import { Container, Graphics, BlurFilter, NoiseFilter, type StrokeStyle } from 'pixi.js'
+import { Container, Graphics, BlurFilter, NoiseFilter, Rectangle, Sprite, type DestroyOptions, type Renderer, type StrokeStyle } from 'pixi.js'
 import { TerrainType, RoomTerrain } from 'screeps-connectivity'
 import { TILE_SIZE } from './RoomRenderer.js'
 import {
@@ -211,20 +211,42 @@ function createSwampGlow(terrain: RoomTerrain): Graphics {
   return g
 }
 
-function createWallNoise(terrain: RoomTerrain): Graphics {
+function createWallNoise(terrain: RoomTerrain, renderer: Renderer): Sprite {
   const g = new Graphics()
-  g.label = 'wallNoise'
   drawTerrainQuadrants(g, terrain, TerrainType.Wall, (gg) => gg.fill(TERRAIN_WALL_NOISE))
   g.alpha = 0.5
   g.filters = [new NoiseFilter({ noise: 0.12, seed: 1 })]
-  return g
+  g.filterArea = new Rectangle(0, 0, 50 * TILE_SIZE, 50 * TILE_SIZE)
+
+  const texture = renderer.generateTexture({
+    target: g,
+    frame: g.filterArea,
+  })
+
+  g.filters = null
+  g.destroy()
+
+  const sprite = new Sprite(texture)
+  sprite.label = 'wallNoise'
+  return sprite
 }
 
-export function createTerrainLayer(terrain: RoomTerrain): Container {
+export function createTerrainLayer(terrain: RoomTerrain, renderer: Renderer): Container {
   const container = new Container()
+  const wallNoise = createWallNoise(terrain, renderer)
+  const baseDestroy = container.destroy.bind(container)
+
+  container.destroy = (options?: DestroyOptions) => {
+    if (!wallNoise.destroyed) {
+      wallNoise.removeFromParent()
+      wallNoise.destroy({ texture: true, textureSource: true })
+    }
+    baseDestroy(options)
+  }
+
   container.addChild(createMainTerrain(terrain))
   container.addChild(createSwampGlow(terrain))
-  container.addChild(createWallNoise(terrain))
+  container.addChild(wallNoise)
   return container
 }
 

@@ -171,7 +171,7 @@ export function RoomViewer(props: RoomViewerProps) {
     const t = untrack(terrain)
     if (t && t.room === props.room) {
       log(`terrain applied immediately (pre-loaded) — ${props.room}`)
-      terrainLayerRef = createTerrainLayer(t.data)
+      terrainLayerRef = createTerrainLayer(t.data, r.app.renderer)
       setTerrainEffectsVisible(terrainLayerRef, untrack(terrainEffects))
       r.world.addChildAt(terrainLayerRef, 0)
       r.bringNavOverlayToTop()
@@ -274,7 +274,7 @@ export function RoomViewer(props: RoomViewerProps) {
       return
     }
     log(`terrain applied (async) — ${props.room}`)
-    terrainLayerRef = createTerrainLayer(t.data)
+    terrainLayerRef = createTerrainLayer(t.data, r.app.renderer)
     setTerrainEffectsVisible(terrainLayerRef, untrack(terrainEffects))
     r.world.addChildAt(terrainLayerRef, 0)
     r.bringNavOverlayToTop()
