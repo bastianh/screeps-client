@@ -722,6 +722,10 @@ export class MapRenderer {
     return this.terrainBaked.has(roomName)
   }
 
+  markRoomFetched(roomName: string): void {
+    this.terrainBaked.add(roomName)
+  }
+
 
   clearRoom(roomName: string): void {
     const entry = this.activeRooms.get(roomName)
@@ -1140,8 +1144,13 @@ export class MapRenderer {
     this.lastVisibleBounds = { rxMin, rxMax, ryMin, ryMax }
 
     const visible: string[] = []
-    for (let rx = rxMin; rx <= rxMax; rx++) {
-      for (let ry = ryMin; ry <= ryMax; ry++) {
+    const b = this.worldBoundsSet
+    const rxFrom = b ? Math.max(rxMin, b.minX) : rxMin
+    const rxTo   = b ? Math.min(rxMax, b.maxX) : rxMax
+    const ryFrom = b ? Math.max(ryMin, b.minY) : ryMin
+    const ryTo   = b ? Math.min(ryMax, b.maxY) : ryMax
+    for (let rx = rxFrom; rx <= rxTo; rx++) {
+      for (let ry = ryFrom; ry <= ryTo; ry++) {
         const name = formatRoomName(rx, ry)
         if (name) visible.push(name)
       }

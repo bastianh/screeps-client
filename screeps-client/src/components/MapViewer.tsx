@@ -90,6 +90,9 @@ export function MapViewer(props: MapViewerProps) {
           const unclaimable = roomUnclaimable.get(room)
           if (unclaimable !== undefined) renderer?.setRoomOwned(room, unclaimable)
         }
+        for (const room of batch) {
+          if (!terrainMap.has(room)) renderer?.markRoomFetched(room)
+        }
       })
       .catch(err => error('terrain fetch failed:', err))
       .finally(() => { if (terrainQueue.length > 0) terrainTimer = setTimeout(drainTerrain, TERRAIN_BATCH_MS) })
