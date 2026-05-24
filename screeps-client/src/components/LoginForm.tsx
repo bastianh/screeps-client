@@ -1,4 +1,5 @@
-import { createSignal, createEffect, onCleanup, For, Show } from 'solid-js'
+import { createSignal, createEffect, onCleanup, For, Show, JSX } from 'solid-js'
+import { Check, X as XIcon } from 'lucide-solid'
 import { connect, status, error } from '~/stores/clientStore.js'
 import { isEmbedded, isXxscreepsMode, embeddedServerUrl } from '~/utils/embedded.js'
 import {
@@ -85,17 +86,20 @@ function useAvailCheck(url: () => string, value: () => string, checker: (url: st
 }
 
 function FieldStatus(props: { state: AvailState }) {
-  const map: Record<AvailState, { text: string; color: string } | null> = {
+  const map: Record<AvailState, { children: JSX.Element; color: string } | null> = {
     idle: null,
-    checking: { text: 'Checking…', color: '#8b949e' },
-    available: { text: '✓ Available', color: '#3fb950' },
-    taken: { text: '✗ Already taken', color: '#f85149' },
-    error: { text: 'Could not verify', color: '#d29922' },
+    checking: { children: 'Checking…', color: '#8b949e' },
+    available: { children: <><Check size={12} /> Available</>, color: '#3fb950' },
+    taken: { children: <><XIcon size={12} /> Already taken</>, color: '#f85149' },
+    error: { children: 'Could not verify', color: '#d29922' },
   }
   const info = () => map[props.state]
   return (
     <Show when={info()}>
-      <span style={{ 'font-size': '11px', color: info()!.color }}>{info()!.text}</span>
+      <span style={{
+        'font-size': '11px', color: info()!.color,
+        display: 'inline-flex', 'align-items': 'center', gap: '3px',
+      }}>{info()!.children}</span>
     </Show>
   )
 }

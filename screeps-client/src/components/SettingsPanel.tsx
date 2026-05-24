@@ -1,4 +1,5 @@
 import { JSX, createSignal, Show, createMemo } from 'solid-js'
+import { X } from 'lucide-solid'
 import {
   widescreenMode, setWidescreenMode,
   showCreepLabels, setShowCreepLabels,
@@ -163,13 +164,12 @@ export function SettingsPanel(props: { onClose: () => void }) {
             background: 'transparent',
             border: 'none',
             color: '#8b949e',
-            'font-size': '18px',
             cursor: 'pointer',
             'line-height': '1',
             padding: '2px 6px',
           }}
         >
-          ✕
+          <X size={18} />
         </button>
       </div>
 

@@ -27,6 +27,7 @@
     "prepublishOnly": "pnpm build:all && node ../scripts/strip-client-devdeps.mjs"
   },
   "devDependencies": {
+    "lucide-solid": "^0.513.0",
     "screeps-connectivity": "workspace:*",
     "@codemirror/lang-javascript": "^6.2.5",
     "@codemirror/theme-one-dark": "^6.1.3",
