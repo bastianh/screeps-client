@@ -55,3 +55,25 @@ export function setSession(key: string, value: string): void {
 export function removeSession(key: string): void {
   sessionStorage.removeItem(key)
 }
+
+export async function clearAllCaches(): Promise<void> {
+  localStorage.clear()
+
+  if (indexedDB.databases) {
+    const dbs = await indexedDB.databases()
+    await Promise.all(dbs.map(db => {
+      if (!db.name) return Promise.resolve()
+      return new Promise<void>((resolve) => {
+        const req = indexedDB.deleteDatabase(db.name!)
+        req.onsuccess = () => resolve()
+        req.onerror = () => resolve()
+        req.onblocked = () => resolve()
+      })
+    }))
+  }
+
+  if ('caches' in window) {
+    const keys = await caches.keys()
+    await Promise.all(keys.map(key => caches.delete(key)))
+  }
+}

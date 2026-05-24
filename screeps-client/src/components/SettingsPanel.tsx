@@ -10,6 +10,8 @@ import { clientVersion, embeddedModInfo } from '~/utils/embedded.js'
 import { userInfo, isGuest } from '~/stores/clientStore.js'
 import { badgeToSvg } from 'screeps-connectivity'
 import { BadgePickerModal } from '~/components/BadgePickerModal.js'
+import { clearAllCaches } from '~/utils/storage.js'
+import { addToast } from '~/stores/toastStore.js'
 
 interface ToggleProps {
   label: string
@@ -110,6 +112,7 @@ function InfoRow(props: { label: string; value: string }) {
 export function SettingsPanel(props: { onClose: () => void }) {
   const modInfo = embeddedModInfo()
   const [showBadgePicker, setShowBadgePicker] = createSignal(false)
+  const [clearing, setClearing] = createSignal(false)
 
   const badgePreviewSrc = createMemo(() => {
     const badge = userInfo()?.badge
@@ -117,6 +120,18 @@ export function SettingsPanel(props: { onClose: () => void }) {
     const svg = badgeToSvg(badge)
     return `data:image/svg+xml,${encodeURIComponent(svg)}`
   })
+
+  async function handleClearCaches() {
+    setClearing(true)
+    try {
+      await clearAllCaches()
+      addToast('All caches cleared. Reloading…', 'success', 2000)
+      setTimeout(() => window.location.reload(), 1500)
+    } catch {
+      addToast('Failed to clear caches.', 'error')
+      setClearing(false)
+    }
+  }
 
   return (
     <div
@@ -242,6 +257,43 @@ export function SettingsPanel(props: { onClose: () => void }) {
               </div>
             </Section>
           </Show>
+
+          <Section title="Data">
+            <div
+              style={{
+                display: 'flex',
+                'align-items': 'center',
+                'justify-content': 'space-between',
+                padding: '10px 0',
+                'border-bottom': '1px solid #21262d',
+              }}
+            >
+              <div>
+                <div style={{ 'font-size': '13px', color: '#c9d1d9' }}>Clear all caches</div>
+                <div style={{ 'font-size': '11px', color: '#8b949e', 'margin-top': '3px' }}>
+                  Deletes IndexedDB, Cache API, and localStorage. Session is kept. Page reloads afterwards.
+                </div>
+              </div>
+              <button
+                disabled={clearing()}
+                onClick={handleClearCaches}
+                style={{
+                  'flex-shrink': 0,
+                  'margin-left': '24px',
+                  padding: '6px 14px',
+                  'border-radius': '6px',
+                  border: '1px solid #da3633',
+                  background: 'transparent',
+                  color: clearing() ? '#8b949e' : '#f85149',
+                  'font-size': '12px',
+                  cursor: clearing() ? 'default' : 'pointer',
+                  opacity: clearing() ? 0.6 : 1,
+                }}
+              >
+                {clearing() ? 'Clearing…' : 'Clear'}
+              </button>
+            </div>
+          </Section>
 
           <Section title="About">
             <InfoRow label="Client version" value={clientVersion()} />
