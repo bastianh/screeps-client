@@ -9,7 +9,7 @@ import { client, gameTime, setGameTime, recordGameTime, tickDuration, worldBound
 import { showCreepLabels, terrainEffects } from '~/stores/settingsStore.js'
 import { setSelection, clearSelection, selection, updateSelectionWithDiff, createSelectedObject } from '~/stores/selectionStore.js'
 import { addToast } from '~/stores/toastStore.js'
-import { setRoomObjectCount, setRoomOwner, setControllerLevel, setStructureCounts } from '~/stores/roomDataStore.js'
+import { setRoomObjectCount, setRoomOwner, setControllerLevel, setStructureCounts, setRoomUsers } from '~/stores/roomDataStore.js'
 import { parseRoomName, formatRoomName, isRoomInWorld } from '~/utils/roomName.js'
 import { useRoomNavigationKeys } from '~/utils/useRoomNavigationKeys.js'
 import type { Badge, RoomTerrain, RoomObjectMap, RoomObjectDiff } from 'screeps-connectivity'
@@ -72,6 +72,7 @@ export function RoomViewer(props: RoomViewerProps) {
     setRoomOwner(null)
     setControllerLevel(null)
     setStructureCounts({})
+    setRoomUsers(null)
 
     const group = new SubscriptionGroup()
 
@@ -135,6 +136,7 @@ export function RoomViewer(props: RoomViewerProps) {
       setRoomOwner(owner)
       setControllerLevel(ctrlLevel || null)
       setStructureCounts(structCounts)
+      setRoomUsers(data.users ?? null)
     }))
 
     onCleanup(() => {
