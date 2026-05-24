@@ -35,6 +35,7 @@ const HEX_RE = /^#[0-9a-f]{6}$/i
 export function BadgePickerModal(props: {
   badge: Badge
   onClose: () => void
+  onSaved?: () => void
 }) {
   const [type, setType] = createSignal(untrack(() => typeof props.badge.type === 'number' ? props.badge.type : 1))
   const [color1, setColor1] = createSignal<string | number>(untrack(() => initColor(props.badge.color1)))
@@ -99,6 +100,7 @@ export function BadgePickerModal(props: {
       await c.http.user.badge(currentBadge())
       await c.stores.user.refreshMe()
       props.onClose()
+      props.onSaved?.()
       addToast('Badge saved', 'success', 3000)
     } catch (err) {
       addToast(`Failed to save badge: ${err instanceof Error ? err.message : String(err)}`, 'error', 5000)

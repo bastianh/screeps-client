@@ -10,9 +10,12 @@ import {
 import { clientVersion, embeddedModInfo } from '~/utils/embedded.js'
 import { userInfo, isGuest } from '~/stores/clientStore.js'
 import { badgeToSvg } from 'screeps-connectivity'
+import type { Badge } from 'screeps-connectivity'
 import { BadgePickerModal } from '~/components/BadgePickerModal.js'
 import { clearAllCaches } from '~/utils/storage.js'
 import { addToast } from '~/stores/toastStore.js'
+
+const DEFAULT_BADGE: Badge = { type: 1, color1: '#4a5060', color2: '#7a9ec0', color3: '#c0daf0', param: 0, flip: false }
 
 interface ToggleProps {
   label: string
@@ -112,7 +115,8 @@ function InfoRow(props: { label: string; value: string }) {
 
 export function SettingsPanel(props: { onClose: () => void }) {
   const modInfo = embeddedModInfo()
-  const [showBadgePicker, setShowBadgePicker] = createSignal(false)
+  const openedForBadgeCreation = !isGuest() && !userInfo()?.badge
+  const [showBadgePicker, setShowBadgePicker] = createSignal(openedForBadgeCreation)
   const [clearing, setClearing] = createSignal(false)
 
   const badgePreviewSrc = createMemo(() => {
@@ -174,10 +178,11 @@ export function SettingsPanel(props: { onClose: () => void }) {
       </div>
 
       {/* Badge picker modal */}
-      <Show when={showBadgePicker() && userInfo()?.badge}>
+      <Show when={showBadgePicker()}>
         <BadgePickerModal
-          badge={userInfo()!.badge}
+          badge={userInfo()?.badge ?? DEFAULT_BADGE}
           onClose={() => setShowBadgePicker(false)}
+          onSaved={openedForBadgeCreation ? () => props.onClose() : undefined}
         />
       </Show>
 
@@ -224,7 +229,7 @@ export function SettingsPanel(props: { onClose: () => void }) {
             />
           </Section>
 
-          <Show when={!isGuest() && badgePreviewSrc()}>
+          <Show when={!isGuest()}>
             <Section title="Player Badge">
               <div
                 style={{
@@ -236,7 +241,9 @@ export function SettingsPanel(props: { onClose: () => void }) {
                 }}
               >
                 <div style={{ display: 'flex', 'align-items': 'center', gap: '12px' }}>
-                  <img src={badgePreviewSrc()!} width={40} height={40} style={{ display: 'block' }} />
+                  <Show when={badgePreviewSrc()}>
+                    <img src={badgePreviewSrc()!} width={40} height={40} style={{ display: 'block' }} />
+                  </Show>
                   <span style={{ 'font-size': '13px', color: '#c9d1d9' }}>{userInfo()?.username ?? ''}</span>
                 </div>
                 <button
@@ -252,7 +259,7 @@ export function SettingsPanel(props: { onClose: () => void }) {
                     'flex-shrink': 0,
                   }}
                 >
-                  Edit Badge
+                  {badgePreviewSrc() ? 'Edit Badge' : 'Create Badge'}
                 </button>
               </div>
             </Section>

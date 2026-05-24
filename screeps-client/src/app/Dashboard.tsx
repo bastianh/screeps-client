@@ -15,7 +15,7 @@ const CodePanel = lazy(() =>
 const MapViewer = lazy(() =>
   import('~/components/MapViewer.js').then((m) => ({ default: m.MapViewer })),
 )
-import { client, disconnect, isGuest } from '~/stores/clientStore.js'
+import { client, disconnect, isGuest, userInfo } from '~/stores/clientStore.js'
 import { widescreenMode } from '~/stores/settingsStore.js'
 import { toggleShowLog, toggleShowConsole } from '~/stores/consoleStore.js'
 import { setRoomViewMode } from '~/stores/roomViewStore.js'
@@ -105,7 +105,7 @@ export function Dashboard() {
   const [shard, setShard] = createSignal<string | null>(urlState.shard ?? getStr(LS.shard))
   const [mapMode, setMapMode] = createSignal(parseMapUrl() !== null || !urlState.room)
 
-  const [showSettings, setShowSettings] = createSignal(false)
+  const [showSettings, setShowSettings] = createSignal(!isGuest() && !userInfo()?.badge)
   const [showCode, setShowCode] = createSignal(false)
   // Suppresses sidebar transition for one render cycle whenever showCode toggles,
   // so both open and close are instant with no CSS animation.
