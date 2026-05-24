@@ -14,8 +14,10 @@ export const TERRAIN_BORDER = 0x30363d
 // In-room terrain fill + outer border (border drawn with stroke alignment=0 / outside)
 export const TERRAIN_WALL_FILL    = 0x181818
 export const TERRAIN_WALL_BORDER  = 0x000000
+export const TERRAIN_WALL_NOISE   = 0x282828  // lighter grey for noise overlay on walls
 export const TERRAIN_SWAMP_FILL   = 0x282D1A
 export const TERRAIN_SWAMP_BORDER = 0x26271F
+export const TERRAIN_SWAMP_GLOW   = 0x2A4A20  // saturated green for atmospheric blur
 
 // ── Body parts ─────────────────────────────────────────────────────────────
 export const BP_TOUGH         = 0x4c4c4c

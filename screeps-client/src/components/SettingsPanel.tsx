@@ -4,6 +4,7 @@ import {
   showCreepLabels, setShowCreepLabels,
   showMapRoomNames, setShowMapRoomNames,
   showUnclaimableRooms, setShowUnclaimableRooms,
+  terrainEffects, setTerrainEffects,
 } from '~/stores/settingsStore.js'
 import { clientVersion, embeddedModInfo } from '~/utils/embedded.js'
 
@@ -165,6 +166,12 @@ export function SettingsPanel(props: { onClose: () => void }) {
               description="Display each creep's name above its sprite."
               value={showCreepLabels()}
               onChange={setShowCreepLabels}
+            />
+            <Toggle
+              label="Terrain effects"
+              description="Swamp glow and wall noise texture overlay."
+              value={terrainEffects()}
+              onChange={setTerrainEffects}
             />
           </Section>
 

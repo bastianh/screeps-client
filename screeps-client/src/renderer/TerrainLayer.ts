@@ -1,10 +1,10 @@
-import { Graphics, type StrokeStyle } from 'pixi.js'
+import { Container, Graphics, BlurFilter, NoiseFilter, type StrokeStyle } from 'pixi.js'
 import { TerrainType, RoomTerrain } from 'screeps-connectivity'
 import { TILE_SIZE } from './RoomRenderer.js'
 import {
   TERRAIN_PLAIN, TERRAIN_ROAD, TERRAIN_BORDER,
-  TERRAIN_WALL_FILL, TERRAIN_WALL_BORDER,
-  TERRAIN_SWAMP_FILL, TERRAIN_SWAMP_BORDER,
+  TERRAIN_WALL_FILL, TERRAIN_WALL_BORDER, TERRAIN_WALL_NOISE,
+  TERRAIN_SWAMP_FILL, TERRAIN_SWAMP_BORDER, TERRAIN_SWAMP_GLOW,
 } from './colors.js'
 
 type ApplyStyle = (g: Graphics) => void
@@ -170,7 +170,7 @@ function drawExits(g: Graphics, terrain: RoomTerrain) {
   }
 }
 
-export function createTerrainLayer(terrain: RoomTerrain): Graphics {
+function createMainTerrain(terrain: RoomTerrain): Graphics {
   const g = new Graphics()
 
   // Base plain layer
@@ -200,4 +200,35 @@ export function createTerrainLayer(terrain: RoomTerrain): Graphics {
   g.stroke({ width: 1, color: TERRAIN_BORDER })
 
   return g
+}
+
+function createSwampGlow(terrain: RoomTerrain): Graphics {
+  const g = new Graphics()
+  g.label = 'swampGlow'
+  drawTerrainQuadrants(g, terrain, TerrainType.Swamp, (gg) => gg.fill(TERRAIN_SWAMP_GLOW))
+  g.alpha = 0.45
+  g.filters = [new BlurFilter({ strength: 5, quality: 3 })]
+  return g
+}
+
+function createWallNoise(terrain: RoomTerrain): Graphics {
+  const g = new Graphics()
+  g.label = 'wallNoise'
+  drawTerrainQuadrants(g, terrain, TerrainType.Wall, (gg) => gg.fill(TERRAIN_WALL_NOISE))
+  g.alpha = 0.5
+  g.filters = [new NoiseFilter({ noise: 0.12, seed: 1 })]
+  return g
+}
+
+export function createTerrainLayer(terrain: RoomTerrain): Container {
+  const container = new Container()
+  container.addChild(createMainTerrain(terrain))
+  container.addChild(createSwampGlow(terrain))
+  container.addChild(createWallNoise(terrain))
+  return container
+}
+
+export function setTerrainEffectsVisible(layer: Container, visible: boolean): void {
+  layer.getChildByLabel('swampGlow')!.visible = visible
+  layer.getChildByLabel('wallNoise')!.visible = visible
 }

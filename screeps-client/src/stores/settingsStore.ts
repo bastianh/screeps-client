@@ -11,3 +11,4 @@ export const [widescreenMode, setWidescreenMode] = boolSetting(LS.widescreenMode
 export const [showCreepLabels, setShowCreepLabels] = boolSetting(LS.showCreepLabels, true)
 export const [showMapRoomNames, setShowMapRoomNames] = boolSetting(LS.showMapRoomNames, false)
 export const [showUnclaimableRooms, setShowUnclaimableRooms] = boolSetting(LS.showUnclaimableRooms, true)
+export const [terrainEffects, setTerrainEffects] = boolSetting(LS.terrainEffects, true)

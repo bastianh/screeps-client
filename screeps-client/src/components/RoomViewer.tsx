@@ -1,12 +1,12 @@
 import { createEffect, createSignal, onCleanup, onMount, untrack } from 'solid-js'
 
 import { RoomRenderer } from '~/renderer/RoomRenderer.js'
-import { createTerrainLayer } from '~/renderer/TerrainLayer.js'
+import { createTerrainLayer, setTerrainEffectsVisible } from '~/renderer/TerrainLayer.js'
 import { ObjectLayer } from '~/renderer/ObjectLayer.js'
 import { ActionAnimationLayer } from '~/renderer/ActionAnimationLayer.js'
 import { VisualLayer } from '~/renderer/VisualLayer.js'
 import { client, gameTime, setGameTime, recordGameTime, tickDuration, worldBounds, userInfo, worldStatus } from '~/stores/clientStore.js'
-import { showCreepLabels } from '~/stores/settingsStore.js'
+import { showCreepLabels, terrainEffects } from '~/stores/settingsStore.js'
 import { setSelection, clearSelection, selection, updateSelectionWithDiff, createSelectedObject } from '~/stores/selectionStore.js'
 import { addToast } from '~/stores/toastStore.js'
 import { setRoomObjectCount, setRoomOwner, setControllerLevel, setStructureCounts } from '~/stores/roomDataStore.js'
@@ -172,6 +172,7 @@ export function RoomViewer(props: RoomViewerProps) {
     if (t && t.room === props.room) {
       log(`terrain applied immediately (pre-loaded) — ${props.room}`)
       terrainLayerRef = createTerrainLayer(t.data)
+      setTerrainEffectsVisible(terrainLayerRef, untrack(terrainEffects))
       r.world.addChildAt(terrainLayerRef, 0)
       r.bringNavOverlayToTop()
     }
@@ -274,6 +275,7 @@ export function RoomViewer(props: RoomViewerProps) {
     }
     log(`terrain applied (async) — ${props.room}`)
     terrainLayerRef = createTerrainLayer(t.data)
+    setTerrainEffectsVisible(terrainLayerRef, untrack(terrainEffects))
     r.world.addChildAt(terrainLayerRef, 0)
     r.bringNavOverlayToTop()
   })
@@ -504,6 +506,12 @@ export function RoomViewer(props: RoomViewerProps) {
   // Sync creep label visibility when the setting changes
   createEffect(() => {
     objLayer?.setShowLabels(showCreepLabels())
+  })
+
+  // Sync terrain effects visibility when the setting changes
+  createEffect(() => {
+    const enabled = terrainEffects()
+    if (terrainLayerRef) setTerrainEffectsVisible(terrainLayerRef, enabled)
   })
 
   return (
