@@ -1,4 +1,4 @@
-import { JSX } from 'solid-js'
+import { JSX, createSignal, Show, createMemo } from 'solid-js'
 import {
   widescreenMode, setWidescreenMode,
   showCreepLabels, setShowCreepLabels,
@@ -6,6 +6,9 @@ import {
   showUnclaimableRooms, setShowUnclaimableRooms,
 } from '~/stores/settingsStore.js'
 import { clientVersion, embeddedModInfo } from '~/utils/embedded.js'
+import { userInfo, isGuest } from '~/stores/clientStore.js'
+import { badgeToSvg } from 'screeps-connectivity'
+import { BadgePickerModal } from '~/components/BadgePickerModal.js'
 
 interface ToggleProps {
   label: string
@@ -105,6 +108,14 @@ function InfoRow(props: { label: string; value: string }) {
 
 export function SettingsPanel(props: { onClose: () => void }) {
   const modInfo = embeddedModInfo()
+  const [showBadgePicker, setShowBadgePicker] = createSignal(false)
+
+  const badgePreviewSrc = createMemo(() => {
+    const badge = userInfo()?.badge
+    if (!badge) return null
+    const svg = badgeToSvg(badge)
+    return `data:image/svg+xml,${encodeURIComponent(svg)}`
+  })
 
   return (
     <div
@@ -146,6 +157,14 @@ export function SettingsPanel(props: { onClose: () => void }) {
         </button>
       </div>
 
+      {/* Badge picker modal */}
+      <Show when={showBadgePicker() && userInfo()?.badge}>
+        <BadgePickerModal
+          badge={userInfo()!.badge}
+          onClose={() => setShowBadgePicker(false)}
+        />
+      </Show>
+
       {/* Body */}
       <div style={{ overflow: 'auto', flex: 1, padding: '20px 24px' }}>
         <div style={{ 'max-width': '480px' }}>
@@ -182,6 +201,40 @@ export function SettingsPanel(props: { onClose: () => void }) {
               onChange={setShowUnclaimableRooms}
             />
           </Section>
+
+          <Show when={!isGuest() && badgePreviewSrc()}>
+            <Section title="Player Badge">
+              <div
+                style={{
+                  display: 'flex',
+                  'align-items': 'center',
+                  'justify-content': 'space-between',
+                  padding: '10px 0',
+                  'border-bottom': '1px solid #21262d',
+                }}
+              >
+                <div style={{ display: 'flex', 'align-items': 'center', gap: '12px' }}>
+                  <img src={badgePreviewSrc()!} width={40} height={40} style={{ display: 'block' }} />
+                  <span style={{ 'font-size': '13px', color: '#c9d1d9' }}>{userInfo()?.username ?? ''}</span>
+                </div>
+                <button
+                  onClick={() => setShowBadgePicker(true)}
+                  style={{
+                    padding: '6px 14px',
+                    'border-radius': '6px',
+                    border: '1px solid #30363d',
+                    background: 'transparent',
+                    color: '#c9d1d9',
+                    'font-size': '12px',
+                    cursor: 'pointer',
+                    'flex-shrink': 0,
+                  }}
+                >
+                  Edit Badge
+                </button>
+              </div>
+            </Section>
+          </Show>
 
           <Section title="About">
             <InfoRow label="Client version" value={clientVersion()} />

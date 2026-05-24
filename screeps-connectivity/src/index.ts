@@ -41,6 +41,8 @@ export { fetchServerVersion, fetchAuthModInfo, checkUsername, checkEmail, regist
 export type { ApiAuthModInfoResponse } from './http/fetchServerVersion.js'
 
 export { badgeToSvg } from './badge/index.js'
+export { BadgeColors } from './badge/colors.js'
+export type { ColorEntry } from './badge/colors.js'
 export type { RoomStoreEvents, UserStoreEvents, ServerStoreEvents, MapStoreEvents, Map2SubscriptionStatus, HttpClientEvents } from './types/events.js'
 
 export type { UserMessagesEndpoints } from './http/endpoints/user-messages.js'
