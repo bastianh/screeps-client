@@ -441,14 +441,17 @@ export class MapRenderer {
     }
   }
 
-  setRoomOwned(roomName: string, owned: boolean): void {
+  setRoomOwned(roomName: string, state: 'none' | 'own' | 'other'): void {
     const entry = this.activeRooms.get(roomName)
     if (!entry) return
     const g = entry.ownerOverlay
     g.clear()
-    if (owned) {
+    if (state === 'other') {
       g.rect(0, 0, MAP_ROOM_SIZE, MAP_ROOM_SIZE)
       g.fill({ color: 0x990000, alpha: 0.18 })
+    } else if (state === 'own') {
+      g.rect(0, 0, MAP_ROOM_SIZE, MAP_ROOM_SIZE)
+      g.fill({ color: 0x000066, alpha: 0.35 })
     }
     g.visible = this.showUnclaimableOverlay
   }

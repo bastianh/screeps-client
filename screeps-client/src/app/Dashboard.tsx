@@ -97,7 +97,7 @@ export function Dashboard() {
   const urlState = parseRoomUrl()
   const [room, setRoom] = createSignal(urlState.room ?? getStr(LS.room) ?? 'W1N1')
   const [shard, setShard] = createSignal<string | null>(urlState.shard ?? getStr(LS.shard))
-  const [mapMode, setMapMode] = createSignal(parseMapUrl() !== null)
+  const [mapMode, setMapMode] = createSignal(parseMapUrl() !== null || !urlState.room)
 
   const [showSettings, setShowSettings] = createSignal(false)
   const [showCode, setShowCode] = createSignal(false)
@@ -119,7 +119,7 @@ export function Dashboard() {
   const [hoveredRoomInfo, setHoveredRoomInfo] = createSignal<RoomInfo | null>(null)
   const [selectedRoomInfo, setSelectedRoomInfo] = createSignal<RoomInfo | null>(null)
   const savedMapZoom = getStr(LS.mapZoom)
-  const [mapZoom, setMapZoom] = createSignal<number | null>(savedMapZoom ? Number(savedMapZoom) : null)
+  const [mapZoom, setMapZoom] = createSignal<number | null>(urlState.room && savedMapZoom ? Number(savedMapZoom) : null)
   const [mapSubsActive, setMapSubsActive] = createSignal<boolean | null>(null)
   const [canBack, setCanBack] = createSignal(false)
   const [canForward, setCanForward] = createSignal(false)
@@ -220,7 +220,7 @@ export function Dashboard() {
   onMount(() => {
     // Ensure URL reflects the active view even when loaded without a path
     if (!parseRoomUrl().room && !parseMapUrl()) {
-      history.replaceState(null, '', buildRoomUrl(room(), shard()))
+      history.replaceState(null, '', buildMapUrl(shard()))
     }
 
     const onPopState = () => {

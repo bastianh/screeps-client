@@ -45,8 +45,8 @@ export function MapViewer(props: MapViewerProps) {
   // Per-room stats received from the library's mapStats store via events
   const roomStats = new Map<string, { own?: { user: string; level: number }; mineral?: string; density?: number; username?: string; safeMode?: boolean; badge?: import('screeps-connectivity').Badge }>()
 
-  // Precomputed unclaimable flag per room — survives the stats-before-terrain race.
-  const roomUnclaimable = new Map<string, boolean>()
+  // Precomputed unclaimable state per room — survives the stats-before-terrain race.
+  const roomUnclaimable = new Map<string, 'none' | 'own' | 'other'>()
 
   // Fast change-detection for badges: roomName → JSON key of last seen badge.
   // If the key hasn't changed we skip re-rendering the badge entirely.
@@ -356,10 +356,10 @@ export function MapViewer(props: MapViewerProps) {
       const prohibited = stat.status === 'out of borders'
       const ownRoom = !!(stat.own && stat.own.user === me)
       const enemyOwned = !!(stat.own && stat.own.user !== me)
-      const isUnclaimable = structurallyUnclaimable || prohibited || ownRoom || enemyOwned
-      roomUnclaimable.set(room, isUnclaimable)
+      const unclaimableState: 'none' | 'own' | 'other' = ownRoom ? 'own' : (structurallyUnclaimable || prohibited || enemyOwned) ? 'other' : 'none'
+      roomUnclaimable.set(room, unclaimableState)
       if (visibleSet.has(room)) {
-        renderer?.setRoomOwned(room, isUnclaimable)
+        renderer?.setRoomOwned(room, unclaimableState)
         renderer?.setRoomSafeMode(room, !!stat.safeMode)
       }
 
