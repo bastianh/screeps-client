@@ -311,13 +311,21 @@ export class MapRenderer {
     const tex = Texture.from(bitmap)
 
     if (lod === 0) {
-      if (entry.texLo && !entry.texLo.destroyed) entry.texLo.destroy(true)
+      if (entry.texLo && !entry.texLo.destroyed) {
+        // Guard: if sprite still references the old texture, clear it before destroying
+        // to avoid rendering a texture with a null source (crash on alphaMode read).
+        if ((entry.terrainSprite.texture as unknown) === entry.texLo) entry.terrainSprite.texture = Texture.EMPTY
+        entry.texLo.destroy(true)
+      }
       entry.texLo = tex as unknown as RenderTexture
-      if (this.getLOD() === 0) if (entry.texLo) entry.terrainSprite.texture = entry.texLo
+      if (this.getLOD() === 0) entry.terrainSprite.texture = tex
     } else {
-      if (entry.texHi && !entry.texHi.destroyed) entry.texHi.destroy(true)
+      if (entry.texHi && !entry.texHi.destroyed) {
+        if ((entry.terrainSprite.texture as unknown) === entry.texHi) entry.terrainSprite.texture = Texture.EMPTY
+        entry.texHi.destroy(true)
+      }
       entry.texHi = tex as unknown as RenderTexture
-      if (this.getLOD() === 1) if (entry.texHi) entry.terrainSprite.texture = entry.texHi
+      if (this.getLOD() === 1) entry.terrainSprite.texture = tex
     }
 
     entry.terrainSprite.width  = MAP_ROOM_SIZE
