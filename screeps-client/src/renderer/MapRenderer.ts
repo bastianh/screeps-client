@@ -6,7 +6,7 @@ import { getTerrainCacheBlob, saveTerrainCacheBlob, blobToImageBitmap, imageBitm
 import TerrainWorker from './terrain.worker.ts?worker'
 import {
   TERRAIN_WALL, TERRAIN_ROAD, TERRAIN_BORDER,
-  OBJ_CYAN, OBJ_ORANGE, ENERGY_FILL,
+  OBJ_CYAN, OBJ_ORANGE, OBJ_GREEN, OBJ_FOREIGN, ENERGY_FILL,
 } from '~/renderer/colors.js'
 import { createLogger } from '~/utils/log.js'
 
@@ -35,11 +35,14 @@ const VISIBLE_DEBOUNCE_MS = 5
 const MIN_ZOOM = 0.2
 const MAX_ZOOM = 5
 
-const COLOR_SOURCE     = ENERGY_FILL // sources
-const COLOR_CONTROLLER = 0xffffff    // controllers
-const COLOR_MINERAL    = OBJ_CYAN    // minerals
-const COLOR_KEEPER     = OBJ_ORANGE  // source keeper lairs
-const COLOR_USER       = 0x4488ff    // player creeps/structures
+const COLOR_SOURCE          = ENERGY_FILL // sources
+const COLOR_CONTROLLER      = 0xffffff    // controllers
+const COLOR_MINERAL         = OBJ_CYAN    // minerals
+const COLOR_KEEPER          = OBJ_ORANGE  // source keeper lairs
+const COLOR_USER_OWN        = OBJ_GREEN   // own creeps/structures
+const COLOR_USER_FOREIGN    = OBJ_FOREIGN // foreign creeps/structures
+const COLOR_WALLS_OWN       = 0x447744   // own room walls/ramparts
+const COLOR_WALLS_FOREIGN   = 0x882222   // foreign room walls/ramparts
 const MAP2_FIXED_KEYS  = new Set(['w', 'r', 'pb', 'p', 's', 'c', 'm', 'k'])
 
 const MINERAL_COLORS: Record<string, number> = {
@@ -61,6 +64,9 @@ interface RoomEntry {
   texHi: RenderTexture | null  // LOD 1
   map2Graphics: Graphics
   ownerOverlay: Graphics
+  ownerState: 'none' | 'own' | 'other'
+  lastMap2Data?: Partial<RoomMap2Data>
+  lastMap2Source?: 'cache' | 'live'
   badgeSprite?: Sprite
   badgeLevel?: number
   nameLabel: Text
@@ -362,6 +368,12 @@ export class MapRenderer {
 
   setRoomMap2(roomName: string, data: Partial<RoomMap2Data>, source: 'cache' | 'live' = 'live'): void {
     const entry = this.getOrCreate(roomName)
+    entry.lastMap2Data = data
+    entry.lastMap2Source = source
+    this.drawMap2(entry, data, source)
+  }
+
+  private drawMap2(entry: RoomEntry, data: Partial<RoomMap2Data>, source: 'cache' | 'live'): void {
     const g = entry.map2Graphics
     g.alpha = source === 'cache' ? 0.6 : 1.0
     const MT = MAP_TILE_SIZE
@@ -374,12 +386,12 @@ export class MapRenderer {
     }
     if (roads.length) g.fill(TERRAIN_ROAD)
 
-    // Player-built walls / ramparts
+    // Player-built walls / ramparts — color depends on room ownership
     const walls = data.w ?? []
     for (const [x, y] of walls) {
       g.rect(x * MT + 0.5, y * MT + 0.5, MT - 1, MT - 1)
     }
-    if (walls.length) g.fill(0x447744)
+    if (walls.length) g.fill(entry.ownerState === 'other' ? COLOR_WALLS_FOREIGN : COLOR_WALLS_OWN)
 
     // Sources — gold dot
     const sources = data.s ?? []
@@ -416,7 +428,7 @@ export class MapRenderer {
     }
     if (powerBanks.length) g.fill(OBJ_ORANGE)
 
-    // User objects — blue for current user, red for others
+    // User objects — green for current user, muted red for others
     const dataRec = data as Record<string, [number, number][]>
     for (const key in dataRec) {
       if (MAP2_FIXED_KEYS.has(key)) continue
@@ -426,7 +438,7 @@ export class MapRenderer {
       for (const [x, y] of positions) {
         g.circle((x + 0.5) * MT, (y + 0.5) * MT, 1.0)
       }
-      const color = key === this.currentUserId ? COLOR_USER : 0xff0000
+      const color = key === this.currentUserId ? COLOR_USER_OWN : COLOR_USER_FOREIGN
       g.fill(color)
     }
   }
@@ -444,6 +456,10 @@ export class MapRenderer {
   setRoomOwned(roomName: string, state: 'none' | 'own' | 'other'): void {
     const entry = this.activeRooms.get(roomName)
     if (!entry) return
+    if (entry.ownerState !== state) {
+      entry.ownerState = state
+      if (entry.lastMap2Data) this.drawMap2(entry, entry.lastMap2Data, entry.lastMap2Source ?? 'live')
+    }
     const g = entry.ownerOverlay
     g.clear()
     if (state === 'other') {
@@ -832,7 +848,7 @@ export class MapRenderer {
 
       this.world.addChild(container)
 
-      entry = { container, terrainSprite, texLo: null, texHi: null, map2Graphics, ownerOverlay, nameLabel }
+      entry = { container, terrainSprite, texLo: null, texHi: null, map2Graphics, ownerOverlay, ownerState: 'none', nameLabel }
     }
 
     entry.container.x = coord.x * MAP_ROOM_SIZE
