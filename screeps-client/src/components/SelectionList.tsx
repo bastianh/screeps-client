@@ -1,11 +1,13 @@
 import { For, Show, createSignal, createEffect } from 'solid-js'
 import { Dynamic } from 'solid-js/web'
-import { Trash2 } from 'lucide-solid'
+import { Trash2, Bell, BellOff, Move, X, Flag } from 'lucide-solid'
 import { selection, deselectItem } from '~/stores/selectionStore.js'
 import { client, gameTime, userInfo } from '~/stores/clientStore.js'
 import { overlayAction, setOverlayAction } from '~/stores/roomViewStore.js'
 import { roomOwner, roomUsers } from '~/stores/roomDataStore.js'
 import { createLogger } from '~/utils/log.js'
+import { CONTROLLER_DOWNGRADE } from '~/utils/gameConstants.js'
+import { ColorPicker, FLAG_COLOR_OPTIONS } from '~/components/ColorPicker.js'
 import type { SelectedObject } from '~/stores/selectionStore.js'
 
 const { log, error } = createLogger('SelectionList')
@@ -69,7 +71,7 @@ const TYPE_LABELS: Record<string, string> = {
 }
 
 /** Fields we want to surface as key-value rows (exclude noisy / structural ones) */
-const SKIP_FIELDS = new Set(['x', 'y', 'type', 'id', 'name', 'user', '_id', 'room', 'hitsMax', 'energyCapacity', 'body', 'storeCapacity'])
+const SKIP_FIELDS = new Set(['x', 'y', 'type', 'id', 'name', 'user', '_id', 'room', 'hitsMax', 'energyCapacity', 'body', 'storeCapacity', 'storeCapacityResource'])
 const NUMERIC_FIELDS = new Set(['hits', 'energy', 'energyCapacity', 'store', 'progress', 'progressTotal', 'nextDecayTime'])
 
 const FIELD_LABELS: Record<string, string> = {
@@ -152,6 +154,9 @@ function DefaultDetails(props: { item: SelectedObject }) {
 
       const v = raw[k]
       let finalValue = formatValue(v)
+
+      if (k === 'notifyWhenAttacked' && v === false) continue
+      if (k === 'off' && v === false) continue
 
       if (k === 'hits' && typeof raw.hitsMax === 'number') {
         finalValue = `${v} / ${raw.hitsMax}`
@@ -341,19 +346,6 @@ function CreepDetails(props: { item: SelectedObject }) {
   )
 }
 
-const FLAG_COLOR_OPTIONS = [
-  { label: 'Red', value: 1 },
-  { label: 'Purple', value: 2 },
-  { label: 'Blue', value: 3 },
-  { label: 'Cyan', value: 4 },
-  { label: 'Green', value: 5 },
-  { label: 'Yellow', value: 6 },
-  { label: 'Orange', value: 7 },
-  { label: 'Brown', value: 8 },
-  { label: 'Grey', value: 9 },
-  { label: 'White', value: 10 },
-]
-
 function FlagDetails(props: { item: SelectedObject }) {
   const raw = () => props.item.raw as Record<string, unknown>
   const name = () => (typeof raw().name === 'string' ? (raw().name as string) : '')
@@ -404,48 +396,10 @@ function FlagDetails(props: { item: SelectedObject }) {
     })
   }
 
-  const [confirming, setConfirming] = createSignal(false)
-  let confirmTimeout: ReturnType<typeof setTimeout> | null = null
-
-  const handleDelete = () => {
-    if (!confirming()) {
-      setConfirming(true)
-      confirmTimeout = setTimeout(() => {
-        setConfirming(false)
-      }, 3000)
-      return
-    }
-
-    if (confirmTimeout) {
-      clearTimeout(confirmTimeout)
-      confirmTimeout = null
-    }
-    setConfirming(false)
-
-    const c = client()
-    if (!c) return
-    const id = props.item.id
-    c.http.game.removeFlag(room(), name())
-      .then(() => {
-        deselectItem(id)
-      })
-      .catch(() => {})
-  }
-
-  const selectStyle = {
-    background: '#010409',
-    color: '#c9d1d9',
-    border: '1px solid #30363d',
-    'border-radius': '4px',
-    padding: '5px 6px',
-    'font-size': '12px',
-    width: '100%',
-  }
-
   const labelStyle = {
     display: 'flex',
     'flex-direction': 'column',
-    gap: '4px',
+    gap: '5px',
     'font-size': '11px',
     color: '#8b949e',
   } as const
@@ -454,98 +408,56 @@ function FlagDetails(props: { item: SelectedObject }) {
     <div style={{ padding: '8px', display: 'flex', 'flex-direction': 'column', gap: '8px', background: '#0d1117' }}>
       <label style={labelStyle}>
         Primary color
-        <select
-          value={draftColor()}
-          onChange={(e) => setDraftColor(Number(e.currentTarget.value))}
-          style={selectStyle}
-        >
-          <For each={FLAG_COLOR_OPTIONS}>
-            {(opt) => <option value={opt.value}>{opt.label}</option>}
-          </For>
-        </select>
+        <ColorPicker value={draftColor()} onChange={setDraftColor} />
       </label>
 
       <label style={labelStyle}>
         Secondary color
-        <select
-          value={draftSecondaryColor()}
-          onChange={(e) => setDraftSecondaryColor(Number(e.currentTarget.value))}
-          style={selectStyle}
-        >
-          <For each={FLAG_COLOR_OPTIONS}>
-            {(opt) => <option value={opt.value}>{opt.label}</option>}
-          </For>
-        </select>
+        <ColorPicker value={draftSecondaryColor()} onChange={setDraftSecondaryColor} />
       </label>
 
-      <button
-        onClick={handleApply}
-        disabled={!hasChanges()}
-        style={{
-          background: hasChanges() ? '#238636' : '#1f6feb',
-          color: '#fff',
-          border: 'none',
-          'border-radius': '4px',
-          padding: '6px 8px',
-          'font-size': '12px',
-          cursor: hasChanges() ? 'pointer' : 'not-allowed',
-          opacity: hasChanges() ? 1 : 0.6,
-          transition: 'opacity 150ms ease, background 150ms ease',
-        }}
-        onMouseEnter={(e) => {
-          if (hasChanges()) e.currentTarget.style.background = '#2ea043'
-        }}
-        onMouseLeave={(e) => {
-          if (hasChanges()) e.currentTarget.style.background = '#238636'
-        }}
-      >
-        Apply color
-      </button>
+      <div style={{ display: 'flex', gap: '6px' }}>
+        <button
+          onClick={handleApply}
+          disabled={!hasChanges()}
+          style={{
+            flex: 1,
+            background: hasChanges() ? '#238636' : '#161b22',
+            color: hasChanges() ? '#fff' : '#484f58',
+            border: `1px solid ${hasChanges() ? '#238636' : '#30363d'}`,
+            'border-radius': '4px',
+            padding: '5px 8px',
+            'font-size': '11px',
+            cursor: hasChanges() ? 'pointer' : 'not-allowed',
+            transition: 'background 150ms ease, color 150ms ease, border-color 150ms ease',
+          }}
+          onMouseEnter={(e) => { if (hasChanges()) e.currentTarget.style.background = '#2ea043' }}
+          onMouseLeave={(e) => { if (hasChanges()) e.currentTarget.style.background = '#238636' }}
+        >
+          Apply color
+        </button>
 
-      <button
-        onClick={handleMoveToggle}
-        style={{
-          background: isMovingThisFlag() ? '#8b949e' : '#d29922',
-          color: '#fff',
-          border: 'none',
-          'border-radius': '4px',
-          padding: '6px 8px',
-          'font-size': '12px',
-          cursor: 'pointer',
-          transition: 'background 150ms ease',
-        }}
-        onMouseEnter={(e) => {
-          if (!isMovingThisFlag()) e.currentTarget.style.background = '#e3b341'
-        }}
-        onMouseLeave={(e) => {
-          if (!isMovingThisFlag()) e.currentTarget.style.background = '#d29922'
-        }}
-      >
-        {isMovingThisFlag() ? 'Abort' : 'Move flag'}
-      </button>
-
-      <button
-        onClick={handleDelete}
-        style={{
-          background: confirming() ? '#da3633' : '#f85149',
-          color: '#fff',
-          border: 'none',
-          'border-radius': '4px',
-          padding: '6px 8px',
-          'font-size': '12px',
-          cursor: 'pointer',
-          'margin-top': '4px',
-          transition: 'background 150ms ease',
-        }}
-        onMouseEnter={(e) => {
-          if (!confirming()) e.currentTarget.style.background = '#da3633'
-        }}
-        onMouseLeave={(e) => {
-          if (!confirming()) e.currentTarget.style.background = '#f85149'
-        }}
-      >
-        {confirming() ? 'Confirm deletion' : 'Delete flag'}
-      </button>
+        <button
+          onClick={handleMoveToggle}
+          title={isMovingThisFlag() ? 'Abort move' : 'Move flag'}
+          style={{
+            background: isMovingThisFlag() ? '#30363d' : '#21262d',
+            color: isMovingThisFlag() ? '#c9d1d9' : '#8b949e',
+            border: `1px solid ${isMovingThisFlag() ? '#8b949e' : '#30363d'}`,
+            'border-radius': '4px',
+            padding: '5px 8px',
+            cursor: 'pointer',
+            display: 'flex',
+            'align-items': 'center',
+            'justify-content': 'center',
+            transition: 'background 150ms ease, color 150ms ease',
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = '#c9d1d9' }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = isMovingThisFlag() ? '#c9d1d9' : '#8b949e' }}
+        >
+          {isMovingThisFlag() ? <X size={13} /> : <Move size={13} />}
+        </button>
+      </div>
     </div>
   )
 }
@@ -574,6 +486,14 @@ function ControllerDetails(props: { item: SelectedObject }) {
     const gt = gameTime()
     if (dt !== null && gt !== null) return Math.max(0, dt - gt)
     return null
+  }
+
+  const downgradeLabel = () => {
+    const ticks = ticksRemaining()
+    if (ticks === null) return '—'
+    const max = CONTROLLER_DOWNGRADE[level()]
+    if (max !== undefined && ticks >= max) return 'Max'
+    return String(ticks)
   }
 
   const isMyRoom = () => userId() !== null && userId() === userInfo()?._id
@@ -636,6 +556,9 @@ function ControllerDetails(props: { item: SelectedObject }) {
 
             <div style={kvCell(true)}>Power</div>
             <div style={kvCell()}>{isPowerEnabled() ? 'Enabled' : 'Disabled'}</div>
+
+            <div style={kvCell(true)}>Downgrade in</div>
+            <div style={{ ...kvCell(), 'font-variant-numeric': 'tabular-nums', color: downgradeLabel() === 'Max' ? '#3fb950' : undefined }}>{downgradeLabel()}</div>
           </>
         </Show>
 
@@ -643,13 +566,6 @@ function ControllerDetails(props: { item: SelectedObject }) {
           <>
             <div style={kvCell(true)}>Safe mode active</div>
             <div style={{ ...kvCell(), 'font-variant-numeric': 'tabular-nums' }}>{safeMode()} ticks</div>
-          </>
-        </Show>
-
-        <Show when={ticksRemaining() !== null}>
-          <>
-            <div style={kvCell(true)}>Downgrade in</div>
-            <div style={{ ...kvCell(), 'font-variant-numeric': 'tabular-nums' }}>{ticksRemaining()}</div>
           </>
         </Show>
       </div>
@@ -696,22 +612,143 @@ function ControllerDetails(props: { item: SelectedObject }) {
   )
 }
 
+function ExtensionDetails(props: { item: SelectedObject }) {
+  const raw = () => props.item.raw as Record<string, unknown>
+
+  const energy = () => {
+    const store = raw().store as Record<string, number> | undefined
+    return store?.energy ?? 0
+  }
+  const energyCapacity = () => {
+    const cap = raw().storeCapacityResource as Record<string, number> | undefined
+    return cap?.energy ?? 0
+  }
+  const hits = () => typeof raw().hits === 'number' ? (raw().hits as number) : null
+  const hitsMax = () => typeof raw().hitsMax === 'number' ? (raw().hitsMax as number) : null
+  const notifyWhenAttacked = () => raw().notifyWhenAttacked === true
+  const userId = () => typeof raw().user === 'string' ? (raw().user as string) : null
+  const isMyStructure = () => userId() !== null && userId() === userInfo()?._id
+
+  const handleToggleNotify = () => {
+    const c = client()
+    if (!c) return
+    c.http.game.addObjectIntent(props.item.id, raw().room as string, 'notifyWhenAttacked', { enabled: !notifyWhenAttacked() })
+      .catch((err: Error) => error('notifyWhenAttacked failed:', err))
+  }
+
+  return (
+    <div style={kvGrid}>
+      <div style={kvCell(true)}>Energy</div>
+      <div style={{ ...kvCell(), 'font-variant-numeric': 'tabular-nums' }}>
+        {energy()} / {energyCapacity()}
+      </div>
+
+      <Show when={hits() !== null && hitsMax() !== null}>
+        <>
+          <div style={kvCell(true)}>Hits</div>
+          <div style={{ ...kvCell(), 'font-variant-numeric': 'tabular-nums' }}>{hits()} / {hitsMax()}</div>
+        </>
+      </Show>
+
+      <Show when={isMyStructure()}>
+        <>
+          <div style={kvCell(true)}>Notify when attacked</div>
+          <div style={{ ...kvCell(), display: 'flex', 'align-items': 'center' }}>
+            <button
+              onClick={handleToggleNotify}
+              title={notifyWhenAttacked() ? 'Notifications on — click to disable' : 'Notifications off — click to enable'}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: notifyWhenAttacked() ? '#3fb950' : '#484f58',
+                cursor: 'pointer',
+                padding: 0,
+                display: 'flex',
+                'align-items': 'center',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = notifyWhenAttacked() ? '#56d364' : '#8b949e' }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = notifyWhenAttacked() ? '#3fb950' : '#484f58' }}
+            >
+              {notifyWhenAttacked() ? <Bell size={12} /> : <BellOff size={12} />}
+            </button>
+          </div>
+        </>
+      </Show>
+    </div>
+  )
+}
+
 import { JSX } from 'solid-js'
 const CUSTOM_DETAILS: Record<string, (props: { item: SelectedObject }) => JSX.Element> = {
   creep: CreepDetails,
   flag: FlagDetails,
   controller: ControllerDetails,
+  extension: ExtensionDetails,
 }
 
 function SelectionItem(props: { item: SelectedObject }) {
   const color = () => OBJECT_COLORS[props.item.type] ?? '#c9d1d9'
   const label = () => TYPE_LABELS[props.item.type] ?? props.item.type
   const isCreep = () => props.item.type === 'creep'
+  const isFlag = () => props.item.type === 'flag'
+  const isOwnCreep = () => {
+    if (!isCreep()) return false
+    const raw = props.item.raw as Record<string, unknown>
+    const uid = typeof raw.user === 'string' ? raw.user : null
+    return uid !== null && uid === userInfo()?._id
+  }
+  const isOwnStructure = () => {
+    if (isCreep() || isFlag() || props.item.type === 'controller') return false
+    const raw = props.item.raw as Record<string, unknown>
+    const uid = typeof raw.user === 'string' ? raw.user : null
+    return uid !== null && uid === userInfo()?._id
+  }
 
   const detailsComponent = () => CUSTOM_DETAILS[props.item.type] || DefaultDetails
 
   const [suicideConfirming, setSuicideConfirming] = createSignal(false)
   let suicideTimeout: ReturnType<typeof setTimeout> | null = null
+
+  const [destroyConfirming, setDestroyConfirming] = createSignal(false)
+  let destroyTimeout: ReturnType<typeof setTimeout> | null = null
+
+  const [flagDeleteConfirming, setFlagDeleteConfirming] = createSignal(false)
+  let flagDeleteTimeout: ReturnType<typeof setTimeout> | null = null
+
+  const handleDeleteFlag = (e: MouseEvent) => {
+    e.stopPropagation()
+    if (!flagDeleteConfirming()) {
+      setFlagDeleteConfirming(true)
+      flagDeleteTimeout = setTimeout(() => setFlagDeleteConfirming(false), 3000)
+      return
+    }
+    if (flagDeleteTimeout) { clearTimeout(flagDeleteTimeout); flagDeleteTimeout = null }
+    setFlagDeleteConfirming(false)
+    const c = client()
+    if (!c) return
+    const raw = props.item.raw as Record<string, unknown>
+    c.http.game.removeFlag(raw.room as string, raw.name as string)
+      .then(() => deselectItem(props.item.id))
+      .catch(() => {})
+  }
+
+  const handleDestroyStructure = (e: MouseEvent) => {
+    e.stopPropagation()
+    if (!destroyConfirming()) {
+      setDestroyConfirming(true)
+      destroyTimeout = setTimeout(() => setDestroyConfirming(false), 3000)
+      return
+    }
+    if (destroyTimeout) { clearTimeout(destroyTimeout); destroyTimeout = null }
+    setDestroyConfirming(false)
+    const c = client()
+    if (!c) return
+    const raw = props.item.raw as Record<string, unknown>
+    const room = raw.room as string
+    c.http.game.addObjectIntent('room', room, 'destroyStructure', [{ id: props.item.id, roomName: room, user: raw.user as string }])
+      .then(() => deselectItem(props.item.id))
+      .catch((err: Error) => error('destroyStructure failed:', err))
+  }
 
   const handleSuicide = (e: MouseEvent) => {
     e.stopPropagation()
@@ -733,7 +770,7 @@ function SelectionItem(props: { item: SelectedObject }) {
     <div
       style={{
         'border-radius': '6px',
-        border: `1px solid ${suicideConfirming() ? '#f85149' : '#30363d'}`,
+        border: `1px solid ${(isOwnCreep() && suicideConfirming()) || destroyConfirming() || flagDeleteConfirming() ? '#f85149' : '#30363d'}`,
         'margin-bottom': '6px',
         overflow: 'hidden',
         transition: 'border-color 150ms ease',
@@ -750,8 +787,8 @@ function SelectionItem(props: { item: SelectedObject }) {
           'border-bottom': '1px solid #21262d',
         }}
       >
-        {/* Color dot — hidden for creep */}
-        <Show when={!isCreep()}>
+        {/* Color dot — hidden for creep and flag */}
+        <Show when={!isCreep() && !isFlag()}>
           <div
             style={{
               width: '8px',
@@ -771,12 +808,17 @@ function SelectionItem(props: { item: SelectedObject }) {
             overflow: 'hidden',
             'text-overflow': 'ellipsis',
             'white-space': 'nowrap',
+            display: 'flex',
+            'align-items': 'center',
+            gap: '5px',
           }}
         >
-          {label()}
+          <Show when={isFlag()} fallback={<>{label()}</>}>
+            <Flag size={12} />
+          </Show>
           <Show when={typeof props.item.raw.name === 'string' && props.item.raw.name}>
             {(name) => (
-              <span style={{ 'font-weight': 400, color: '#8b949e', 'margin-left': '5px' }}>
+              <span style={{ 'font-weight': 400, color: '#8b949e' }}>
                 {name() as string}
               </span>
             )}
@@ -785,7 +827,7 @@ function SelectionItem(props: { item: SelectedObject }) {
         <span style={{ 'font-size': '10px', color: '#484f58', 'flex-shrink': 0, 'margin-right': '2px' }}>
           ({props.item.raw.x},{props.item.raw.y})
         </span>
-        <Show when={isCreep()}>
+        <Show when={isOwnCreep()}>
           <button
             onClick={handleSuicide}
             title={suicideConfirming() ? 'Click again to confirm suicide' : 'Suicide'}
@@ -802,6 +844,48 @@ function SelectionItem(props: { item: SelectedObject }) {
             }}
             onMouseEnter={(e) => { if (!suicideConfirming()) e.currentTarget.style.color = '#f85149' }}
             onMouseLeave={(e) => { if (!suicideConfirming()) e.currentTarget.style.color = '#8b949e' }}
+          >
+            <Trash2 size={13} />
+          </button>
+        </Show>
+        <Show when={isOwnStructure()}>
+          <button
+            onClick={handleDestroyStructure}
+            title={destroyConfirming() ? 'Click again to confirm destruction' : 'Destroy structure'}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: destroyConfirming() ? '#f85149' : '#8b949e',
+              cursor: 'pointer',
+              padding: '0 2px',
+              display: 'flex',
+              'align-items': 'center',
+              'justify-content': 'center',
+              'flex-shrink': 0,
+            }}
+            onMouseEnter={(e) => { if (!destroyConfirming()) e.currentTarget.style.color = '#f85149' }}
+            onMouseLeave={(e) => { if (!destroyConfirming()) e.currentTarget.style.color = '#8b949e' }}
+          >
+            <Trash2 size={13} />
+          </button>
+        </Show>
+        <Show when={isFlag()}>
+          <button
+            onClick={handleDeleteFlag}
+            title={flagDeleteConfirming() ? 'Click again to confirm deletion' : 'Delete flag'}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: flagDeleteConfirming() ? '#f85149' : '#8b949e',
+              cursor: 'pointer',
+              padding: '0 2px',
+              display: 'flex',
+              'align-items': 'center',
+              'justify-content': 'center',
+              'flex-shrink': 0,
+            }}
+            onMouseEnter={(e) => { if (!flagDeleteConfirming()) e.currentTarget.style.color = '#f85149' }}
+            onMouseLeave={(e) => { if (!flagDeleteConfirming()) e.currentTarget.style.color = '#8b949e' }}
           >
             <Trash2 size={13} />
           </button>

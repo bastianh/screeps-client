@@ -139,7 +139,7 @@ export function confirmBuild(room: string, shard: string | null): void {
       room,
       pending.tx,
       pending.ty,
-      draft.structureName || 'Spawn 1',
+      draft.structureName || undefined,
       shard ?? undefined
     )
       .then(() => {

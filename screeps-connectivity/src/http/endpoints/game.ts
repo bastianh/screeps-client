@@ -32,8 +32,8 @@ export interface GameEndpoints {
   checkUniqueFlagName(name: string): Promise<ApiCheckUniqueFlagNameResponse>
   changeFlagColor(room: string, name: string, color: number, secondaryColor: number): Promise<ApiChangeFlagColorResponse>
   removeFlag(room: string, name: string): Promise<ApiRemoveFlagResponse>
-  genUniqueObjectName(type: string): Promise<ApiGenUniqueObjectNameResponse>
-  checkUniqueObjectName(type: string, name: string): Promise<ApiCheckUniqueObjectNameResponse>
+  genUniqueObjectName(type: string, shard?: string | null): Promise<ApiGenUniqueObjectNameResponse>
+  checkUniqueObjectName(type: string, name: string, shard?: string | null): Promise<ApiCheckUniqueObjectNameResponse>
   placeSpawn(room: string, x: number, y: number, name?: string, shard?: string | null): Promise<{ ok: number }>
   createConstruction(room: string, x: number, y: number, structureType: string, name?: string, shard?: string | null): Promise<{ ok: number }>
   removeConstructionSite(room: string, ids: string[], shard?: string | null): Promise<{ ok: number }>
@@ -78,8 +78,8 @@ export function createGameEndpoints(http: HttpClient): GameEndpoints {
     checkUniqueFlagName: (name) => http.request('POST', '/api/game/check-unique-flag-name', { name }),
     changeFlagColor: (room, name, color, secondaryColor) => http.request('POST', '/api/game/change-flag-color', { room, name, color, secondaryColor }),
     removeFlag: (room, name) => http.request('POST', '/api/game/remove-flag', { room, name }),
-    genUniqueObjectName: (type) => http.request('POST', '/api/game/gen-unique-object-name', { type }),
-    checkUniqueObjectName: (type, name) => http.request('POST', '/api/game/check-unique-object-name', { type, name }),
+    genUniqueObjectName: (type, shard) => http.request('POST', '/api/game/gen-unique-object-name', withShard({ type }, shard)),
+    checkUniqueObjectName: (type, name, shard) => http.request('POST', '/api/game/check-unique-object-name', withShard({ type, name }, shard)),
     placeSpawn: (room, x, y, name, shard) => http.request('POST', '/api/game/place-spawn', withShard({ room, x, y, ...(name ? { name } : {}) }, shard)),
     createConstruction: (room, x, y, structureType, name, shard) => http.request('POST', '/api/game/create-construction', withShard({ room, x, y, structureType, ...(name ? { name } : {}) }, shard)),
     removeConstructionSite: (room, ids, shard) => http.request('POST', '/api/game/add-object-intent', withShard({ _id: 'room', room, name: 'removeConstructionSite', intent: ids.map(id => ({ id, roomName: room })) }, shard)),

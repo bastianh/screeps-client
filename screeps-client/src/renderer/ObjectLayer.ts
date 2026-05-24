@@ -198,11 +198,15 @@ function getObjectColor(type: string): number {
 }
 
 function getExtensionEnergy(obj: RoomObject): { energy: number; capacity: number } {
-  const capacity = typeof obj.energyCapacity === 'number'
-    ? obj.energyCapacity
-    : typeof obj.storeCapacity === 'number'
-      ? obj.storeCapacity
-      : 50
+  let capacity = 50
+  if (typeof obj.energyCapacity === 'number') {
+    capacity = obj.energyCapacity
+  } else if (typeof obj.storeCapacity === 'number') {
+    capacity = obj.storeCapacity
+  } else if (obj.storeCapacityResource && typeof obj.storeCapacityResource === 'object') {
+    const cap = obj.storeCapacityResource as Record<string, number>
+    capacity = cap.energy ?? 50
+  }
 
   let energy = 0
   if (typeof obj.energy === 'number') {
@@ -216,7 +220,9 @@ function getExtensionEnergy(obj: RoomObject): { energy: number; capacity: number
 }
 
 function extScale(capacity: number): number {
-  return capacity < 100 ? 0.7 : 1.0
+  if (capacity >= 200) return 1.15
+  if (capacity >= 100) return 0.85
+  return 0.70
 }
 
 function calcExtensionFillRadius(energy: number, capacity: number): number {

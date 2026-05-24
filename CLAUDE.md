@@ -2,6 +2,19 @@
 
 pnpm workspace — four published packages plus docs.
 
+## Codebase Navigation — MANDATORY
+
+You MUST use codebase-index MCP tools FIRST when exploring or navigating the codebase. This is not optional.
+
+- ALWAYS start with: get_project_summary, find_symbol, get_function_source, get_class_source,
+  get_structure_summary, get_dependencies, get_dependents, get_change_impact, get_call_chain, search_codebase
+- Only fall back to Read/Glob/Grep when codebase-index tools genuinely don't have what you need
+  (e.g. reading non-code files, config, frontmatter)
+- If you catch yourself reaching for Glob/Grep/Read to find or understand code, STOP and use
+  codebase-index instead
+
+pnpm workspace — four published packages plus docs.
+
 ## Packages
 
 | Directory | Published as | Role |

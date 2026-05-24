@@ -130,8 +130,8 @@ export function Dashboard() {
   const [canBack, setCanBack] = createSignal(false)
   const [canForward, setCanForward] = createSignal(false)
 
-  const [sidebarWidth, setSidebarWidth] = createSignal(getNum(LS.sidebarWidth, 260))
-  const [sidebarPrevWidth, setSidebarPrevWidth] = createSignal(getNum(LS.sidebarWidth, 260))
+  const [sidebarWidth, setSidebarWidth] = createSignal(getNum(LS.sidebarWidth, 300))
+  const [sidebarPrevWidth, setSidebarPrevWidth] = createSignal(getNum(LS.sidebarWidth, 300))
   const [consoleHeight, setConsoleHeight] = createSignal(getNum(LS.consoleHeight, 220))
   const [consolePrevHeight, setConsolePrevHeight] = createSignal(getNum(LS.consoleHeight, 220))
   const [sidebarDragging, setSidebarDragging] = createSignal(false)

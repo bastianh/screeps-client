@@ -1,23 +1,17 @@
 import { For, Show, createEffect, createSignal } from 'solid-js'
-import { flagDraft, roomViewMode, setFlagDraft, pendingTile } from '~/stores/roomViewStore.js'
+import { flagDraft, roomViewMode, setFlagDraft, pendingTile, FLAG_COLOR_MAP } from '~/stores/roomViewStore.js'
 import { client, userFlags } from '~/stores/clientStore.js'
 import { FLAG_COLORS as FLAG_COLOR_HEXES } from '~/renderer/colors.js'
+import { ColorPicker } from '~/components/ColorPicker.js'
 import { createLogger } from '~/utils/log.js'
 
 const { error } = createLogger('flag')
 
-const FLAG_COLORS = [
-  'COLOR_WHITE',
-  'COLOR_GREY',
-  'COLOR_RED',
-  'COLOR_PURPLE',
-  'COLOR_BLUE',
-  'COLOR_CYAN',
-  'COLOR_GREEN',
-  'COLOR_YELLOW',
-  'COLOR_ORANGE',
-  'COLOR_BROWN',
-] as const
+// Reverse map: numeric value → COLOR_NAME string
+const COLOR_NUM_TO_NAME: Record<number, string> = {}
+for (const [name, num] of Object.entries(FLAG_COLOR_MAP)) {
+  COLOR_NUM_TO_NAME[num] = name
+}
 
 export function FlagForm() {
   const updateDraft = (patch: Partial<ReturnType<typeof flagDraft>>) => {
@@ -50,9 +44,7 @@ export function FlagForm() {
     updateDraft({ name: value })
     setNameError(null)
 
-    if (checkTimeout) {
-      clearTimeout(checkTimeout)
-    }
+    if (checkTimeout) clearTimeout(checkTimeout)
 
     const trimmed = value.trim()
     if (!trimmed) {
@@ -63,22 +55,22 @@ export function FlagForm() {
     setIsChecking(true)
     checkTimeout = setTimeout(() => {
       const c = client()
-      if (!c) {
-        setIsChecking(false)
-        return
-      }
-
+      if (!c) { setIsChecking(false); return }
       c.http.game.checkUniqueFlagName(trimmed)
-        .then(() => {
-          setNameError(null)
-        })
-        .catch((err: Error) => {
-          setNameError(err.message)
-        })
-        .finally(() => {
-          setIsChecking(false)
-        })
+        .then(() => { setNameError(null) })
+        .catch((err: Error) => { setNameError(err.message) })
+        .finally(() => { setIsChecking(false) })
     }, 300)
+  }
+
+  const primaryColorNum = () => FLAG_COLOR_MAP[flagDraft().color] ?? 1
+  const secondaryColorNum = () => FLAG_COLOR_MAP[flagDraft().secondaryColor] ?? 1
+
+  const handlePrimaryChange = (num: number) => {
+    updateDraft({ color: COLOR_NUM_TO_NAME[num] ?? 'COLOR_WHITE' })
+  }
+  const handleSecondaryChange = (num: number) => {
+    updateDraft({ secondaryColor: COLOR_NUM_TO_NAME[num] ?? 'COLOR_WHITE' })
   }
 
   const flags = () => {
@@ -97,6 +89,14 @@ export function FlagForm() {
     const hex = FLAG_COLOR_HEXES[colorNum]
     return `#${hex.toString(16).padStart(6, '0')}`
   }
+
+  const labelStyle = {
+    display: 'flex',
+    'flex-direction': 'column',
+    gap: '5px',
+    'font-size': '11px',
+    color: '#8b949e',
+  } as const
 
   return (
     <div style={{ flex: 1, overflow: 'auto', 'min-height': 0, padding: '8px' }}>
@@ -121,7 +121,7 @@ export function FlagForm() {
           Create flag
         </div>
         <div style={{ padding: '8px', display: 'flex', 'flex-direction': 'column', gap: '8px' }}>
-          <label style={{ display: 'flex', 'flex-direction': 'column', gap: '4px', 'font-size': '11px', color: '#8b949e' }}>
+          <label style={labelStyle}>
             Name
             <input
               value={flagDraft().name}
@@ -134,58 +134,25 @@ export function FlagForm() {
                 'border-radius': '4px',
                 padding: '5px 6px',
                 'font-size': '12px',
+                outline: 'none',
               }}
             />
             <Show when={nameError()}>
-              {(err) => (
-                <span style={{ color: '#f85149', 'font-size': '11px' }}>
-                  {err()}
-                </span>
-              )}
+              {(err) => <span style={{ color: '#f85149', 'font-size': '11px' }}>{err()}</span>}
             </Show>
             <Show when={isChecking()}>
               <span style={{ color: '#8b949e', 'font-size': '11px' }}>Checking…</span>
             </Show>
           </label>
 
-          <label style={{ display: 'flex', 'flex-direction': 'column', gap: '4px', 'font-size': '11px', color: '#8b949e' }}>
+          <label style={labelStyle}>
             Primary color
-            <select
-              value={flagDraft().color}
-              onChange={(e) => updateDraft({ color: e.currentTarget.value })}
-              style={{
-                background: '#010409',
-                color: '#c9d1d9',
-                border: '1px solid #30363d',
-                'border-radius': '4px',
-                padding: '5px 6px',
-                'font-size': '12px',
-              }}
-            >
-              <For each={FLAG_COLORS}>
-                {(color) => <option value={color}>{color.replace('COLOR_', '')}</option>}
-              </For>
-            </select>
+            <ColorPicker value={primaryColorNum()} onChange={handlePrimaryChange} />
           </label>
 
-          <label style={{ display: 'flex', 'flex-direction': 'column', gap: '4px', 'font-size': '11px', color: '#8b949e' }}>
+          <label style={labelStyle}>
             Secondary color
-            <select
-              value={flagDraft().secondaryColor}
-              onChange={(e) => updateDraft({ secondaryColor: e.currentTarget.value })}
-              style={{
-                background: '#010409',
-                color: '#c9d1d9',
-                border: '1px solid #30363d',
-                'border-radius': '4px',
-                padding: '5px 6px',
-                'font-size': '12px',
-              }}
-            >
-              <For each={FLAG_COLORS}>
-                {(color) => <option value={color}>{color.replace('COLOR_', '')}</option>}
-              </For>
-            </select>
+            <ColorPicker value={secondaryColorNum()} onChange={handleSecondaryChange} />
           </label>
 
           <div style={{ color: '#484f58', 'font-size': '11px', 'line-height': '1.4' }}>
@@ -270,3 +237,4 @@ export function FlagForm() {
     </div>
   )
 }
+

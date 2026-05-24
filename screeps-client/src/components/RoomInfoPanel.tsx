@@ -1,4 +1,5 @@
-import { For, Show } from 'solid-js'
+import { For, Show, type JSX } from 'solid-js'
+import { Eye, Flag, Hammer } from 'lucide-solid'
 import { gameTime, tickDuration, isGuest } from '~/stores/clientStore.js'
 import { roomObjectCount, roomOwner } from '~/stores/roomDataStore.js'
 import { roomViewMode, setRoomViewMode, type RoomViewMode } from '~/stores/roomViewStore.js'
@@ -8,10 +9,10 @@ interface RoomInfoPanelProps {
   shard: string | null
 }
 
-const ROOM_VIEW_MODES: Array<{ mode: RoomViewMode; label: string }> = [
-  { mode: 'view', label: 'View' },
-  { mode: 'flag', label: 'Flag' },
-  { mode: 'build', label: 'Build' },
+const ROOM_VIEW_MODES: Array<{ mode: RoomViewMode; label: string; icon: () => JSX.Element }> = [
+  { mode: 'view', label: 'View',  icon: () => <Eye size={14} /> },
+  { mode: 'flag', label: 'Flag',  icon: () => <Flag size={14} /> },
+  { mode: 'build', label: 'Build', icon: () => <Hammer size={14} /> },
 ]
 
 export function RoomInfoPanel(props: RoomInfoPanelProps) {
@@ -68,6 +69,7 @@ export function RoomInfoPanel(props: RoomInfoPanelProps) {
               <button
                 type="button"
                 onClick={() => setRoomViewMode(entry.mode)}
+                title={entry.label}
                 style={{
                   padding: '5px 8px',
                   'border-radius': '6px',
@@ -75,11 +77,12 @@ export function RoomInfoPanel(props: RoomInfoPanelProps) {
                   background: active() ? '#1f6feb33' : '#161b22',
                   color: active() ? '#c9d1d9' : '#8b949e',
                   cursor: 'pointer',
-                  'font-size': '11px',
-                  'font-weight': 600,
+                  display: 'flex',
+                  'align-items': 'center',
+                  'justify-content': 'center',
                 }}
               >
-                {entry.label}
+                {entry.icon()}
               </button>
             )
           }}

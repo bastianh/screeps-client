@@ -9,11 +9,11 @@ import { RoomInfoBox } from './RoomInfoBox.js'
 import { FlagForm } from './FlagForm.js'
 import { BuildPanel } from './BuildPanel.js'
 
-function RoomModePanel() {
+function RoomModePanel(props: { shard?: string | null }) {
   return (
     <Show when={roomViewMode() === 'flag'} fallback={
       <Show when={roomViewMode() === 'build'} fallback={<SelectionList />}>
-        <BuildPanel />
+        <BuildPanel shard={props.shard} />
       </Show>
     }>
       <FlagForm />
@@ -129,7 +129,7 @@ export function Sidebar(props: SidebarProps) {
 
         <Show
           when={props.mapMode}
-          fallback={<RoomModePanel />}
+          fallback={<RoomModePanel shard={props.shard} />}
         >
           <div style={{ 'padding-bottom': '8px', overflow: 'auto', 'min-height': 0 }}>
             <RoomInfoBox label="Selected" info={props.selectedRoomInfo ?? null} />
