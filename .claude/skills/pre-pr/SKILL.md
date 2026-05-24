@@ -20,8 +20,9 @@ report if any step fails** — don't continue to the next step with broken outpu
 pnpm lint
 ```
 
-Run from the repo root. Warnings are fine; errors are a blocker. If there are
+Run from the repo root. Warnings are bad; errors are a blocker. If there are
 errors, show them and stop — ask the user to fix them first.
+If there are warnings, ask the user if he wants to proceed anyway.
 
 ## Step 2 — Test
 

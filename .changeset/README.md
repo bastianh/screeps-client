@@ -12,6 +12,8 @@ pnpm changeset
 
 The CLI will ask which packages changed and at what semver level (patch / minor / major), then write a markdown file into this folder. Commit it alongside your change.
 
+In this repo, `pnpm changeset` is wrapped by `scripts/changeset-with-mod-sync.mjs`. When a new changeset includes `screeps-client`, the wrapper also creates or refreshes `.changeset/screeps-client-mod-consumers.md` with patch bumps for `screepsmod-client-new` and `xxscreeps-mod-client`, unless another pending changeset already covers both mod packages.
+
 ## How releases happen
 
 `.github/workflows/release.yml` runs on every push to `main`:

@@ -15,6 +15,8 @@ pnpm changeset --empty            # record intentionally version-less change
 pnpm exec changeset status        # show pending changesets + projected bumps
 ```
 
+`pnpm changeset` is wrapped locally. If a newly created changeset includes `screeps-client`, the wrapper also creates or refreshes `.changeset/screeps-client-mod-consumers.md` with patch bumps for `screepsmod-client-new` and `xxscreeps-mod-client`, unless those packages are already covered by another pending changeset. Edit that generated file if the release note text should be more specific.
+
 Bump rules:
 - **patch** — bug fixes, internal refactors, doc-only changes
 - **minor** — new public API surface, additive features
