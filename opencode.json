@@ -1,0 +1,9 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "mcp-codebase-index": {
+      "type": "local",
+      "command": ["uvx", "--with", "mcp-codebase-index[mcp]", "mcp-codebase-index"]
+    }
+  }
+}

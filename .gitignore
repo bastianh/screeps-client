@@ -5,3 +5,5 @@ reference
 screeps-connectivity/test-live.mjs
 .env.local
 .env.*.local
+/.opencode/plans/
+/.codebase-index-cache.pkl

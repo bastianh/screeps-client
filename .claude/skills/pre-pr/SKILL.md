@@ -88,8 +88,6 @@ main...HEAD` and `git diff main...HEAD --stat`. Use this structure:
 - [ ] Lint passes
 - [ ] Tests pass
 - [ ] Changeset added (if applicable)
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
 ```
 
 Then create the PR:
