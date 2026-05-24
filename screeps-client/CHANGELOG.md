@@ -1,5 +1,16 @@
 # screeps-client
 
+## 0.3.3
+
+### Patch Changes
+
+- 0bd54f3: Add badge editor modal to settings panel with color picker, design selector, and variation controls. Export badge color utilities from library for use in UI components.
+- c6cb87f: Add clear caches button in settings panel. Users can now clear IndexedDB, Cache API, and localStorage from the settings UI, with the page reloading afterwards. Session tokens are preserved.
+- aa05da7: Integrate lucide-solid icon library. Replace Unicode fallback glyphs (✕ close buttons, ✓/✗ field indicators) with proper SVG icons from Lucide. Replace text labels in the dashboard header (Map, Code, Settings, Logout, nav arrows) with icon-only buttons and native browser tooltips.
+- 45471d4: Improve map room ownership visualization with distinct overlays and enhanced room detail colors. Own rooms display with a blue overlay and green-tinted creeps/structures, while enemy-owned rooms display with a red overlay and muted red creeps/structures. Own walls render in green, foreign walls in red. Also fixes map mode to display by default when loading without a room and ensures map zoom persists only when viewing a specific room.
+- 4375f2f: Add terrain visual effects: swamp glow (green atmospheric blur) and wall noise (rough stone grain overlay) with user-togglable setting in Settings panel.
+- de6f984: Pre-render wall noise terrain as a texture sprite using the renderer. This improves rendering performance by avoiding per-frame NoiseFilter application on the wall noise graphics, and ensures proper cleanup of the generated texture on destroy.
+
 ## 0.3.2
 
 ### Patch Changes
