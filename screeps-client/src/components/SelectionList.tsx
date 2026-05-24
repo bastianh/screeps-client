@@ -7,7 +7,7 @@ import { overlayAction, setOverlayAction } from '~/stores/roomViewStore.js'
 import { roomOwner, roomUsers } from '~/stores/roomDataStore.js'
 import { createLogger } from '~/utils/log.js'
 import { CONTROLLER_DOWNGRADE } from '~/utils/gameConstants.js'
-import { ColorPicker, FLAG_COLOR_OPTIONS } from '~/components/ColorPicker.js'
+import { ColorPicker } from '~/components/ColorPicker.js'
 import type { SelectedObject } from '~/stores/selectionStore.js'
 
 const { log, error } = createLogger('SelectionList')
