@@ -554,6 +554,7 @@ export function RoomViewer(props: RoomViewerProps) {
     }
 
     objLayer.update(objs, diff, users)
+    objLayer.setShowLabels(untrack(showCreepLabels))
 
     if (animLayer) {
       animLayer.clear()
@@ -597,10 +598,6 @@ export function RoomViewer(props: RoomViewerProps) {
     objLayer?.setInstantMode(historyMode())
   })
 
-  // Sync creep label visibility when the setting changes
-  createEffect(() => {
-    objLayer?.setShowLabels(showCreepLabels())
-  })
 
   // Sync terrain effects visibility when the setting changes
   createEffect(() => {
