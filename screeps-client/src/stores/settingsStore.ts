@@ -12,3 +12,4 @@ export const [showCreepLabels, setShowCreepLabels] = boolSetting(LS.showCreepLab
 export const [showMapRoomNames, setShowMapRoomNames] = boolSetting(LS.showMapRoomNames, false)
 export const [showUnclaimableRooms, setShowUnclaimableRooms] = boolSetting(LS.showUnclaimableRooms, true)
 export const [terrainEffects, setTerrainEffects] = boolSetting(LS.terrainEffects, true)
+export const [showRoomVisuals, setShowRoomVisuals] = boolSetting(LS.showRoomVisuals, true)

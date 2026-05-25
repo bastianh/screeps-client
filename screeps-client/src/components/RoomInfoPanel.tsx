@@ -4,6 +4,7 @@ import { gameTime, tickDuration, isGuest } from '~/stores/clientStore.js'
 import { roomObjectCount, roomOwner } from '~/stores/roomDataStore.js'
 import { roomViewMode, setRoomViewMode, type RoomViewMode } from '~/stores/roomViewStore.js'
 import { historyMode, enterHistoryMode, exitHistoryMode } from '~/stores/historyStore.js'
+import { showCreepLabels, setShowCreepLabels, showRoomVisuals, setShowRoomVisuals } from '~/stores/settingsStore.js'
 
 interface RoomInfoPanelProps {
   room: string
@@ -53,6 +54,42 @@ export function RoomInfoPanel(props: RoomInfoPanelProps) {
         <div style={{ padding: '3px 0', color: '#8b949e' }}>Owner</div>
         <div style={{ padding: '3px 0', color: '#c9d1d9' }}>{roomOwner()?.username ?? '—'}</div>
       </div>
+      <label
+        style={{
+          display: 'flex',
+          'align-items': 'center',
+          'justify-content': 'space-between',
+          'font-size': '11px',
+          color: '#c9d1d9',
+          cursor: 'pointer',
+          'margin-top': '6px',
+        }}
+      >
+        <span>Creep-Namen</span>
+        <input
+          type="checkbox"
+          checked={showCreepLabels()}
+          onChange={(e) => setShowCreepLabels(e.currentTarget.checked)}
+        />
+      </label>
+      <label
+        style={{
+          display: 'flex',
+          'align-items': 'center',
+          'justify-content': 'space-between',
+          'font-size': '11px',
+          color: '#c9d1d9',
+          cursor: 'pointer',
+          'margin-top': '4px',
+        }}
+      >
+        <span>Room Visuals</span>
+        <input
+          type="checkbox"
+          checked={showRoomVisuals()}
+          onChange={(e) => setShowRoomVisuals(e.currentTarget.checked)}
+        />
+      </label>
     </div>
     <div
       style={{

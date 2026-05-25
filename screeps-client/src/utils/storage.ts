@@ -14,6 +14,7 @@ export const LS = {
   showMapRoomNames: 'screeps:settings:showMapRoomNames',
   showUnclaimableRooms: 'screeps:settings:showUnclaimableRooms',
   terrainEffects: 'screeps:settings:terrainEffects',
+  showRoomVisuals: 'screeps:settings:showRoomVisuals',
 } as const
 
 export const SS = {

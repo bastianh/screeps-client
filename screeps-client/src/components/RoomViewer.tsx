@@ -6,7 +6,7 @@ import { ObjectLayer } from '~/renderer/ObjectLayer.js'
 import { ActionAnimationLayer } from '~/renderer/ActionAnimationLayer.js'
 import { VisualLayer } from '~/renderer/VisualLayer.js'
 import { client, gameTime, setGameTime, recordGameTime, tickDuration, worldBounds, userInfo, worldStatus, serverVersion, isPrivateServer } from '~/stores/clientStore.js'
-import { showCreepLabels, terrainEffects } from '~/stores/settingsStore.js'
+import { showCreepLabels, terrainEffects, showRoomVisuals } from '~/stores/settingsStore.js'
 import { setSelection, clearSelection, selection, updateSelectionWithDiff, updateSelectionFromObjects, createSelectedObject } from '~/stores/selectionStore.js'
 import { addToast } from '~/stores/toastStore.js'
 import { setRoomObjectCount, setRoomOwner, setControllerLevel, setStructureCounts, setRoomUsers, roomUsers } from '~/stores/roomDataStore.js'
@@ -589,7 +589,7 @@ export function RoomViewer(props: RoomViewerProps) {
   // even when visualLayer hasn't been created yet.
   createEffect(() => {
     const raw = visualState()
-    visualLayer?.update(raw)
+    visualLayer?.update(showRoomVisuals() ? raw : '')
   })
 
   // Sync instant-mode when entering/leaving history mode
