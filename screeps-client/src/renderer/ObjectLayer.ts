@@ -1949,6 +1949,9 @@ export class ObjectLayer {
     this.roadGraphics.clear()
     this.rampartGraphics.clear()
     this.container.removeChildren()
+    // Re-attach persistent graphics layers removed by removeChildren()
+    this.container.addChild(this.rampartGraphics)
+    this.container.addChild(this.roadGraphics)
   }
 
   destroy(): void {
