@@ -17,7 +17,7 @@ const MapViewer = lazy(() =>
 )
 import { client, disconnect, isGuest, userInfo } from '~/stores/clientStore.js'
 import { widescreenMode } from '~/stores/settingsStore.js'
-import { toggleShowLog, toggleShowConsole } from '~/stores/consoleStore.js'
+import { toggleShowLog, toggleShowConsole, toggleShowMemory } from '~/stores/consoleStore.js'
 import { setRoomViewMode } from '~/stores/roomViewStore.js'
 
 import { parseRoomName } from '~/utils/roomName.js'
@@ -277,6 +277,9 @@ export function Dashboard() {
       }
       if (e.key === 'c' || e.key === 'C') {
         toggleShowConsole()
+      }
+      if (e.key === 'y' || e.key === 'Y') {
+        toggleShowMemory()
       }
       if (!mapMode()) {
         if (e.key === '1') setRoomViewMode('view')

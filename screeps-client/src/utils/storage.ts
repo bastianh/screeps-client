@@ -7,6 +7,7 @@ export const LS = {
   sidebarWidth: 'screeps:sidebarWidth',
   consoleHeight: 'screeps:consoleHeight',
   consoleSplit: 'screeps:consoleSplit',
+  consoleWeights: 'screeps:consoleWeights',
   mapZoom: 'screeps:mapZoom',
   widescreenMode: 'screeps:settings:widescreenMode',
   showCreepLabels: 'screeps:settings:showCreepLabels',
@@ -42,6 +43,17 @@ export function getNum(key: string, fallback: number): number {
 
 export function setNum(key: string, value: number): void {
   localStorage.setItem(key, String(value))
+}
+
+export function getJson<T>(key: string, fallback: T): T {
+  const raw = localStorage.getItem(key)
+  if (raw === null) return fallback
+  try { return JSON.parse(raw) }
+  catch { return fallback }
+}
+
+export function setJson(key: string, value: unknown): void {
+  localStorage.setItem(key, JSON.stringify(value))
 }
 
 export function getSession(key: string): string | null {
