@@ -9,6 +9,7 @@ interface RoomHistoryChunk {
 
 export class HistoryPlayer {
   private readonly chunkCache = new Map<number, RoomHistoryChunk>()
+  private readonly inflight = new Map<number, Promise<RoomHistoryChunk>>()
 
   constructor(
     private readonly room: string,
@@ -32,9 +33,12 @@ export class HistoryPlayer {
     return `${this.baseUrl}room-history/${encodeURIComponent(this.shard)}/${encodeURIComponent(this.room)}/${base}.json`
   }
 
-  private async loadChunk(base: number): Promise<RoomHistoryChunk> {
+  private loadChunk(base: number): Promise<RoomHistoryChunk> {
     const cached = this.chunkCache.get(base)
-    if (cached) return cached
+    if (cached) return Promise.resolve(cached)
+
+    const existing = this.inflight.get(base)
+    if (existing) return existing
 
     const url = this.buildUrl(base)
     const token = this.getToken()
@@ -44,14 +48,23 @@ export class HistoryPlayer {
       headers['X-Username'] = token
     }
 
-    const res = await fetch(url, { headers })
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status}`)
-    }
+    const promise = fetch(url, { headers })
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        return res.json() as Promise<RoomHistoryChunk>
+      })
+      .then((chunk) => {
+        this.chunkCache.set(base, chunk)
+        this.inflight.delete(base)
+        return chunk
+      })
+      .catch((err: Error) => {
+        this.inflight.delete(base)
+        throw err
+      })
 
-    const chunk = await res.json() as RoomHistoryChunk
-    this.chunkCache.set(base, chunk)
-    return chunk
+    this.inflight.set(base, promise)
+    return promise
   }
 
   private applyDiff(base: RoomObjectMap, diff: RoomObjectDiff): RoomObjectMap {

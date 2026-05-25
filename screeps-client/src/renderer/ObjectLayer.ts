@@ -1096,6 +1096,7 @@ export class ObjectLayer {
   private sourceAnimations = new Map<string, ExtAnimation>()
   private buildGlowAnimations = new Map<string, { startTime: number; duration: number }>()
   private readonly EXT_ANIM_DURATION = 300
+  private instantMode = false
   private lastWorldScale = 1
   private showLabels: boolean
   private currentUserId?: string
@@ -1238,8 +1239,12 @@ export class ObjectLayer {
     toEnergy: number,
     toCapacity: number,
   ): void {
-    const fromRadius = calcExtensionFillRadius(fromEnergy, fromCapacity)
     const toRadius = calcExtensionFillRadius(toEnergy, toCapacity)
+    if (this.instantMode) {
+      updateExtensionFill(visual, toRadius)
+      return
+    }
+    const fromRadius = calcExtensionFillRadius(fromEnergy, fromCapacity)
     if (fromRadius === toRadius) return
     this.extAnimations.set(id, { visual, fromRadius, toRadius, startTime: performance.now() })
   }
@@ -1252,8 +1257,12 @@ export class ObjectLayer {
     toUsed: number,
     toCapacity: number,
   ): void {
-    const fromRadius = calcCreepFillRadius(fromUsed, fromCapacity)
     const toRadius = calcCreepFillRadius(toUsed, toCapacity)
+    if (this.instantMode) {
+      updateCreepFill(visual, toRadius)
+      return
+    }
+    const fromRadius = calcCreepFillRadius(fromUsed, fromCapacity)
     if (fromRadius === toRadius) return
     this.creepFillAnimations.set(id, { visual, fromRadius, toRadius, startTime: performance.now() })
   }
@@ -1266,8 +1275,12 @@ export class ObjectLayer {
     toEnergy: number,
     toCapacity: number,
   ): void {
-    const fromH = calcTowerFillHeight(fromEnergy, fromCapacity)
     const toH = calcTowerFillHeight(toEnergy, toCapacity)
+    if (this.instantMode) {
+      updateTowerFill(visual, toH)
+      return
+    }
+    const fromH = calcTowerFillHeight(fromEnergy, fromCapacity)
     if (fromH === toH) return
     this.towerFillAnimations.set(id, { visual, fromRadius: fromH, toRadius: toH, startTime: performance.now() })
   }
@@ -1280,8 +1293,12 @@ export class ObjectLayer {
     toEnergy: number,
     toCapacity: number,
   ): void {
-    const fromSize = calcSourceSize(fromEnergy, fromCapacity)
     const toSize = calcSourceSize(toEnergy, toCapacity)
+    if (this.instantMode) {
+      updateSourceVisual(visual, toSize)
+      return
+    }
+    const fromSize = calcSourceSize(fromEnergy, fromCapacity)
     if (fromSize === toSize) return
     this.sourceAnimations.set(id, { visual, fromRadius: fromSize, toRadius: toSize, startTime: performance.now() })
   }
@@ -1344,7 +1361,11 @@ export class ObjectLayer {
               }
               existing.__tileX = obj.x
               existing.__tileY = obj.y
-              if (existing.x !== tx || existing.y !== ty) {
+              if (this.instantMode) {
+                existing.position.set(tx, ty)
+                existing.__targetX = undefined
+                existing.__targetY = undefined
+              } else if (existing.x !== tx || existing.y !== ty) {
                 existing.__targetX = tx
                 existing.__targetY = ty
               }
@@ -1466,7 +1487,11 @@ export class ObjectLayer {
             }
             existing.__tileX = obj.x
             existing.__tileY = obj.y
-            if (existing.x !== tx || existing.y !== ty) {
+            if (this.instantMode) {
+              existing.position.set(tx, ty)
+              existing.__targetX = undefined
+              existing.__targetY = undefined
+            } else if (existing.x !== tx || existing.y !== ty) {
               existing.__targetX = tx
               existing.__targetY = ty
             }
@@ -1866,6 +1891,7 @@ export class ObjectLayer {
 
   /** Trigger the yellow build-glow on the construction site at the given tile, if any. */
   triggerBuildAt(tx: number, ty: number, durationMs: number): void {
+    if (this.instantMode) return
     for (const [id, visual] of this.objects) {
       const obj = this.rawObjects.get(id)
       if (!obj || obj.type !== 'constructionSite') continue
@@ -1874,6 +1900,27 @@ export class ObjectLayer {
       this.buildGlowAnimations.set(id, { startTime: performance.now(), duration: durationMs })
       return
     }
+  }
+
+  setInstantMode(enabled: boolean): void {
+    this.instantMode = enabled
+    if (!enabled) return
+    for (const visual of this.objects.values()) {
+      if (visual.__targetX !== undefined) {
+        visual.position.set(visual.__targetX, visual.__targetY!)
+        visual.__targetX = undefined
+        visual.__targetY = undefined
+      }
+    }
+    for (const anim of this.extAnimations.values()) updateExtensionFill(anim.visual, anim.toRadius)
+    this.extAnimations.clear()
+    for (const anim of this.creepFillAnimations.values()) updateCreepFill(anim.visual, anim.toRadius)
+    this.creepFillAnimations.clear()
+    for (const anim of this.towerFillAnimations.values()) updateTowerFill(anim.visual, anim.toRadius)
+    this.towerFillAnimations.clear()
+    for (const anim of this.sourceAnimations.values()) updateSourceVisual(anim.visual, anim.toRadius)
+    this.sourceAnimations.clear()
+    this.buildGlowAnimations.clear()
   }
 
   setShowLabels(show: boolean): void {

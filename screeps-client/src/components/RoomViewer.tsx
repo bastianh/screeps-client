@@ -7,14 +7,14 @@ import { ActionAnimationLayer } from '~/renderer/ActionAnimationLayer.js'
 import { VisualLayer } from '~/renderer/VisualLayer.js'
 import { client, gameTime, setGameTime, recordGameTime, tickDuration, worldBounds, userInfo, worldStatus, serverVersion, isPrivateServer } from '~/stores/clientStore.js'
 import { showCreepLabels, terrainEffects } from '~/stores/settingsStore.js'
-import { setSelection, clearSelection, selection, updateSelectionWithDiff, createSelectedObject } from '~/stores/selectionStore.js'
+import { setSelection, clearSelection, selection, updateSelectionWithDiff, updateSelectionFromObjects, createSelectedObject } from '~/stores/selectionStore.js'
 import { addToast } from '~/stores/toastStore.js'
 import { setRoomObjectCount, setRoomOwner, setControllerLevel, setStructureCounts, setRoomUsers, roomUsers } from '~/stores/roomDataStore.js'
 import { parseRoomName, formatRoomName, isRoomInWorld } from '~/utils/roomName.js'
 import { useRoomNavigationKeys } from '~/utils/useRoomNavigationKeys.js'
 import type { Badge, RoomTerrain, RoomObjectMap, RoomObjectDiff } from 'screeps-connectivity'
 import { SubscriptionGroup } from 'screeps-connectivity'
-import { historyMode, historyTick, historyMinTick, historyMaxTick, historyLoading, setHistoryLoading, seekToTick } from '~/stores/historyStore.js'
+import { historyMode, historyTick, historyMinTick, historyMaxTick, historyLoading, setHistoryLoading, seekToTick, playbackSpeed } from '~/stores/historyStore.js'
 import { HistoryPlayer } from '~/stores/HistoryPlayer.js'
 import {flagDraft, roomViewMode, FLAG_COLOR_MAP, pendingTile, setPendingTile, clearPendingTile, setFlagDraft, modeHint, overlayAction, clearOverlayAction, buildDraft, confirmBuild, resetRoomViewMode} from '~/stores/roomViewStore';
 import { createLogger } from '~/utils/log.js'
@@ -37,6 +37,10 @@ export function RoomViewer(props: RoomViewerProps) {
   const [terrain, setTerrain] = createSignal<{ room: string, data: RoomTerrain } | null>(null)
   const [objectState, setObjectState] = createSignal<{ objects: RoomObjectMap, diff?: RoomObjectDiff, users?: Record<string, { _id: string; username: string; badge?: Badge }> } | null>(null)
   const [visualState, setVisualState] = createSignal<string>('')
+  const [sliderValue, setSliderValue] = createSignal(historyTick())
+  createEffect(() => setSliderValue(historyTick()))
+
+  let seekDebounceTimer: ReturnType<typeof setTimeout> | null = null
 
   onMount(async () => {
     if (!containerRef) return
@@ -45,6 +49,7 @@ export function RoomViewer(props: RoomViewerProps) {
   })
 
   onCleanup(() => {
+    if (seekDebounceTimer !== null) clearTimeout(seekDebounceTimer)
     objLayer?.destroy()
     objLayer = null
     animLayer?.destroy()
@@ -153,6 +158,8 @@ export function RoomViewer(props: RoomViewerProps) {
     const c = client()
     if (!c || !historyMode()) return
 
+    setVisualState('')
+
     const room = props.room
     const shard = props.shard
     const isPriv = isPrivateServer() ?? true
@@ -170,7 +177,7 @@ export function RoomViewer(props: RoomViewerProps) {
         .then((state) => {
           if (cancelled) return
           setHistoryLoading(false)
-          setObjectState({ objects: state.objects, diff: state.diff, users: cachedUsers })
+          setObjectState({ objects: state.objects, diff: undefined, users: cachedUsers })
           setGameTime(state.gameTime)
 
           let objectCount = 0
@@ -356,13 +363,19 @@ export function RoomViewer(props: RoomViewerProps) {
   createEffect(() => {
     const r = renderer()
     const state = objectState()
-    if (!r || !state) return
+    if (!r) return
+    if (!state) {
+      objLayer?.clear()
+      animLayer?.clear()
+      return
+    }
 
     const { objects: objs, diff, users } = state
 
     if (!objLayer) {
       log(`object layer created — ${props.room}`)
       objLayer = new ObjectLayer(r.app.ticker, showCreepLabels(), userInfo()?._id, userInfo()?.badge, users)
+      objLayer.setInstantMode(untrack(historyMode))
       objLayer.container.label = 'objects'
       r.world.addChild(objLayer.container)
       r.bringNavOverlayToTop()
@@ -536,13 +549,17 @@ export function RoomViewer(props: RoomViewerProps) {
 
     if (diff) {
       updateSelectionWithDiff(diff, objs)
+    } else {
+      updateSelectionFromObjects(objs)
     }
 
     objLayer.update(objs, diff, users)
 
     if (animLayer) {
       animLayer.clear()
-      const duration = (tickDuration() ?? 2000) * 0.6
+      const duration = historyMode()
+        ? Math.round(1000 / untrack(playbackSpeed))
+        : (tickDuration() ?? 2000) * 0.6
       // Use for...in over Object.entries to avoid allocating a new array of arrays every tick
       for (const id in objs) {
         const obj = objs[id]
@@ -573,6 +590,11 @@ export function RoomViewer(props: RoomViewerProps) {
   createEffect(() => {
     const raw = visualState()
     visualLayer?.update(raw)
+  })
+
+  // Sync instant-mode when entering/leaving history mode
+  createEffect(() => {
+    objLayer?.setInstantMode(historyMode())
   })
 
   // Sync creep label visibility when the setting changes
@@ -646,9 +668,17 @@ export function RoomViewer(props: RoomViewerProps) {
             type="range"
             min={historyMinTick()}
             max={historyMaxTick()}
-            value={historyTick()}
+            value={sliderValue()}
             step={1}
-            onInput={(e) => seekToTick(parseInt(e.currentTarget.value, 10))}
+            onInput={(e) => {
+              const v = parseInt(e.currentTarget.value, 10)
+              setSliderValue(v)
+              if (seekDebounceTimer !== null) clearTimeout(seekDebounceTimer)
+              seekDebounceTimer = setTimeout(() => {
+                seekDebounceTimer = null
+                seekToTick(v)
+              }, 150)
+            }}
             style={{ width: '100%', cursor: 'pointer' }}
           />
           <div

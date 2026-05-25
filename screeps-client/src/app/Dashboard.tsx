@@ -1,4 +1,4 @@
-import { createEffect, createSignal, lazy, onCleanup, onMount, Show, type JSX } from 'solid-js'
+import { createEffect, createSignal, lazy, onCleanup, onMount, Show, untrack, type JSX } from 'solid-js'
 import { Map, LayoutGrid, Code2, Settings, LogOut, ChevronLeft, ChevronRight } from 'lucide-solid'
 import { ConnectionStatus } from '~/components/ConnectionStatus.js'
 import { RoomViewer } from '~/components/RoomViewer.js'
@@ -15,7 +15,8 @@ const CodePanel = lazy(() =>
 const MapViewer = lazy(() =>
   import('~/components/MapViewer.js').then((m) => ({ default: m.MapViewer })),
 )
-import { client, disconnect, isGuest, userInfo } from '~/stores/clientStore.js'
+import { client, disconnect, isGuest, userInfo, gameTime } from '~/stores/clientStore.js'
+import { historyMode, historyTick, enterHistoryMode, exitHistoryMode, seekToTick } from '~/stores/historyStore.js'
 import { widescreenMode } from '~/stores/settingsStore.js'
 import { toggleShowLog, toggleShowConsole, toggleShowMemory } from '~/stores/consoleStore.js'
 import { setRoomViewMode } from '~/stores/roomViewStore.js'
@@ -25,14 +26,16 @@ import { basePath } from '~/utils/embedded.js'
 import { isTypingTarget } from '~/utils/dom.js'
 import { LS, getStr, setStr, removeLocal, getNum, setNum } from '~/utils/storage.js'
 
-function parseRoomUrl(): { room: string | null; shard: string | null } {
+function parseRoomUrl(): { room: string | null; shard: string | null; tick: number | null } {
   const base = basePath()
   const match = window.location.pathname.match(new RegExp(`^${base}/room/([A-Za-z0-9]+)`))
-  if (!match) return { room: null, shard: null }
+  if (!match) return { room: null, shard: null, tick: null }
   const room = match[1].toUpperCase()
-  if (!parseRoomName(room)) return { room: null, shard: null }
+  if (!parseRoomName(room)) return { room: null, shard: null, tick: null }
   const shard = new URLSearchParams(window.location.search).get('shard')
-  return { room, shard }
+  const tickMatch = window.location.hash.match(/tick=(\d+)/)
+  const tick = tickMatch ? parseInt(tickMatch[1], 10) : null
+  return { room, shard, tick }
 }
 
 function buildRoomUrl(room: string, shard: string | null): string {
@@ -129,6 +132,28 @@ export function Dashboard() {
   const [mapSubsActive, setMapSubsActive] = createSignal<boolean | null>(null)
   const [canBack, setCanBack] = createSignal(false)
   const [canForward, setCanForward] = createSignal(false)
+
+  // Consumed once when gameTime first becomes available
+  let pendingHistoryTick: number | null = urlState.tick
+  createEffect(() => {
+    const t = gameTime()
+    if (t === null || pendingHistoryTick === null) return
+    const targetTick = pendingHistoryTick
+    pendingHistoryTick = null
+    enterHistoryMode(t)
+    seekToTick(targetTick)
+  })
+
+  // Sync history tick to URL hash via replaceState (no history entry created)
+  createEffect(() => {
+    if (mapMode()) return
+    const base = buildRoomUrl(room(), shard())
+    if (historyMode()) {
+      history.replaceState(null, '', `${base}#tick=${historyTick()}`)
+    } else {
+      history.replaceState(null, '', base)
+    }
+  })
 
   const [sidebarWidth, setSidebarWidth] = createSignal(getNum(LS.sidebarWidth, 300))
   const [sidebarPrevWidth, setSidebarPrevWidth] = createSignal(getNum(LS.sidebarWidth, 300))
@@ -234,13 +259,19 @@ export function Dashboard() {
       if (mapState) {
         setMapMode(true)
         if (mapState.shard !== null) setShard(mapState.shard)
+        if (untrack(historyMode)) exitHistoryMode()
         return
       }
-      const { room: r, shard: s } = parseRoomUrl()
+      const { room: r, shard: s, tick: t } = parseRoomUrl()
       if (r) {
         setRoom(r)
         setShard(s)
         setMapMode(false)
+        if (t !== null) {
+          pendingHistoryTick = t
+        } else if (untrack(historyMode)) {
+          exitHistoryMode()
+        }
       }
     }
     window.addEventListener('popstate', onPopState)

@@ -4,6 +4,7 @@ import { Trash2, Bell, BellOff, Move, X, Flag } from 'lucide-solid'
 import { selection, deselectItem } from '~/stores/selectionStore.js'
 import { client, gameTime, userInfo } from '~/stores/clientStore.js'
 import { overlayAction, setOverlayAction } from '~/stores/roomViewStore.js'
+import { historyMode } from '~/stores/historyStore.js'
 import { roomOwner, roomUsers } from '~/stores/roomDataStore.js'
 import { createLogger } from '~/utils/log.js'
 import { CONTROLLER_DOWNGRADE } from '~/utils/gameConstants.js'
@@ -416,6 +417,7 @@ function FlagDetails(props: { item: SelectedObject }) {
         <ColorPicker value={draftSecondaryColor()} onChange={setDraftSecondaryColor} />
       </label>
 
+      <Show when={!historyMode()}>
       <div style={{ display: 'flex', gap: '6px' }}>
         <button
           onClick={handleApply}
@@ -458,6 +460,7 @@ function FlagDetails(props: { item: SelectedObject }) {
           {isMovingThisFlag() ? <X size={13} /> : <Move size={13} />}
         </button>
       </div>
+      </Show>
     </div>
   )
 }
@@ -570,7 +573,7 @@ function ControllerDetails(props: { item: SelectedObject }) {
         </Show>
       </div>
 
-      <Show when={isMyRoom()}>
+      <Show when={isMyRoom() && !historyMode()}>
         <div style={{ padding: '8px', display: 'flex', 'flex-direction': 'column', gap: '6px', background: '#0d1117' }}>
           <button
             onClick={handleActivateSafeMode}
@@ -650,7 +653,7 @@ function ExtensionDetails(props: { item: SelectedObject }) {
         </>
       </Show>
 
-      <Show when={isMyStructure()}>
+      <Show when={isMyStructure() && !historyMode()}>
         <>
           <div style={kvCell(true)}>Notify when attacked</div>
           <div style={{ ...kvCell(), display: 'flex', 'align-items': 'center' }}>
@@ -830,7 +833,7 @@ function SelectionItem(props: { item: SelectedObject }) {
         <span style={{ 'font-size': '10px', color: '#484f58', 'flex-shrink': 0, 'margin-right': '2px' }}>
           ({props.item.raw.x},{props.item.raw.y})
         </span>
-        <Show when={isOwnCreep()}>
+        <Show when={isOwnCreep() && !historyMode()}>
           <button
             onClick={handleSuicide}
             title={suicideConfirming() ? 'Click again to confirm suicide' : 'Suicide'}
@@ -851,7 +854,7 @@ function SelectionItem(props: { item: SelectedObject }) {
             <Trash2 size={13} />
           </button>
         </Show>
-        <Show when={isOwnStructure()}>
+        <Show when={isOwnStructure() && !historyMode()}>
           <button
             onClick={handleDestroyStructure}
             title={destroyConfirming() ? 'Click again to confirm destruction' : 'Destroy structure'}
@@ -872,7 +875,7 @@ function SelectionItem(props: { item: SelectedObject }) {
             <Trash2 size={13} />
           </button>
         </Show>
-        <Show when={isFlag()}>
+        <Show when={isFlag() && !historyMode()}>
           <button
             onClick={handleDeleteFlag}
             title={flagDeleteConfirming() ? 'Click again to confirm deletion' : 'Delete flag'}

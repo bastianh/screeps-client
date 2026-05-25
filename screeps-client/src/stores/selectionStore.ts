@@ -57,3 +57,20 @@ export function updateSelectionWithDiff(
   }
   if (removed) setSelection(next)
 }
+
+export function updateSelectionFromObjects(objects: Record<string, RoomObject>): void {
+  const current = selection()
+  if (current.length === 0) return
+  let removed = false
+  const next: SelectedObject[] = []
+  for (const item of current) {
+    const updated = objects[item.id]
+    if (!updated) {
+      removed = true
+      continue
+    }
+    setters.get(item)?.(updated)
+    next.push(item)
+  }
+  if (removed) setSelection(next)
+}

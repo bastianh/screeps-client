@@ -1,10 +1,9 @@
-import { For, Show } from 'solid-js'
+import { For } from 'solid-js'
 import {
-  historyMode, historyTick, historyMaxTick, isPlaying, playbackSpeed,
-  historyLoading, enterHistoryMode, exitHistoryMode,
-  stepTick, togglePlayback, setPlaybackSpeedValue,
+  historyTick, historyMaxTick, isPlaying, playbackSpeed,
+  historyLoading, stepTick, togglePlayback, setPlaybackSpeedValue,
 } from '~/stores/historyStore.js'
-import { gameTime, tickDuration } from '~/stores/clientStore.js'
+import { tickDuration } from '~/stores/clientStore.js'
 
 const SPEED_OPTIONS = [0.5, 1, 2, 5, 10, 20] as const
 
@@ -43,41 +42,9 @@ export function HistoryControlPanel() {
     })
   }
 
-  const handleToggle = () => {
-    if (historyMode()) {
-      exitHistoryMode()
-    } else {
-      const t = gameTime()
-      if (t !== null) enterHistoryMode(t)
-    }
-  }
-
   return (
     <div style={{ padding: '8px', 'border-bottom': '1px solid #30363d', 'flex-shrink': 0 }}>
-      <button
-        type="button"
-        onClick={handleToggle}
-        disabled={!historyMode() && gameTime() === null}
-        style={{
-          width: '100%',
-          padding: '5px 8px',
-          'border-radius': '6px',
-          border: `1px solid ${historyMode() ? '#58a6ff' : '#30363d'}`,
-          background: historyMode() ? '#1f6feb33' : '#161b22',
-          color: historyMode() ? '#c9d1d9' : '#8b949e',
-          cursor: 'pointer',
-          'font-size': '11px',
-          display: 'flex',
-          'align-items': 'center',
-          'justify-content': 'center',
-          gap: '4px',
-        }}
-      >
-        {historyMode() ? '⏺ History (active)' : '⏺ History'}
-      </button>
-
-      <Show when={historyMode()}>
-        <div style={{ 'margin-top': '8px', display: 'flex', 'flex-direction': 'column', gap: '6px' }}>
+        <div style={{ display: 'flex', 'flex-direction': 'column', gap: '6px' }}>
           <div style={{ 'font-size': '11px' }}>
             <div style={{ color: historyLoading() ? '#f0883e' : '#c9d1d9' }}>
               {historyLoading() ? 'Loading…' : `Tick ${historyTick()}`}
@@ -153,7 +120,6 @@ export function HistoryControlPanel() {
             </select>
           </div>
         </div>
-      </Show>
     </div>
   )
 }

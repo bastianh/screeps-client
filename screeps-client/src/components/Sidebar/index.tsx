@@ -4,6 +4,7 @@ import { RoomInfoPanel } from '~/components/RoomInfoPanel.js'
 import { MapInfoPanel } from '~/components/MapInfoPanel.js'
 import type { RoomInfo } from '~/components/MapViewer.js'
 import { roomViewMode } from '~/stores/roomViewStore.js'
+import { historyMode } from '~/stores/historyStore.js'
 
 import { RoomInfoBox } from './RoomInfoBox.js'
 import { FlagForm } from './FlagForm.js'
@@ -128,7 +129,7 @@ export function Sidebar(props: SidebarProps) {
           <MapInfoPanel zoom={props.mapZoom} subsActive={props.mapSubsActive} />
         </Show>
 
-        <Show when={!props.mapMode}>
+        <Show when={!props.mapMode && historyMode()}>
           <HistoryControlPanel />
         </Show>
 
