@@ -8,6 +8,7 @@ import { roomViewMode } from '~/stores/roomViewStore.js'
 import { RoomInfoBox } from './RoomInfoBox.js'
 import { FlagForm } from './FlagForm.js'
 import { BuildPanel } from './BuildPanel.js'
+import { HistoryControlPanel } from './HistoryControlPanel.js'
 
 function RoomModePanel(props: { shard?: string | null }) {
   return (
@@ -125,6 +126,10 @@ export function Sidebar(props: SidebarProps) {
           <RoomInfoPanel room={props.room ?? '—'} shard={props.shard ?? null} />
         }>
           <MapInfoPanel zoom={props.mapZoom} subsActive={props.mapSubsActive} />
+        </Show>
+
+        <Show when={!props.mapMode}>
+          <HistoryControlPanel />
         </Show>
 
         <Show

@@ -1,19 +1,21 @@
-import { createEffect, createSignal, onCleanup, onMount, untrack } from 'solid-js'
+import { createEffect, createSignal, onCleanup, onMount, untrack, Show } from 'solid-js'
 
 import { RoomRenderer } from '~/renderer/RoomRenderer.js'
 import { createTerrainLayer, setTerrainEffectsVisible } from '~/renderer/TerrainLayer.js'
 import { ObjectLayer } from '~/renderer/ObjectLayer.js'
 import { ActionAnimationLayer } from '~/renderer/ActionAnimationLayer.js'
 import { VisualLayer } from '~/renderer/VisualLayer.js'
-import { client, gameTime, setGameTime, recordGameTime, tickDuration, worldBounds, userInfo, worldStatus } from '~/stores/clientStore.js'
+import { client, gameTime, setGameTime, recordGameTime, tickDuration, worldBounds, userInfo, worldStatus, serverVersion, isPrivateServer } from '~/stores/clientStore.js'
 import { showCreepLabels, terrainEffects } from '~/stores/settingsStore.js'
 import { setSelection, clearSelection, selection, updateSelectionWithDiff, createSelectedObject } from '~/stores/selectionStore.js'
 import { addToast } from '~/stores/toastStore.js'
-import { setRoomObjectCount, setRoomOwner, setControllerLevel, setStructureCounts, setRoomUsers } from '~/stores/roomDataStore.js'
+import { setRoomObjectCount, setRoomOwner, setControllerLevel, setStructureCounts, setRoomUsers, roomUsers } from '~/stores/roomDataStore.js'
 import { parseRoomName, formatRoomName, isRoomInWorld } from '~/utils/roomName.js'
 import { useRoomNavigationKeys } from '~/utils/useRoomNavigationKeys.js'
 import type { Badge, RoomTerrain, RoomObjectMap, RoomObjectDiff } from 'screeps-connectivity'
 import { SubscriptionGroup } from 'screeps-connectivity'
+import { historyMode, historyTick, historyMinTick, historyMaxTick, historyLoading, setHistoryLoading, seekToTick } from '~/stores/historyStore.js'
+import { HistoryPlayer } from '~/stores/HistoryPlayer.js'
 import {flagDraft, roomViewMode, FLAG_COLOR_MAP, pendingTile, setPendingTile, clearPendingTile, setFlagDraft, modeHint, overlayAction, clearOverlayAction, buildDraft, confirmBuild, resetRoomViewMode} from '~/stores/roomViewStore';
 import { createLogger } from '~/utils/log.js'
 
@@ -57,7 +59,7 @@ export function RoomViewer(props: RoomViewerProps) {
   // a race where PixiJS init finishes after the initial room state arrives)
   createEffect(() => {
     const c = client()
-    if (!c) return
+    if (!c || historyMode()) return
 
     const room = props.room
     const shard = props.shard
@@ -143,6 +145,74 @@ export function RoomViewer(props: RoomViewerProps) {
       log(`leaving ${room}`)
       terrainCancelled = true
       group.dispose()
+    })
+  })
+
+  // History mode: fetch tick state from HTTP instead of WebSocket
+  createEffect(() => {
+    const c = client()
+    if (!c || !historyMode()) return
+
+    const room = props.room
+    const shard = props.shard
+    const isPriv = isPrivateServer() ?? true
+    const chunkSize = serverVersion()?.serverData?.historyChunkSize ?? (isPriv ? 20 : 100)
+    const cachedUsers = untrack(roomUsers) ?? undefined
+
+    const player = new HistoryPlayer(room, shard, c.http.baseUrl, () => c.http.token, chunkSize, isPriv)
+
+    createEffect(() => {
+      const tick = historyTick()
+      let cancelled = false
+      setHistoryLoading(true)
+
+      player.getStateAtTick(tick)
+        .then((state) => {
+          if (cancelled) return
+          setHistoryLoading(false)
+          setObjectState({ objects: state.objects, diff: state.diff, users: cachedUsers })
+          setGameTime(state.gameTime)
+
+          let objectCount = 0
+          const structCounts: Record<string, number> = {}
+          let ctrlLevel = 0
+          let owner: { userId: string; username: string } | null = null
+
+          for (const id in state.objects) {
+            objectCount++
+            const obj = state.objects[id]
+            if (!obj) continue
+            const objType = obj.type
+            if (typeof objType === 'string') {
+              if (objType === 'constructionSite') {
+                const structureType = obj.structureType
+                if (typeof structureType === 'string') {
+                  structCounts[structureType] = (structCounts[structureType] || 0) + 1
+                }
+              } else {
+                structCounts[objType] = (structCounts[objType] || 0) + 1
+              }
+            }
+            if (objType === 'controller' && typeof obj.user === 'string') {
+              const userId = obj.user
+              const username = cachedUsers?.[userId]?.username ?? userId
+              owner = { userId, username }
+              if (typeof obj.level === 'number') ctrlLevel = obj.level
+            }
+          }
+
+          setRoomObjectCount(objectCount)
+          setRoomOwner(owner)
+          setControllerLevel(ctrlLevel || null)
+          setStructureCounts(structCounts)
+        })
+        .catch((err: Error) => {
+          if (cancelled) return
+          setHistoryLoading(false)
+          addToast(`History load failed for tick ${tick}: ${err.message}`, 'error', 5000)
+        })
+
+      onCleanup(() => { cancelled = true })
     })
   })
 
@@ -541,7 +611,7 @@ export function RoomViewer(props: RoomViewerProps) {
           {modeHint()}
         </div>
       )}
-      {gameTime() !== null && (
+      {!historyMode() && gameTime() !== null && (
         <div
           style={{
             position: 'absolute',
@@ -559,6 +629,45 @@ export function RoomViewer(props: RoomViewerProps) {
           Tick {gameTime()}
         </div>
       )}
+      <Show when={historyMode()}>
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            padding: '8px 12px',
+            background: 'rgba(13, 17, 23, 0.85)',
+            'border-top': '1px solid #30363d',
+            'z-index': 10,
+          }}
+        >
+          <input
+            type="range"
+            min={historyMinTick()}
+            max={historyMaxTick()}
+            value={historyTick()}
+            step={1}
+            onInput={(e) => seekToTick(parseInt(e.currentTarget.value, 10))}
+            style={{ width: '100%', cursor: 'pointer' }}
+          />
+          <div
+            style={{
+              display: 'flex',
+              'justify-content': 'space-between',
+              'font-size': '10px',
+              color: '#8b949e',
+              'margin-top': '2px',
+            }}
+          >
+            <span>{historyMinTick()}</span>
+            <span style={{ color: historyLoading() ? '#f0883e' : '#8b949e' }}>
+              {historyLoading() ? 'Loading…' : `Tick ${historyTick()}`}
+            </span>
+            <span>{historyMaxTick()}</span>
+          </div>
+        </div>
+      </Show>
     </div>
   )
 }

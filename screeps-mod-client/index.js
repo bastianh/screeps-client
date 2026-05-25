@@ -58,12 +58,6 @@ module.exports = function (config) {
 
     app.use(mountPath, express.static(distDir, { fallthrough: true, index: false }))
 
-    // SPA fallback: serve index.html for unmatched GET requests under mountPath
-    app.use(mountPath, (req, res, next) => {
-      if (req.method !== 'GET') return next()
-      sendInjectedIndex(res)
-    })
-
     if (rootRedirect && mountPath !== '/') {
       const alreadyRegistered = app._router?.stack?.some(
         layer => layer.route?.path === '/' && layer.route?.methods?.get
@@ -75,6 +69,15 @@ module.exports = function (config) {
         res.redirect(302, mountPath + '/')
       })
     }
+  })
+
+  // SPA fallback registered in expressPostConfig so backend routes (e.g. /room-history,
+  // /api/...) are matched first and never shadowed by the catch-all.
+  config.backend.on('expressPostConfig', (app) => {
+    app.use(mountPath, (req, res, next) => {
+      if (req.method !== 'GET') return next()
+      sendInjectedIndex(res)
+    })
   })
 
   console.log(`[screeps-mod-client] serving client at ${mountPath}/ (rootRedirect=${rootRedirect})`)
