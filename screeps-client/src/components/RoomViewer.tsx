@@ -14,7 +14,7 @@ import { parseRoomName, formatRoomName, isRoomInWorld } from '~/utils/roomName.j
 import { useRoomNavigationKeys } from '~/utils/useRoomNavigationKeys.js'
 import type { Badge, RoomTerrain, RoomObjectMap, RoomObjectDiff } from 'screeps-connectivity'
 import { SubscriptionGroup } from 'screeps-connectivity'
-import { historyMode, historyTick, historyMinTick, historyMaxTick, historyLoading, setHistoryLoading, seekToTick, playbackSpeed } from '~/stores/historyStore.js'
+import { historyMode, historyTick, historyMinTick, historyMaxTick, setHistoryMaxTick, historyLoading, setHistoryLoading, seekToTick, playbackSpeed } from '~/stores/historyStore.js'
 import { HistoryPlayer } from '~/stores/HistoryPlayer.js'
 import {flagDraft, roomViewMode, FLAG_COLOR_MAP, pendingTile, setPendingTile, clearPendingTile, setFlagDraft, modeHint, overlayAction, clearOverlayAction, buildDraft, confirmBuild, resetRoomViewMode} from '~/stores/roomViewStore';
 import { createLogger } from '~/utils/log.js'
@@ -177,6 +177,12 @@ export function RoomViewer(props: RoomViewerProps) {
         .then((state) => {
           if (cancelled) return
           setHistoryLoading(false)
+          // If the requested chunk didn't exist yet, clamp the history range down
+          if (state.clampedTo !== undefined) {
+            setHistoryMaxTick(state.clampedTo)
+            seekToTick(state.clampedTo)
+            return
+          }
           setObjectState({ objects: state.objects, diff: undefined, users: cachedUsers })
           setGameTime(state.gameTime)
 

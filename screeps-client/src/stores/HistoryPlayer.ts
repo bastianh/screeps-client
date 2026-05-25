@@ -82,9 +82,25 @@ export class HistoryPlayer {
     return result
   }
 
-  async getStateAtTick(tick: number): Promise<{ objects: RoomObjectMap; diff: RoomObjectDiff; gameTime: number }> {
-    const base = this.chunkBase(tick)
-    const chunk = await this.loadChunk(base)
+  async getStateAtTick(tick: number): Promise<{ objects: RoomObjectMap; diff: RoomObjectDiff; gameTime: number; clampedTo?: number }> {
+    let base = this.chunkBase(tick)
+    let chunk: RoomHistoryChunk
+    let clampedTo: number | undefined
+
+    try {
+      chunk = await this.loadChunk(base)
+    } catch {
+      // Chunk not yet written — fall back to the previous one
+      const prevBase = base - this.chunkSize
+      if (prevBase < 0) throw new Error(`No history data available before tick ${base}`)
+      chunk = await this.loadChunk(prevBase)
+      base = prevBase
+      // Clamp tick to the highest available tick in the previous chunk
+      const available = Object.keys(chunk.ticks).map(Number).filter(t => t >= base)
+      const clamped = available.length > 0 ? Math.max(...available) : base
+      clampedTo = clamped
+      tick = clamped
+    }
 
     // The base tick entry is the full room state (all objects present, no nulls)
     const baseDiff = chunk.ticks[String(base)] ?? {}
@@ -101,6 +117,6 @@ export class HistoryPlayer {
       }
     }
 
-    return { objects, diff: chunk.ticks[String(tick)] ?? {}, gameTime: tick }
+    return { objects, diff: chunk.ticks[String(tick)] ?? {}, gameTime: tick, clampedTo }
   }
 }
