@@ -1,5 +1,17 @@
 # screepsmod-client-new
 
+## 0.2.5
+
+### Patch Changes
+
+- 046b25c: Add room history mode: replay historical ticks via the screepsmod-history API with playback controls (step, play/pause, speed) in the sidebar and a timeline slider on the room canvas. Fix SPA catch-all in screeps-mod-client shadowing backend routes such as `/room-history` when the client is mounted at `/`.
+- Updated dependencies [010e8c4]
+- Updated dependencies [5e8af08]
+- Updated dependencies [cf6c9d7]
+- Updated dependencies [7a20f8c]
+- Updated dependencies [046b25c]
+  - screeps-client@0.3.4
+
 ## 0.2.4
 
 ### Patch Changes

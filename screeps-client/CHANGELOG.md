@@ -1,5 +1,15 @@
 # screeps-client
 
+## 0.3.4
+
+### Patch Changes
+
+- 010e8c4: Add Memory tab to console panel with keyboard shortcut and flex-based split layout.
+- 5e8af08: Fix crash when tracking creep ring overlays for destroyed PixiJS containers.
+- cf6c9d7: Fix rooms outside world bounds being marked with the red unclaimable overlay and triggering unnecessary terrain/stats fetches. The visible-room list is now clamped to the world bounds rectangle, and a negative cache prevents re-fetching rooms the server returns no terrain data for.
+- 7a20f8c: Fix crash when zooming out fast with uncached terrain tiles. A race condition caused the map renderer to destroy a terrain texture while the sprite still referenced it, leading to a PixiJS crash reading `alphaMode` from a null source. The sprite is now cleared before any texture it references is destroyed.
+- 046b25c: Add room history mode: replay historical ticks via the screepsmod-history API with playback controls (step, play/pause, speed) in the sidebar and a timeline slider on the room canvas. Fix SPA catch-all in screeps-mod-client shadowing backend routes such as `/room-history` when the client is mounted at `/`.
+
 ## 0.3.3
 
 ### Patch Changes
