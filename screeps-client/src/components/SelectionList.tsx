@@ -1,8 +1,10 @@
 import { For, Show, createSignal, createEffect } from 'solid-js'
 import { Dynamic } from 'solid-js/web'
-import { Trash2, Bell, BellOff, Move, X, Flag } from 'lucide-solid'
+import { Trash2, Bell, BellOff, Move, X, Flag, Eye } from 'lucide-solid'
 import { selection, deselectItem } from '~/stores/selectionStore.js'
 import { client, gameTime, userInfo } from '~/stores/clientStore.js'
+import { setTempWatchFor } from '~/stores/memoryStore.js'
+import { setShowMemory } from '~/stores/consoleStore.js'
 import { overlayAction, setOverlayAction } from '~/stores/roomViewStore.js'
 import { historyMode } from '~/stores/historyStore.js'
 import { roomOwner, roomUsers, currentShard, currentRoom } from '~/stores/roomDataStore.js'
@@ -926,6 +928,28 @@ function SelectionItem(props: { item: SelectedObject }) {
             onMouseLeave={(e) => { if (!suicideConfirming()) e.currentTarget.style.color = '#8b949e' }}
           >
             <Trash2 size={13} />
+          </button>
+          <button
+            onClick={() => {
+              setTempWatchFor(props.item.id, props.item.raw.name as string)
+              setShowMemory(true)
+            }}
+            title="Watch memory"
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: '#8b949e',
+              cursor: 'pointer',
+              padding: '0 2px',
+              display: 'flex',
+              'align-items': 'center',
+              'justify-content': 'center',
+              'flex-shrink': 0,
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = '#58a6ff')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = '#8b949e')}
+          >
+            <Eye size={13} />
           </button>
         </Show>
         <Show when={isOwnStructure() && !historyMode()}>

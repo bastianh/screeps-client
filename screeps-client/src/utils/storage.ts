@@ -8,6 +8,7 @@ export const LS = {
   consoleHeight: 'screeps:consoleHeight',
   consoleSplit: 'screeps:consoleSplit',
   consoleWeights: 'screeps:consoleWeights',
+  memoryWatches: 'screeps:memoryWatches',
   mapZoom: 'screeps:mapZoom',
   widescreenMode: 'screeps:settings:widescreenMode',
   showCreepLabels: 'screeps:settings:showCreepLabels',

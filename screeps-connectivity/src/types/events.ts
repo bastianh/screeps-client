@@ -41,6 +41,7 @@ export interface UserStoreEvents {
     'user:console': { messages: ConsoleMessage }
     'user:code': { branch: string; modules: Record<string, string> }
     'user:stream': Record<string, unknown>
+    'user:memory': { path: string; shard: string | null; value: unknown }
 }
 
 export interface ServerStoreEvents {

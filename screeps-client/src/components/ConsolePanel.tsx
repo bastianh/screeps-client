@@ -1,9 +1,11 @@
 import { createEffect, createSignal, onCleanup, onMount, For, Show } from 'solid-js'
-import { Trash2, Pause, Play } from 'lucide-solid'
+import { Trash2, Pause, Play, X, Plus } from 'lucide-solid'
 import { client } from '~/stores/clientStore.js'
 import { SubscriptionGroup } from 'screeps-connectivity'
 import type { ConsoleMessage } from 'screeps-connectivity'
-import { showLog, showConsole, showMemory, toggleShowLog, toggleShowConsole, toggleShowMemory } from '~/stores/consoleStore.js'
+import { showLog, showConsole, showMemory, toggleShowLog, toggleShowConsole, toggleShowMemory, consoleInput, setConsoleInput, registerConsoleInput } from '~/stores/consoleStore.js'
+import { watches, tempWatch, memoryValues, addWatch, removeWatch, clearTempWatch, initMemorySubscriptions } from '~/stores/memoryStore.js'
+import { MemoryTree } from '~/components/MemoryTree.js'
 import { createLogger } from '~/utils/log.js'
 import { LS, getJson, setJson } from '~/utils/storage.js'
 
@@ -16,9 +18,128 @@ interface ConsoleEntry {
   error: string[]
 }
 
+function MemoryPane(props: { shard: string | null; width: number }) {
+  const [addInput, setAddInput] = createSignal('')
+
+  onMount(() => {
+    initMemorySubscriptions(props.shard)
+  })
+
+  const monoStyle = {
+    'font-family': 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+    'font-size': '12px',
+    'line-height': '1.5',
+  } as const
+
+  const iconBtnStyle = {
+    background: 'transparent',
+    border: 'none',
+    color: '#8b949e',
+    cursor: 'pointer',
+    padding: '4px',
+    'border-radius': '4px',
+    display: 'flex',
+    'align-items': 'center',
+    'justify-content': 'center',
+  } as const
+
+  return (
+    <div style={{ width: `${props.width * 100}%`, 'flex-shrink': 0, display: 'flex', 'flex-direction': 'column', overflow: 'hidden' }}>
+      <div class="console-scroll" style={{ flex: 1, overflow: 'auto', padding: '8px', ...monoStyle }}>
+
+        {/* Temporary watch (creep) */}
+        <Show when={tempWatch()}>
+          {(tw) => {
+            const creepPath = `creeps.${tw().name}`
+            return (
+              <div style={{ 'margin-bottom': '8px' }}>
+                <div style={{ display: 'flex', 'align-items': 'center', gap: '4px', 'border-bottom': '1px solid #21262d', 'padding-bottom': '4px', 'margin-bottom': '4px' }}>
+                  <span style={{ color: '#f0883e', 'font-weight': 600, flex: 1 }}>{creepPath}</span>
+                  <span style={{ color: '#484f58', 'font-size': '10px', 'font-style': 'italic' }}>temp</span>
+                  <button style={iconBtnStyle} title="Remove temp watch" onClick={clearTempWatch}>
+                    <X size={12} />
+                  </button>
+                </div>
+                <MemoryTree
+                  value={memoryValues[creepPath]}
+                  path={`Memory.${creepPath}`}
+                  label={creepPath}
+                />
+              </div>
+            )
+          }}
+        </Show>
+
+        {/* Persistent watchlist */}
+        <For each={watches()}>
+          {(path) => (
+            <div style={{ 'margin-bottom': '8px' }}>
+              <div style={{ display: 'flex', 'align-items': 'center', gap: '4px', 'border-bottom': '1px solid #21262d', 'padding-bottom': '4px', 'margin-bottom': '4px' }}>
+                <span style={{ color: '#c9d1d9', 'font-weight': 600, flex: 1 }}>{path}</span>
+                <button style={iconBtnStyle} title="Remove watch" onClick={() => removeWatch(path)}>
+                  <X size={12} />
+                </button>
+              </div>
+              <MemoryTree
+                value={memoryValues[path]}
+                path={`Memory.${path}`}
+                label={path}
+              />
+            </div>
+          )}
+        </For>
+
+        <Show when={watches().length === 0 && !tempWatch()}>
+          <div style={{ color: '#484f58', 'font-style': 'italic' }}>No paths watched — add one below.</div>
+        </Show>
+      </div>
+
+      {/* Add watch input */}
+      <form
+        onSubmit={(e) => { e.preventDefault(); addWatch(addInput()); setAddInput('') }}
+        style={{ display: 'flex', gap: '6px', padding: '8px', 'border-top': '1px solid #30363d' }}
+      >
+        <input
+          type="text"
+          value={addInput()}
+          onInput={(e) => setAddInput(e.currentTarget.value)}
+          placeholder="creeps.Harvester1.energy"
+          style={{
+            flex: 1,
+            padding: '6px 8px',
+            'border-radius': '4px',
+            border: '1px solid #30363d',
+            background: '#161b22',
+            color: '#c9d1d9',
+            'font-size': '12px',
+            'font-family': 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+          }}
+        />
+        <button
+          type="submit"
+          style={{
+            padding: '6px 8px',
+            'border-radius': '4px',
+            border: 'none',
+            background: '#238636',
+            color: '#fff',
+            'font-size': '12px',
+            cursor: 'pointer',
+            display: 'flex',
+            'align-items': 'center',
+            gap: '4px',
+          }}
+          title="Add watch"
+        >
+          <Plus size={14} /> Watch
+        </button>
+      </form>
+    </div>
+  )
+}
+
 export function ConsolePanel(props: { shard?: string | null; isCollapsed?: boolean; onToggle?: () => void }) {
   const [entries, setEntries] = createSignal<ConsoleEntry[]>([])
-  const [input, setInput] = createSignal('')
   const [autoScroll, setAutoScroll] = createSignal(true)
   const DEFAULT_WEIGHTS = [1, 1, 1] as const
   const [weights, setWeights] = createSignal<number[]>(getJson(LS.consoleWeights, [...DEFAULT_WEIGHTS]))
@@ -152,10 +273,10 @@ export function ConsolePanel(props: { shard?: string | null; isCollapsed?: boole
   const handleSubmit = async (e: Event) => {
     e.preventDefault()
     const c = client()
-    if (!c || !input().trim()) return
+    if (!c || !consoleInput().trim()) return
     try {
-      await c.http.user.console(input().trim(), props.shard ?? 'shard0')
-      setInput('')
+      await c.http.user.console(consoleInput().trim(), props.shard ?? 'shard0')
+      setConsoleInput('')
     } catch (err) {
       error('command failed:', err)
     }
@@ -354,8 +475,9 @@ export function ConsolePanel(props: { shard?: string | null; isCollapsed?: boole
                 <span style={{ color: '#8b949e', 'font-size': '13px', 'line-height': '28px' }}>&gt;</span>
                 <input
                   type="text"
-                  value={input()}
-                  onInput={(e) => setInput(e.currentTarget.value)}
+                  ref={(el) => registerConsoleInput(el)}
+                  value={consoleInput()}
+                  onInput={(e) => setConsoleInput(e.currentTarget.value)}
                   placeholder="Game.creeps.Harvester1.moveTo(10, 10)"
                   style={{
                     flex: 1,
@@ -401,11 +523,7 @@ export function ConsolePanel(props: { shard?: string | null; isCollapsed?: boole
 
           {/* Memory pane */}
           <Show when={showMemory()}>
-            <div style={{ width: `${paneWidths()[2] * 100}%`, 'flex-shrink': 0, display: 'flex', 'flex-direction': 'column', overflow: 'hidden' }}>
-              <div style={{ flex: 1, display: 'flex', 'align-items': 'center', 'justify-content': 'center', color: '#484f58', 'font-style': 'italic' }}>
-                Memory – coming soon
-              </div>
-            </div>
+            <MemoryPane shard={props.shard ?? null} width={paneWidths()[2]} />
           </Show>
 
         </div>

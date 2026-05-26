@@ -136,6 +136,54 @@ export class UserStore extends TypedStore<UserStoreEvents> {
     }
   }
 
+  subscribeMemory(path: string, shard?: string | null): Subscription {
+    this.logger.log('subscribe memory', path)
+    let socketSub: Subscription | null = null
+    let listenerSub: Subscription | null = null
+    let disposed = false
+
+    const setup = async () => {
+      try {
+        const uid = this._userId ?? (await this.me())._id
+        if (disposed) return
+        const shardSegment = shard ? `${shard}/` : ''
+        const fullChannel = `user:${uid}/memory/${shardSegment}${path}`
+        socketSub = this.socket.subscribe(fullChannel)
+        listenerSub = this.socket.on(fullChannel, (raw) => {
+          let value: unknown = raw
+          if (typeof raw === 'string' && raw.startsWith('gz:')) {
+            void (async () => {
+              try {
+                const { decompressZlib } = await import('../http/decompress.js')
+                value = await decompressZlib(raw)
+                this.emit('user:memory', { path, shard: shard ?? null, value })
+              } catch (err) {
+                this.logger.log('memory decompress failed', err)
+              }
+            })()
+            return
+          }
+          this.emit('user:memory', { path, shard: shard ?? null, value })
+        })
+      } catch (err) {
+        if (!disposed) {
+          this.dispatchEvent(new ErrorEvent('error', { error: err instanceof Error ? err : new Error(String(err)) }))
+        }
+      }
+    }
+
+    void setup()
+
+    return {
+      dispose: () => {
+        this.logger.log('unsubscribe memory', path)
+        disposed = true
+        socketSub?.dispose()
+        listenerSub?.dispose()
+      },
+    }
+  }
+
   /** Subscribe to the general user stream to receive global data like flags. */
   subscribeUserStream(): Subscription {
     this.logger.log('subscribe user stream')
