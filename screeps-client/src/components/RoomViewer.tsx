@@ -550,6 +550,13 @@ export function RoomViewer(props: RoomViewerProps) {
                 .filter(v => v.visual != null)
             r.hoverLayer.setSelectedObjects(visuals)
           },
+          () => {
+            const mode = roomViewMode()
+            if (mode === 'build' || mode === 'flag' || overlayAction()?.type === 'moveFlag') {
+              resetRoomViewMode()
+              r.hoverLayer.clearPendingTile()
+            }
+          },
       )
     }
 

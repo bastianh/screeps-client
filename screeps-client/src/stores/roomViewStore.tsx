@@ -259,11 +259,21 @@ export function modeHint(): JSX.Element | null {
   }
 
   if (overlay?.type === 'moveFlag') {
-    return <span>Choose new flag position</span>
+    return (
+      <div style={{ display: 'flex', 'flex-direction': 'column', gap: '2px', 'text-align': 'center' }}>
+        <span>Choose new flag position</span>
+        <span style={{ opacity: '0.6', 'font-size': '0.9em' }}>Right-click to cancel</span>
+      </div>
+    )
   }
 
   if (mode === 'flag') {
-    return <span>{pending ? 'Confirm position' : 'Choose position'}</span>
+    return (
+      <div style={{ display: 'flex', 'flex-direction': 'column', gap: '2px', 'text-align': 'center' }}>
+        <span>{pending ? 'Click again to confirm position' : 'Click to choose flag position'}</span>
+        <span style={{ opacity: '0.6', 'font-size': '0.9em' }}>Right-click to exit flag mode</span>
+      </div>
+    )
   }
 
   if (mode === 'build') {
@@ -272,22 +282,29 @@ export function modeHint(): JSX.Element | null {
     const counts = structureCounts()
     const type = draft.structureType
 
-    const ctrlHint = ' — Ctrl+click to remove construction sites'
-
     if (!type) {
-      return <span>{`Select structure type, then click to build${ctrlHint}`}</span>
+      return (
+        <div style={{ display: 'flex', 'flex-direction': 'column', gap: '2px', 'text-align': 'center' }}>
+          <span>Select a structure type, then click to build</span>
+          <span style={{ opacity: '0.6', 'font-size': '0.9em' }}>Ctrl+click to remove construction sites</span>
+          <span style={{ opacity: '0.6', 'font-size': '0.9em' }}>Right-click to exit build mode</span>
+        </div>
+      )
     }
 
     const levels = CONTROLLER_STRUCTURES[type]
     const max = levels?.[level ?? 0] ?? 0
     const current = counts[type] ?? 0
     const display = type.replace(/([A-Z])/g, ' $1').trim()
+    const countStr = max === 2500 ? `${current}/∞` : `${current}/${max}`
 
-    if (max === 2500) {
-      return <span>{`Click to build ${display} (${current}/∞)${ctrlHint}`}</span>
-    }
-
-    return <span>{`Click to build ${display} (${current}/${max})${ctrlHint}`}</span>
+    return (
+      <div style={{ display: 'flex', 'flex-direction': 'column', gap: '2px', 'text-align': 'center' }}>
+        <span>{`Click to build ${display} (${countStr})`}</span>
+        <span style={{ opacity: '0.6', 'font-size': '0.9em' }}>Ctrl+click to remove construction sites</span>
+        <span style={{ opacity: '0.6', 'font-size': '0.9em' }}>Right-click to exit build mode</span>
+      </div>
+    )
   }
 
   return null

@@ -22,6 +22,7 @@ export class RoomRenderer {
 
   private onHoverTile: ((tx: number | null, ty: number | null) => void) | null = null
   private onClickTile: ((tx: number, ty: number, ctrlKey: boolean) => void) | null = null
+  private onRightClick: (() => void) | null = null
 
   private constructor(app: Application, container: HTMLElement) {
     this.app = app
@@ -337,6 +338,11 @@ export class RoomRenderer {
     canvas.addEventListener('pointerup', onUp)
     canvas.addEventListener('pointercancel', onUp)
 
+    canvas.addEventListener('contextmenu', (e) => {
+      e.preventDefault()
+      this.onRightClick?.()
+    })
+
     canvas.addEventListener('pointerleave', () => {
       this.hoverLayer.setHoveredTile(null, null)
       this.onHoverTile?.(null, null)
@@ -394,13 +400,15 @@ export class RoomRenderer {
     }, { passive: false })
   }
 
-  /** Register callbacks for hover and click tile events. */
+  /** Register callbacks for hover, click, and right-click tile events. */
   setTileHandlers(
     onHover: (tx: number | null, ty: number | null) => void,
     onClick: (tx: number, ty: number, ctrlKey: boolean) => void,
+    onRightClick?: () => void,
   ): void {
     this.onHoverTile = onHover
     this.onClickTile = onClick
+    this.onRightClick = onRightClick ?? null
   }
 
   /**
