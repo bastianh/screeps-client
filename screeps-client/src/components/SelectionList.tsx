@@ -681,12 +681,83 @@ function ExtensionDetails(props: { item: SelectedObject }) {
   )
 }
 
+function StoreStructureDetails(props: { item: SelectedObject }) {
+  const raw = () => props.item.raw as Record<string, unknown>
+
+  const hits = () => typeof raw().hits === 'number' ? (raw().hits as number) : null
+  const hitsMax = () => typeof raw().hitsMax === 'number' ? (raw().hitsMax as number) : null
+  const store = () => raw().store as Record<string, number> | undefined
+  const capacity = () => {
+    if (typeof raw().storeCapacity === 'number') return raw().storeCapacity as number
+    const res = raw().storeCapacityResource as Record<string, number> | undefined
+    if (res) {
+      let total = 0
+      for (const k in res) total += res[k]
+      return total
+    }
+    return null
+  }
+
+  const total = () => {
+    const s = store()
+    if (!s) return 0
+    let t = 0
+    for (const k in s) t += s[k]
+    return t
+  }
+
+  const fillPct = () => {
+    const cap = capacity()
+    if (!cap || cap === 0) return 0
+    return Math.min(100, (total() / cap) * 100)
+  }
+
+  return (
+    <div>
+      <Show when={hits() !== null && hitsMax() !== null}>
+        <div style={kvGrid}>
+          <div style={kvCell(true)}>Hits</div>
+          <div style={{ ...kvCell(), 'font-variant-numeric': 'tabular-nums' }}>{hits()} / {hitsMax()}</div>
+        </div>
+      </Show>
+
+      <Show when={capacity() !== null}>
+        <div style={{ padding: '5px 8px', background: '#0d1117', 'border-top': '1px solid #21262d' }}>
+          <div style={{ display: 'flex', 'justify-content': 'space-between', 'font-size': '10px', 'margin-bottom': '4px' }}>
+            <span style={{ color: '#8b949e' }}>Fill</span>
+            <span style={{ color: '#c9d1d9', 'font-variant-numeric': 'tabular-nums' }}>
+              {formatLargeNumber(total())} / {formatLargeNumber(capacity()!)} ({fillPct().toFixed(1)}%)
+            </span>
+          </div>
+          <div style={{ height: '5px', background: '#21262d', 'border-radius': '3px', overflow: 'hidden' }}>
+            <div style={{
+              height: '100%',
+              width: `${fillPct()}%`,
+              background: '#ffe87b',
+              'border-radius': '3px',
+            }} />
+          </div>
+        </div>
+      </Show>
+
+      <StoreDetails store={store()} capacity={null} />
+    </div>
+  )
+}
+
 import { JSX } from 'solid-js'
 const CUSTOM_DETAILS: Record<string, (props: { item: SelectedObject }) => JSX.Element> = {
   creep: CreepDetails,
   flag: FlagDetails,
   controller: ControllerDetails,
   extension: ExtensionDetails,
+  storage: StoreStructureDetails,
+  terminal: StoreStructureDetails,
+  container: StoreStructureDetails,
+  lab: StoreStructureDetails,
+  factory: StoreStructureDetails,
+  nuker: StoreStructureDetails,
+  powerSpawn: StoreStructureDetails,
 }
 
 function SelectionItem(props: { item: SelectedObject }) {

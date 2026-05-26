@@ -286,6 +286,47 @@ function updateTowerFill(visual: ContainerWithTarget, height: number): void {
   }
 }
 
+// ── Storage helpers ────────────────────────────────────────────────────────
+// Box inner rect in container coords (cx = cy = TILE_SIZE/2, so rect x = 0, rect y = -TILE_SIZE*0.1)
+const STORAGE_BOX_X = 0
+const STORAGE_BOX_Y = -TILE_SIZE * 0.1
+const STORAGE_BOX_W = TILE_SIZE * 1.0
+const STORAGE_BOX_H = TILE_SIZE * 1.2
+
+function getStoreFill(obj: RoomObject): { used: number; capacity: number } {
+  const capacity = typeof obj.storeCapacity === 'number' ? obj.storeCapacity : 0
+  if (capacity === 0) return { used: 0, capacity: 0 }
+  let used = 0
+  if (obj.store && typeof obj.store === 'object') {
+    const storeObj = obj.store as Record<string, unknown>
+    for (const k in storeObj) {
+      const v = storeObj[k]
+      if (typeof v === 'number') used += v
+    }
+  }
+  return { used, capacity }
+}
+
+function calcStorageFillHeight(used: number, capacity: number): number {
+  if (capacity <= 0 || used <= 0) return 0
+  return STORAGE_BOX_H * Math.min(1, used / capacity)
+}
+
+function updateStorageFill(visual: ContainerWithTarget, height: number): void {
+  const fill = visual.__storageFillG
+  if (!fill) return
+  fill.clear()
+  if (height > 0) {
+    fill.rect(
+      STORAGE_BOX_X,
+      STORAGE_BOX_Y + STORAGE_BOX_H - height,
+      STORAGE_BOX_W,
+      height,
+    )
+    fill.fill(ST_ENERGY)
+  }
+}
+
 // ── Controller helpers ─────────────────────────────────────────────────────
 
 const CTRL_OCTO_R  = TILE_SIZE * 0.65
@@ -750,6 +791,7 @@ function createObjectVisual(
       break
     }
     case 'storage': {
+      const { used: storageUsed, capacity: storageCap } = getStoreFill(obj)
       const storagePts = spts(cx, cy, [
         [-0.6, -0.7], [0, -0.8], [0.6, -0.7], [0.65, 0],
         [0.6, 0.7], [0, 0.8], [-0.6, 0.7], [-0.65, 0], [-0.6, -0.7],
@@ -760,8 +802,19 @@ function createObjectVisual(
       g.stroke({ width: TILE_SIZE * 0.05, color: outlineColor })
       g.rect(cx - TILE_SIZE * 0.5, cy - TILE_SIZE * 0.6, TILE_SIZE * 1.0, TILE_SIZE * 1.2)
       g.fill(ST_GRAY)
-      g.rect(cx - TILE_SIZE * 0.5, cy - TILE_SIZE * 0.6, TILE_SIZE * 1.0, TILE_SIZE * 1.2)
-      g.stroke({ width: TILE_SIZE * 0.1, color: ST_DARK })
+      container.addChild(g)
+
+      const storageFillG = new Graphics()
+      container.addChild(storageFillG)
+      ;(container as ContainerWithTarget).__storageFillG = storageFillG
+      ;(container as ContainerWithTarget).__storageUsed = storageUsed
+      ;(container as ContainerWithTarget).__storageCapacity = storageCap
+      updateStorageFill(container as ContainerWithTarget, calcStorageFillHeight(storageUsed, storageCap))
+
+      const storageBorderG = new Graphics()
+      storageBorderG.rect(cx - TILE_SIZE * 0.5, cy - TILE_SIZE * 0.6, TILE_SIZE * 1.0, TILE_SIZE * 1.2)
+      storageBorderG.stroke({ width: TILE_SIZE * 0.1, color: ST_DARK })
+      container.addChild(storageBorderG)
       break
     }
     case 'terminal': {
@@ -989,7 +1042,7 @@ function createObjectVisual(
     }
   }
 
-  if (obj.type !== 'extension' && obj.type !== 'road' && obj.type !== 'creep' && obj.type !== 'tower' && obj.type !== 'controller' && obj.type !== 'flag' && obj.type !== 'source' && obj.type !== 'constructionSite' && obj.type !== 'mineral' && obj.type !== 'tombstone' && obj.type !== 'ruin') {
+  if (obj.type !== 'extension' && obj.type !== 'road' && obj.type !== 'creep' && obj.type !== 'tower' && obj.type !== 'controller' && obj.type !== 'flag' && obj.type !== 'source' && obj.type !== 'constructionSite' && obj.type !== 'mineral' && obj.type !== 'tombstone' && obj.type !== 'ruin' && obj.type !== 'storage') {
     container.addChild(g)
   }
 
@@ -1043,6 +1096,9 @@ type ContainerWithTarget = Container & {
   __towerFillGraphics?: Graphics
   __towerEnergy?: number
   __towerCapacity?: number
+  __storageFillG?: Graphics
+  __storageUsed?: number
+  __storageCapacity?: number
   __barrelContainer?: Container
   __ctrlSegGraphics?: Graphics
   __ctrlLevel?: number
@@ -1093,6 +1149,7 @@ export class ObjectLayer {
   private extAnimations = new Map<string, ExtAnimation>()
   private creepFillAnimations = new Map<string, ExtAnimation>()
   private towerFillAnimations = new Map<string, ExtAnimation>()
+  private storageFillAnimations = new Map<string, ExtAnimation>()
   private sourceAnimations = new Map<string, ExtAnimation>()
   private buildGlowAnimations = new Map<string, { startTime: number; duration: number }>()
   private readonly EXT_ANIM_DURATION = 300
@@ -1188,6 +1245,13 @@ export class ObjectLayer {
       const ease = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2
       updateTowerFill(anim.visual, anim.fromRadius + (anim.toRadius - anim.fromRadius) * ease)
       if (t >= 1) this.towerFillAnimations.delete(id)
+    }
+    for (const [id, anim] of this.storageFillAnimations) {
+      const elapsed = now - anim.startTime
+      const t = Math.min(1, elapsed / this.EXT_ANIM_DURATION)
+      const ease = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2
+      updateStorageFill(anim.visual, anim.fromRadius + (anim.toRadius - anim.fromRadius) * ease)
+      if (t >= 1) this.storageFillAnimations.delete(id)
     }
     for (const [id, anim] of this.sourceAnimations) {
       const elapsed = now - anim.startTime
@@ -1285,6 +1349,24 @@ export class ObjectLayer {
     this.towerFillAnimations.set(id, { visual, fromRadius: fromH, toRadius: toH, startTime: performance.now() })
   }
 
+  private startStorageFillAnimation(
+    id: string,
+    visual: ContainerWithTarget,
+    fromUsed: number,
+    fromCapacity: number,
+    toUsed: number,
+    toCapacity: number,
+  ): void {
+    const toH = calcStorageFillHeight(toUsed, toCapacity)
+    if (this.instantMode) {
+      updateStorageFill(visual, toH)
+      return
+    }
+    const fromH = calcStorageFillHeight(fromUsed, fromCapacity)
+    if (fromH === toH) return
+    this.storageFillAnimations.set(id, { visual, fromRadius: fromH, toRadius: toH, startTime: performance.now() })
+  }
+
   private startSourceAnimation(
     id: string,
     visual: ContainerWithTarget,
@@ -1326,6 +1408,7 @@ export class ObjectLayer {
             this.extAnimations.delete(id)
             this.creepFillAnimations.delete(id)
             this.towerFillAnimations.delete(id)
+            this.storageFillAnimations.delete(id)
             this.sourceAnimations.delete(id)
             this.buildGlowAnimations.delete(id)
           }
@@ -1420,6 +1503,14 @@ export class ObjectLayer {
                 this.startTowerFillAnimation(id, existing, existing.__towerEnergy ?? 0, existing.__towerCapacity ?? capacity, energy, capacity)
                 existing.__towerEnergy = energy
                 existing.__towerCapacity = capacity
+              }
+            }
+            if (obj.type === 'storage') {
+              const { used, capacity } = getStoreFill(obj)
+              if (existing.__storageUsed !== used || existing.__storageCapacity !== capacity) {
+                this.startStorageFillAnimation(id, existing, existing.__storageUsed ?? 0, existing.__storageCapacity ?? capacity, used, capacity)
+                existing.__storageUsed = used
+                existing.__storageCapacity = capacity
               }
             }
             if (obj.type === 'controller') {
