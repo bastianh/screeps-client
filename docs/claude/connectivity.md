@@ -1,3 +1,9 @@
+---
+title: connectivity
+type: note
+permalink: screeps-client/claude/connectivity
+---
+
 # screeps-connectivity — Architecture
 
 Package: `screeps-connectivity/` · zero production dependencies · ESM + CJS via tsup

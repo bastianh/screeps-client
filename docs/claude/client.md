@@ -1,3 +1,9 @@
+---
+title: client
+type: note
+permalink: screeps-client/claude/client
+---
+
 # screeps-client — Architecture
 
 SolidJS + PixiJS browser frontend. Dev server: `pnpm dev` (from `screeps-client/`).

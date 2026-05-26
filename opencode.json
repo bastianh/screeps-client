@@ -3,7 +3,16 @@
   "mcp": {
     "mcp-codebase-index": {
       "type": "local",
-      "command": ["uvx", "--with", "mcp-codebase-index[mcp]", "mcp-codebase-index"]
+      "command": [
+        "uvx",
+        "--with",
+        "mcp-codebase-index[mcp]",
+        "mcp-codebase-index"
+      ]
+    },
+    "basic-memory": {
+      "type": "local",
+      "command": ["uvx", "basic-memory", "mcp", "--project", "screeps_client"]
     }
   }
 }

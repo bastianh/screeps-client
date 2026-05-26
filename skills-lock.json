@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "skills": {
+    "memory-notes": {
+      "source": "basicmachines-co/basic-memory-skills",
+      "sourceType": "github",
+      "skillPath": "memory-notes/SKILL.md",
+      "computedHash": "c6ac355ae99e11a963f05a1d2452598403078d33eb9f7e096b1e43aa60caec15"
+    },
+    "memory-schema": {
+      "source": "basicmachines-co/basic-memory-skills",
+      "sourceType": "github",
+      "skillPath": "memory-schema/SKILL.md",
+      "computedHash": "876c3923dde4f88ce9502314832471f52a4fc15a4563b31cdbd74396fba33043"
+    },
+    "memory-tasks": {
+      "source": "basicmachines-co/basic-memory-skills",
+      "sourceType": "github",
+      "skillPath": "memory-tasks/SKILL.md",
+      "computedHash": "35c7286251d478b35ed6a771a55fd457c0332ad14ff7e9710787d5cebaef5b9f"
+    }
+  }
+}

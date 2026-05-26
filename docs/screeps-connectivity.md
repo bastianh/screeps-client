@@ -1,3 +1,9 @@
+---
+title: screeps-connectivity
+type: note
+permalink: screeps-client/screeps-connectivity
+---
+
 # screeps-connectivity
 
 TypeScript library for connecting to Screeps servers. Handles HTTP, WebSocket, authentication, data stores, caching, and persistent storage — with zero production dependencies.

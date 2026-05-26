@@ -1,0 +1,10 @@
+views:
+  - type: table
+    name: Tabelle
+  - type: table
+    name: Sicht
+    order:
+      - file.name
+      - file.tags
+    columnSize:
+      file.name: 530

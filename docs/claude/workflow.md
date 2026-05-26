@@ -1,3 +1,9 @@
+---
+title: workflow
+type: note
+permalink: screeps-client/claude/workflow
+---
+
 # Workflow — PRs, Testing, Releases
 
 ## Pull Requests

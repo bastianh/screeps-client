@@ -3,6 +3,10 @@
     "mcp-codebase-index": {
       "command": "uvx",
       "args": ["--with", "mcp-codebase-index[mcp]", "mcp-codebase-index"]
+    },
+    "basic-memory": {
+      "command": "uvx",
+      "args": ["basic-memory", "mcp", "--project", "screeps_client"]
     }
   }
 }
