@@ -8,5 +8,7 @@ const [roomOwner, setRoomOwner] = createSignal<{ userId: string; username: strin
 const [controllerLevel, setControllerLevel] = createSignal<number | null>(null)
 const [structureCounts, setStructureCounts] = createSignal<Record<string, number>>({})
 const [roomUsers, setRoomUsers] = createSignal<RoomUsersMap | null>(null)
+const [currentShard, setCurrentShard] = createSignal<string | null>(null)
+const [currentRoom, setCurrentRoom] = createSignal<string | null>(null)
 
-export { roomObjectCount, setRoomObjectCount, roomOwner, setRoomOwner, controllerLevel, setControllerLevel, structureCounts, setStructureCounts, roomUsers, setRoomUsers }
+export { roomObjectCount, setRoomObjectCount, roomOwner, setRoomOwner, controllerLevel, setControllerLevel, structureCounts, setStructureCounts, roomUsers, setRoomUsers, currentShard, setCurrentShard, currentRoom, setCurrentRoom }

@@ -5,7 +5,7 @@ import { selection, deselectItem } from '~/stores/selectionStore.js'
 import { client, gameTime, userInfo } from '~/stores/clientStore.js'
 import { overlayAction, setOverlayAction } from '~/stores/roomViewStore.js'
 import { historyMode } from '~/stores/historyStore.js'
-import { roomOwner, roomUsers } from '~/stores/roomDataStore.js'
+import { roomOwner, roomUsers, currentShard, currentRoom } from '~/stores/roomDataStore.js'
 import { createLogger } from '~/utils/log.js'
 import { CONTROLLER_DOWNGRADE } from '~/utils/gameConstants.js'
 import { ColorPicker } from '~/components/ColorPicker.js'
@@ -775,7 +775,9 @@ function SelectionItem(props: { item: SelectedObject }) {
     if (isCreep() || isFlag() || props.item.type === 'controller') return false
     const raw = props.item.raw as Record<string, unknown>
     const uid = typeof raw.user === 'string' ? raw.user : null
-    return uid !== null && uid === userInfo()?._id
+    if (uid !== null) return uid === userInfo()?._id
+    // Roads and walls have no user field — owned by whoever owns the room
+    return roomOwner()?.userId === userInfo()?._id
   }
 
   const detailsComponent = () => CUSTOM_DETAILS[props.item.type] || DefaultDetails
@@ -820,8 +822,9 @@ function SelectionItem(props: { item: SelectedObject }) {
     if (!c) return
     const id = props.item.id
     const raw = props.item.raw as Record<string, unknown>
-    const room = raw.room as string
-    c.http.game.addObjectIntent('room', room, 'destroyStructure', [{ id, roomName: room, user: raw.user as string }])
+    const room = (typeof raw.room === 'string' ? raw.room : null) ?? currentRoom() ?? ''
+    const userId = typeof raw.user === 'string' ? raw.user : (roomOwner()?.userId ?? '')
+    c.http.game.addObjectIntent('room', room, 'destroyStructure', [{ id, roomName: room, user: userId }], currentShard())
       .then(() => deselectItem(id))
       .catch((err: Error) => error('destroyStructure failed:', err))
   }
