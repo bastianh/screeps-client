@@ -1,4 +1,4 @@
-import { createSignal, createEffect, onCleanup } from 'solid-js'
+import { createSignal, createEffect, createRoot, onCleanup } from 'solid-js'
 import { createStore } from 'solid-js/store'
 import type { Subscription } from 'screeps-connectivity'
 import { client } from '~/stores/clientStore.js'
@@ -110,12 +110,14 @@ export function initMemorySubscriptions(shard: string | null): () => void {
   }
 }
 
-// Auto-remove temp watch when the watched creep is deselected
-createEffect(() => {
-  const tw = tempWatch()
-  if (!tw) return
-  const sel = selection()
-  if (!sel.some((item) => item.id === tw.creepId)) {
-    clearTempWatch()
-  }
+// Auto-remove temp watch when the watched creep is deselected (app-lifetime effect)
+createRoot(() => {
+  createEffect(() => {
+    const tw = tempWatch()
+    if (!tw) return
+    const sel = selection()
+    if (!sel.some((item) => item.id === tw.creepId)) {
+      clearTempWatch()
+    }
+  })
 })

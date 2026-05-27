@@ -6,6 +6,7 @@ import type { ConsoleMessage } from 'screeps-connectivity'
 import { showLog, showConsole, showMemory, toggleShowLog, toggleShowConsole, toggleShowMemory, consoleInput, setConsoleInput, registerConsoleInput } from '~/stores/consoleStore.js'
 import { watches, tempWatch, memoryValues, addWatch, removeWatch, clearTempWatch, initMemorySubscriptions } from '~/stores/memoryStore.js'
 import { MemoryTree } from '~/components/MemoryTree.js'
+import { currentShard } from '~/stores/roomDataStore.js'
 import { createLogger } from '~/utils/log.js'
 import { LS, getJson, setJson } from '~/utils/storage.js'
 
@@ -20,9 +21,11 @@ interface ConsoleEntry {
 
 function MemoryPane(props: { shard: string | null; width: number }) {
   const [addInput, setAddInput] = createSignal('')
+  // Props shard may be null on private servers; fall back to the currently viewed room's shard
+  const effectiveShard = () => props.shard ?? currentShard()
 
   onMount(() => {
-    initMemorySubscriptions(props.shard)
+    initMemorySubscriptions(effectiveShard())
   })
 
   const monoStyle = {
@@ -64,7 +67,7 @@ function MemoryPane(props: { shard: string | null; width: number }) {
                   value={memoryValues[creepPath]}
                   path={`Memory.${creepPath}`}
                   label={creepPath}
-                  shard={props.shard}
+                  shard={effectiveShard()}
                 />
               </div>
             )
@@ -85,7 +88,7 @@ function MemoryPane(props: { shard: string | null; width: number }) {
                 value={memoryValues[path]}
                 path={`Memory.${path}`}
                 label={path}
-                shard={props.shard}
+                shard={effectiveShard()}
               />
             </div>
           )}
