@@ -10,7 +10,7 @@ export const defaultSpriteTheme: Theme = {
         { frame: 'storage/shell', tint: 'owner' },
         { frame: 'storage/fill' },
       ],
-      tileScale: 1.0,
+      tileScale: 1.75,
     },
   },
 }
