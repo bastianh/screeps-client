@@ -66,23 +66,24 @@ function MemoryNode(props: MemoryTreeProps) {
   const childCount = () => entries().length
 
   const handleExpand = async () => {
-    const alreadyExpanded = expanded()
-    // If this is a pending placeholder and we're about to expand, fetch first
-    if (isPending(props.value) && fetchedValue() === undefined && !alreadyExpanded) {
+    if (!expanded() && isPending(props.value) && fetchedValue() === undefined) {
       setLoading(true)
       try {
         const c = client()
-        if (c) {
-          const apiPath = toApiPath(props.path)
-          const res = await c.http.user.memory.get(apiPath, currentShard()) as { data: unknown }
-          console.log('[MemoryTree] fetched', apiPath, res.data)
-          setFetchedValue(() => res.data)
-        }
+        if (!c) return
+        const apiPath = toApiPath(props.path)
+        const shard = currentShard()
+        console.log('[MemoryTree] fetching', apiPath, 'shard:', shard)
+        const res = await c.http.user.memory.get(apiPath, shard) as { data: unknown }
+        console.log('[MemoryTree] fetched', apiPath, typeof res.data, res.data)
+        setFetchedValue(res.data)
+        setExpanded(true)
       } catch (err) {
-        error('fetch object failed', err)
+        console.error('[MemoryTree] fetch failed', err)
       } finally {
         setLoading(false)
       }
+      return
     }
     setExpanded((v) => !v)
   }
