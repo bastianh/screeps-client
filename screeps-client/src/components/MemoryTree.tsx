@@ -1,11 +1,17 @@
 import { createSignal, For, Show } from 'solid-js'
-import { ChevronRight, ChevronDown, Terminal, Pencil } from 'lucide-solid'
+import { ChevronRight, ChevronDown, Terminal, Pencil, Loader } from 'lucide-solid'
 import { insertConsole } from '~/stores/consoleStore.js'
 import { client } from '~/stores/clientStore.js'
 import { currentShard } from '~/stores/roomDataStore.js'
+import { setMemoryValues } from '~/stores/memoryStore.js'
 import { createLogger } from '~/utils/log.js'
 
 const { error } = createLogger('MemoryTree')
+
+/** Sentinel emitted by subscribeMemory when the server can't serialize the object. */
+function isPending(v: unknown): boolean {
+  return v !== null && typeof v === 'object' && '__screeps_object__' in (v as object)
+}
 
 interface MemoryTreeProps {
   value: unknown
@@ -46,10 +52,32 @@ function MemoryNode(props: MemoryTreeProps) {
   const nodeDepth = () => props.depth ?? 0
   const [editing, setEditing] = createSignal(false)
   const [editValue, setEditValue] = createSignal('')
+  const [loading, setLoading] = createSignal(false)
 
-  const isObject = () => props.value !== null && typeof props.value === 'object'
+  const isObject = () => !isPending(props.value) && props.value !== null && typeof props.value === 'object'
   const entries = () => isObject() ? Object.entries(props.value as Record<string, unknown>) : []
   const childCount = () => entries().length
+
+  const handleExpand = async () => {
+    if (isPending(props.value) && !expanded()) {
+      setLoading(true)
+      try {
+        const c = client()
+        if (c) {
+          const apiPath = toApiPath(props.path)
+          const res = await c.http.user.memory.get(apiPath, currentShard()) as { data: unknown }
+          // Update the root-level memoryValues entry so the whole tree re-renders
+          const rootKey = apiPath.split('.')[0].split('[')[0]
+          setMemoryValues(rootKey, res.data)
+        }
+      } catch (err) {
+        error('fetch object failed', err)
+      } finally {
+        setLoading(false)
+      }
+    }
+    setExpanded((v) => !v)
+  }
 
   const commitEdit = async () => {
     const raw = editValue().trim()
@@ -94,19 +122,25 @@ function MemoryNode(props: MemoryTreeProps) {
   return (
     <div style={{ 'padding-left': nodeDepth() > 0 ? '14px' : '0', ...monoStyle }}>
       <div style={{ display: 'flex', 'align-items': 'center', gap: '2px', 'min-height': '20px' }}>
-        {/* Expand toggle for objects/arrays */}
-        <Show when={isObject()}>
+        {/* Expand toggle for objects/arrays and pending placeholders */}
+        <Show when={isObject() || isPending(props.value)}>
           <button
             style={{ ...iconBtnStyle, color: '#8b949e' }}
-            onClick={() => setExpanded((v) => !v)}
+            onClick={() => void handleExpand()}
             title={expanded() ? 'Collapse' : 'Expand'}
+            disabled={loading()}
           >
-            <Show when={expanded()} fallback={<ChevronRight size={12} />}>
-              <ChevronDown size={12} />
+            <Show when={loading()}>
+              <Loader size={12} style={{ animation: 'spin 1s linear infinite' }} />
+            </Show>
+            <Show when={!loading()}>
+              <Show when={expanded()} fallback={<ChevronRight size={12} />}>
+                <ChevronDown size={12} />
+              </Show>
             </Show>
           </button>
         </Show>
-        <Show when={!isObject()}>
+        <Show when={!isObject() && !isPending(props.value)}>
           <span style={{ width: '18px', 'flex-shrink': 0 }} />
         </Show>
 
@@ -115,6 +149,9 @@ function MemoryNode(props: MemoryTreeProps) {
         <span style={{ color: '#484f58', 'margin': '0 2px', 'flex-shrink': 0 }}>:</span>
 
         {/* Value / type summary */}
+        <Show when={isPending(props.value)}>
+          <span style={{ color: '#484f58', 'font-style': 'italic' }}>{'{…}'}</span>
+        </Show>
         <Show when={isObject()}>
           <span style={{ color: '#484f58', 'font-style': 'italic' }}>
             {Array.isArray(props.value) ? `[${childCount()}]` : `{${childCount()}}`}

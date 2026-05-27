@@ -164,18 +164,12 @@ export class UserStore extends TypedStore<UserStoreEvents> {
           }
           // Memory values arrive as JSON-encoded strings inside the WS frame,
           // e.g. the frame ["user:x/memory/foo","1"] delivers raw="1" here.
-          // Objects can't be serialized by the server over WS; "[object Object]"
-          // means we need to fetch the actual value via HTTP.
+          // Objects can't be serialized over WS; the server sends "[object Object]".
+          // Emit a sentinel so the UI can show a collapsed placeholder and fetch
+          // the real value via HTTP only when the user expands it.
           if (raw === '[object Object]') {
-            void (async () => {
-              try {
-                const res = await this.http.user.memory.get(path, shard ?? undefined) as { data: unknown }
-                this.logger.log('memory http fetch', path, res.data)
-                this.emit('user:memory', { path, shard: shard ?? null, value: res.data })
-              } catch (err) {
-                this.logger.log('memory http fetch failed', path, err)
-              }
-            })()
+            this.logger.log('memory object placeholder', path)
+            this.emit('user:memory', { path, shard: shard ?? null, value: { __screeps_object__: true } })
             return
           }
           let value: unknown = raw

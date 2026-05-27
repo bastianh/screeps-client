@@ -14,7 +14,7 @@ const [watches, setWatches] = createSignal<string[]>(getJson(LS.memoryWatches, [
 const [tempWatch, setTempWatch] = createSignal<TempWatch | null>(null)
 const [memoryValues, setMemoryValues] = createStore<Record<string, unknown>>({})
 
-export { watches, tempWatch, memoryValues }
+export { watches, tempWatch, memoryValues, setMemoryValues }
 
 export function addWatch(path: string): void {
   const trimmed = path.trim()
