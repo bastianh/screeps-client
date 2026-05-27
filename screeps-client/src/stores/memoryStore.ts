@@ -86,8 +86,12 @@ export function initMemorySubscriptions(shard: string | null): () => void {
   let listenerSub: Subscription | null = null
   if (c) {
     listenerSub = c.stores.user.on('user:memory', (data) => {
+      console.log('[memoryStore] user:memory received', data.path, data.value)
       setMemoryValues(data.path, data.value)
+      console.log('[memoryStore] memoryValues after set:', JSON.stringify(memoryValues))
     })
+  } else {
+    console.warn('[memoryStore] no client available when initMemorySubscriptions called')
   }
 
   onCleanup(() => {
