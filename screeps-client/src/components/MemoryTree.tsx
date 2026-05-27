@@ -3,12 +3,11 @@ import { ChevronRight, ChevronDown, Terminal, Pencil, Loader } from 'lucide-soli
 import { insertConsole } from '~/stores/consoleStore.js'
 import { client } from '~/stores/clientStore.js'
 import { currentShard } from '~/stores/roomDataStore.js'
-import { setMemoryValues } from '~/stores/memoryStore.js'
 import { createLogger } from '~/utils/log.js'
 
 const { error } = createLogger('MemoryTree')
 
-/** Sentinel emitted by subscribeMemory when the server can't serialize the object. */
+/** Sentinel emitted by subscribeMemory when the server can't serialize the object over WS. */
 function isPending(v: unknown): boolean {
   return v !== null && typeof v === 'object' && '__screeps_object__' in (v as object)
 }
@@ -53,22 +52,31 @@ function MemoryNode(props: MemoryTreeProps) {
   const [editing, setEditing] = createSignal(false)
   const [editValue, setEditValue] = createSignal('')
   const [loading, setLoading] = createSignal(false)
+  // Holds HTTP-fetched value for object placeholders; reset when props.value changes back to pending
+  const [fetchedValue, setFetchedValue] = createSignal<unknown>(undefined)
 
-  const isObject = () => !isPending(props.value) && props.value !== null && typeof props.value === 'object'
-  const entries = () => isObject() ? Object.entries(props.value as Record<string, unknown>) : []
+  // The value we actually render: prefer the locally-fetched value over the WS placeholder
+  const effectiveValue = () => (isPending(props.value) && fetchedValue() !== undefined) ? fetchedValue() : props.value
+
+  const isObject = () => {
+    const v = effectiveValue()
+    return !isPending(v) && v !== null && typeof v === 'object'
+  }
+  const entries = () => isObject() ? Object.entries(effectiveValue() as Record<string, unknown>) : []
   const childCount = () => entries().length
 
   const handleExpand = async () => {
-    if (isPending(props.value) && !expanded()) {
+    const alreadyExpanded = expanded()
+    // If this is a pending placeholder and we're about to expand, fetch first
+    if (isPending(props.value) && fetchedValue() === undefined && !alreadyExpanded) {
       setLoading(true)
       try {
         const c = client()
         if (c) {
           const apiPath = toApiPath(props.path)
           const res = await c.http.user.memory.get(apiPath, currentShard()) as { data: unknown }
-          // Update the root-level memoryValues entry so the whole tree re-renders
-          const rootKey = apiPath.split('.')[0].split('[')[0]
-          setMemoryValues(rootKey, res.data)
+          console.log('[MemoryTree] fetched', apiPath, res.data)
+          setFetchedValue(() => res.data)
         }
       } catch (err) {
         error('fetch object failed', err)
@@ -105,25 +113,27 @@ function MemoryNode(props: MemoryTreeProps) {
   }
 
   const labelColor = () => {
+    const v = effectiveValue()
     if (isObject()) return '#c9d1d9'
-    if (typeof props.value === 'string') return '#3fb950'
-    if (typeof props.value === 'number') return '#79c0ff'
-    if (typeof props.value === 'boolean') return '#a371f7'
+    if (typeof v === 'string') return '#3fb950'
+    if (typeof v === 'number') return '#79c0ff'
+    if (typeof v === 'boolean') return '#a371f7'
     return '#8b949e'
   }
 
   const displayValue = () => {
-    if (props.value === null) return 'null'
-    if (props.value === undefined) return 'undefined'
-    if (typeof props.value === 'string') return JSON.stringify(props.value)
-    return String(props.value)
+    const v = effectiveValue()
+    if (v === null) return 'null'
+    if (v === undefined) return 'undefined'
+    if (typeof v === 'string') return JSON.stringify(v)
+    return String(v)
   }
 
   return (
     <div style={{ 'padding-left': nodeDepth() > 0 ? '14px' : '0', ...monoStyle }}>
       <div style={{ display: 'flex', 'align-items': 'center', gap: '2px', 'min-height': '20px' }}>
         {/* Expand toggle for objects/arrays and pending placeholders */}
-        <Show when={isObject() || isPending(props.value)}>
+        <Show when={isObject() || isPending(effectiveValue())}>
           <button
             style={{ ...iconBtnStyle, color: '#8b949e' }}
             onClick={() => void handleExpand()}
@@ -140,7 +150,7 @@ function MemoryNode(props: MemoryTreeProps) {
             </Show>
           </button>
         </Show>
-        <Show when={!isObject() && !isPending(props.value)}>
+        <Show when={!isObject() && !isPending(effectiveValue())}>
           <span style={{ width: '18px', 'flex-shrink': 0 }} />
         </Show>
 
@@ -149,16 +159,16 @@ function MemoryNode(props: MemoryTreeProps) {
         <span style={{ color: '#484f58', 'margin': '0 2px', 'flex-shrink': 0 }}>:</span>
 
         {/* Value / type summary */}
-        <Show when={isPending(props.value)}>
+        <Show when={isPending(effectiveValue())}>
           <span style={{ color: '#484f58', 'font-style': 'italic' }}>{'{…}'}</span>
         </Show>
         <Show when={isObject()}>
           <span style={{ color: '#484f58', 'font-style': 'italic' }}>
-            {Array.isArray(props.value) ? `[${childCount()}]` : `{${childCount()}}`}
+            {Array.isArray(effectiveValue()) ? `[${childCount()}]` : `{${childCount()}}`}
           </span>
         </Show>
 
-        <Show when={!isObject()}>
+        <Show when={!isObject() && !isPending(effectiveValue())}>
           <Show when={!editing()}>
             <span
               style={{ color: labelColor(), cursor: 'text', 'flex': 1 }}
@@ -204,7 +214,7 @@ function MemoryNode(props: MemoryTreeProps) {
         </button>
 
         {/* Inline edit toggle for leaf values */}
-        <Show when={!isObject()}>
+        <Show when={!isObject() && !isPending(effectiveValue())}>
           <button
             style={iconBtnStyle}
             title="Edit value"
@@ -219,7 +229,7 @@ function MemoryNode(props: MemoryTreeProps) {
       <Show when={isObject() && expanded()}>
         <For each={entries()}>
           {([key, val]) => {
-            const childPath = Array.isArray(props.value)
+            const childPath = Array.isArray(effectiveValue())
               ? `${props.path}[${key}]`
               : `${props.path}.${key}`
             return (
