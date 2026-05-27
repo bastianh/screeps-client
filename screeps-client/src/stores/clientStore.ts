@@ -107,7 +107,7 @@ export async function connect(opts: {
       url: opts.url,
       auth: authStrategy,
       storage: opts.storage ?? new IndexedDBStorage('screeps-client'),
-      debug: import.meta.env.DEV ? (...args: unknown[]) => console.log('[screeps]', ...args) : false,
+      debug: false,
       serverPassword: opts.serverPassword,
     })
 

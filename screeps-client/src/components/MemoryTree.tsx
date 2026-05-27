@@ -2,7 +2,6 @@ import { createSignal, For, Show } from 'solid-js'
 import { ChevronRight, ChevronDown, Terminal, Pencil, Loader } from 'lucide-solid'
 import { insertConsole } from '~/stores/consoleStore.js'
 import { client } from '~/stores/clientStore.js'
-import { currentShard } from '~/stores/roomDataStore.js'
 import { createLogger } from '~/utils/log.js'
 
 const { error } = createLogger('MemoryTree')
@@ -17,6 +16,7 @@ interface MemoryTreeProps {
   /** Full JS-style path, e.g. "Memory.creeps['Harvester1']" */
   path: string
   label: string
+  shard: string | null
   depth?: number
 }
 
@@ -72,9 +72,8 @@ function MemoryNode(props: MemoryTreeProps) {
         const c = client()
         if (!c) return
         const apiPath = toApiPath(props.path)
-        const shard = currentShard()
-        console.log('[MemoryTree] fetching', apiPath, 'shard:', shard)
-        const res = await c.http.user.memory.get(apiPath, shard) as { data: unknown }
+        console.log('[MemoryTree] fetching', apiPath, 'shard:', props.shard)
+        const res = await c.http.user.memory.get(apiPath, props.shard) as { data: unknown }
         console.log('[MemoryTree] fetched', apiPath, typeof res.data, res.data)
         setFetchedValue(res.data)
         setExpanded(true)
@@ -106,7 +105,7 @@ function MemoryNode(props: MemoryTreeProps) {
     if (!c) return
     const apiPath = toApiPath(props.path)
     try {
-      await c.http.user.memory.set(apiPath, parsed, currentShard())
+      await c.http.user.memory.set(apiPath, parsed, props.shard)
     } catch (err) {
       error('set memory failed', err)
     }
@@ -238,6 +237,7 @@ function MemoryNode(props: MemoryTreeProps) {
                 value={val}
                 path={childPath}
                 label={key}
+                shard={props.shard}
                 depth={nodeDepth() + 1}
               />
             )
@@ -248,6 +248,6 @@ function MemoryNode(props: MemoryTreeProps) {
   )
 }
 
-export function MemoryTree(props: { value: unknown; path: string; label: string }) {
-  return <MemoryNode value={props.value} path={props.path} label={props.label} depth={0} />
+export function MemoryTree(props: { value: unknown; path: string; label: string; shard: string | null }) {
+  return <MemoryNode value={props.value} path={props.path} label={props.label} shard={props.shard} depth={0} />
 }

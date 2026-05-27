@@ -173,7 +173,9 @@ export class UserStore extends TypedStore<UserStoreEvents> {
             return
           }
           let value: unknown = raw
-          if (typeof raw === 'string') {
+          if (raw === 'undefined') {
+            value = undefined
+          } else if (typeof raw === 'string') {
             try { value = JSON.parse(raw) } catch { /* leave as-is */ }
           }
           this.logger.log('memory value received', path, value)

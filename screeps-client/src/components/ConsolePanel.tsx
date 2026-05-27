@@ -64,6 +64,7 @@ function MemoryPane(props: { shard: string | null; width: number }) {
                   value={memoryValues[creepPath]}
                   path={`Memory.${creepPath}`}
                   label={creepPath}
+                  shard={props.shard}
                 />
               </div>
             )
@@ -84,6 +85,7 @@ function MemoryPane(props: { shard: string | null; width: number }) {
                 value={memoryValues[path]}
                 path={`Memory.${path}`}
                 label={path}
+                shard={props.shard}
               />
             </div>
           )}
