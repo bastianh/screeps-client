@@ -6,6 +6,7 @@ import {
   showMapRoomNames, setShowMapRoomNames,
   showUnclaimableRooms, setShowUnclaimableRooms,
   terrainEffects, setTerrainEffects,
+  spriteTheme, setSpriteTheme,
 } from '~/stores/settingsStore.js'
 import { clientVersion, embeddedModInfo } from '~/utils/embedded.js'
 import { userInfo, isGuest } from '~/stores/clientStore.js'
@@ -212,6 +213,17 @@ export function SettingsPanel(props: { onClose: () => void }) {
               value={terrainEffects()}
               onChange={setTerrainEffects}
             />
+            <div style={{ display: 'flex', 'flex-direction': 'column', gap: '4px' }}>
+              <label style={{ 'font-size': '13px', 'font-weight': '500' }}>Structure theme</label>
+              <select
+                value={spriteTheme()}
+                onChange={e => setSpriteTheme(e.currentTarget.value)}
+                style={{ background: '#2a2a2a', color: '#eee', border: '1px solid #444', 'border-radius': '4px', padding: '4px 8px', 'font-size': '13px' }}
+              >
+                <option value="vector">Vector (procedural)</option>
+                <option value="default">Default (sprites)</option>
+              </select>
+            </div>
           </Section>
 
           <Section title="Map View">

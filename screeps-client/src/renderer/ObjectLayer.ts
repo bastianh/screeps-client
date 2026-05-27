@@ -1,6 +1,8 @@
-import { Container, Graphics, Text, Ticker, Sprite } from 'pixi.js'
+import { Container, Graphics, Text, Ticker, Sprite, Texture } from 'pixi.js'
 import type { RoomObject, RoomObjectMap, RoomObjectDiff, Badge } from 'screeps-connectivity'
 import { BadgeTextureCache } from './BadgeTextureCache.js'
+import type { Theme } from './themes/Theme.js'
+import type { AtlasCache } from './AtlasCache.js'
 
 const sharedBadgeCache = new BadgeTextureCache()
 import { TILE_SIZE } from './RoomRenderer.js'
@@ -408,6 +410,8 @@ function createObjectVisual(
   _badge?: Badge,
   badgeCache?: BadgeTextureCache,
   users?: Record<string, { _id: string; username: string; badge?: Badge }>,
+  theme?: Theme | null,
+  atlasCache?: AtlasCache | null,
 ): Container {
   const container = new Container()
   const g = new Graphics()
@@ -804,6 +808,39 @@ function createObjectVisual(
       break
     }
     case 'storage': {
+      const spec = theme?.sprites['storage']
+      if (spec && atlasCache) {
+        const { used: storageUsed, capacity: storageCap } = getStoreFill(obj)
+        const targetSize = TILE_SIZE * spec.tileScale
+        const applyTexture = (sprite: Sprite, tex: Texture) => {
+          sprite.texture = tex
+          sprite.width = targetSize
+          sprite.height = targetSize
+        }
+        for (const layer of spec.layers) {
+          const sprite = new Sprite()
+          sprite.anchor.set(0.5, 0.5)
+          sprite.x = cx
+          sprite.y = cy
+          if (layer.tint === 'owner') sprite.tint = outlineColor
+          container.addChild(sprite)
+          const tex = atlasCache.getTexture(theme!.atlasUrl, layer.frame)
+          if (tex) {
+            applyTexture(sprite, tex)
+          } else {
+            atlasCache.getOrLoad(theme!.atlasUrl).then(sheet => {
+              if (!sprite.destroyed) applyTexture(sprite, sheet.textures[layer.frame] ?? Texture.EMPTY)
+            }).catch(() => {})
+          }
+        }
+        const storageFillG = new Graphics()
+        container.addChild(storageFillG)
+        ;(container as ContainerWithTarget).__storageFillG = storageFillG
+        ;(container as ContainerWithTarget).__storageUsed = storageUsed
+        ;(container as ContainerWithTarget).__storageCapacity = storageCap
+        updateStorageFill(container as ContainerWithTarget, calcStorageFillHeight(storageUsed, storageCap))
+        break
+      }
       const { used: storageUsed, capacity: storageCap } = getStoreFill(obj)
       const storagePts = spts(cx, cy, [
         [-0.6, -0.7], [0, -0.8], [0.6, -0.7], [0.65, 0],
@@ -1224,6 +1261,8 @@ export class ObjectLayer {
   private badge?: Badge
   private readonly badgeCache = sharedBadgeCache
   private users?: Record<string, { _id: string; username: string; badge?: Badge }>
+  private activeTheme: Theme | null = null
+  private atlasCache: AtlasCache | null = null
 
   constructor(ticker?: Ticker, showLabels = true, currentUserId?: string, badge?: Badge, users?: Record<string, { _id: string; username: string; badge?: Badge }>) {
     this.showLabels = showLabels
@@ -1242,6 +1281,11 @@ export class ObjectLayer {
       this.tickerCallback = () => this.tick()
       ticker.add(this.tickerCallback)
     }
+  }
+
+  setTheme(theme: Theme | null, cache: AtlasCache | null): void {
+    this.activeTheme = theme
+    this.atlasCache = cache
   }
 
   private tick(): void {
@@ -1502,7 +1546,7 @@ export class ObjectLayer {
           this.rawObjects.set(id, obj)
           const existing = this.objects.get(id)
           if (!existing) {
-            const visual: ContainerWithTarget = createObjectVisual(obj, this.showLabels, this.currentUserId, this.badge, this.badgeCache, this.users)
+            const visual: ContainerWithTarget = createObjectVisual(obj, this.showLabels, this.currentUserId, this.badge, this.badgeCache, this.users, this.activeTheme, this.atlasCache)
             visual.__tileX = obj.x
             visual.__tileY = obj.y
             this.applyLabelScale(visual)
@@ -1552,7 +1596,7 @@ export class ObjectLayer {
                 this.container.removeChild(existing)
                 destroyVisual(existing)
                 this.objects.delete(id)
-                const visual: ContainerWithTarget = createObjectVisual(obj, this.showLabels, this.currentUserId, this.badge, this.badgeCache, this.users)
+                const visual: ContainerWithTarget = createObjectVisual(obj, this.showLabels, this.currentUserId, this.badge, this.badgeCache, this.users, this.activeTheme, this.atlasCache)
                 visual.__tileX = obj.x
                 visual.__tileY = obj.y
                 this.applyLabelScale(visual)
@@ -1644,7 +1688,7 @@ export class ObjectLayer {
         this.rawObjects.set(id, obj)
         const existing = this.objects.get(id)
         if (!existing) {
-          const visual: ContainerWithTarget = createObjectVisual(obj, this.showLabels, this.currentUserId, this.badge, this.badgeCache, this.users)
+          const visual: ContainerWithTarget = createObjectVisual(obj, this.showLabels, this.currentUserId, this.badge, this.badgeCache, this.users, this.activeTheme, this.atlasCache)
           visual.__tileX = obj.x
           visual.__tileY = obj.y
           this.applyLabelScale(visual)
@@ -1694,7 +1738,7 @@ export class ObjectLayer {
               this.container.removeChild(existing)
               destroyVisual(existing)
               this.objects.delete(id)
-              const visual: ContainerWithTarget = createObjectVisual(obj, this.showLabels, this.currentUserId, this.badge, this.badgeCache, this.users)
+              const visual: ContainerWithTarget = createObjectVisual(obj, this.showLabels, this.currentUserId, this.badge, this.badgeCache, this.users, this.activeTheme, this.atlasCache)
               visual.__tileX = obj.x
               visual.__tileY = obj.y
               this.applyLabelScale(visual)
