@@ -1,10 +1,10 @@
 import { createSignal, For, Show, onMount } from 'solid-js'
-import { ChevronRight, ChevronDown, Terminal, Pencil, Loader, Check, X, RefreshCw } from 'lucide-solid'
+import { ChevronRight, ChevronDown, Terminal, Loader, Check, X, RefreshCw } from 'lucide-solid'
 import { insertConsole } from '~/stores/consoleStore.js'
 import { client } from '~/stores/clientStore.js'
 import { createLogger } from '~/utils/log.js'
 
-const { error, log } = createLogger('MemoryTree')
+const { error } = createLogger('MemoryTree')
 
 /** Sentinel emitted by subscribeMemory when the server can't serialize the object over WS. */
 function isPending(v: unknown): boolean {
@@ -72,12 +72,9 @@ function MemoryNode(props: MemoryTreeProps) {
       const c = client()
       if (!c) return
       const apiPath = toApiPath(props.path)
-      log('GET memory', apiPath, 'shard=', props.shard)
       const res = await c.http.user.memory.get(apiPath, props.shard) as { data: unknown }
-      log('GET memory result', JSON.stringify(res))
       // Private servers may return '[object Object]' even via HTTP — re-use the WS sentinel
       const value = res.data === '[object Object]' ? { __screeps_object__: true } : res.data
-      log('effective value', JSON.stringify(value))
       setFetchedValue(value)
     } catch (err) {
       error('fetch memory failed', err)
@@ -128,6 +125,8 @@ function MemoryNode(props: MemoryTreeProps) {
       await c.http.user.memory.set(apiPath, parsed, props.shard)
     } catch (err) {
       error('set memory failed', err)
+      setEditing(false)
+      return
     }
     setEditing(false)
     props.onRefresh?.()
@@ -242,16 +241,6 @@ function MemoryNode(props: MemoryTreeProps) {
           <Terminal size={11} />
         </button>
 
-        {/* Inline edit toggle for leaf values */}
-        <Show when={!isObject() && !isPending(effectiveValue())}>
-          <button
-            style={iconBtnStyle}
-            title="Edit value"
-            onClick={() => { setEditValue(displayValue()); setEditing(true) }}
-          >
-            <Pencil size={11} />
-          </button>
-        </Show>
       </div>
 
       {/* Children */}
