@@ -150,18 +150,23 @@ export class UserStore extends TypedStore<UserStoreEvents> {
         const fullChannel = `user:${uid}/memory/${shardSegment}${path}`
         socketSub = this.socket.subscribe(fullChannel)
         listenerSub = this.socket.on(fullChannel, (raw) => {
-          let value: unknown = raw
           if (typeof raw === 'string' && raw.startsWith('gz:')) {
             void (async () => {
               try {
                 const { decompressZlib } = await import('../http/decompress.js')
-                value = await decompressZlib(raw)
+                const value = await decompressZlib(raw)
                 this.emit('user:memory', { path, shard: shard ?? null, value })
               } catch (err) {
                 this.logger.log('memory decompress failed', err)
               }
             })()
             return
+          }
+          // Memory values arrive as JSON-encoded strings inside the WS frame,
+          // e.g. the frame ["user:x/memory/foo","1"] delivers raw="1" here.
+          let value: unknown = raw
+          if (typeof raw === 'string') {
+            try { value = JSON.parse(raw) } catch { /* leave as-is */ }
           }
           this.emit('user:memory', { path, shard: shard ?? null, value })
         })
