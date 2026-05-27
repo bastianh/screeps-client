@@ -94,7 +94,7 @@ export class HttpClient extends EventTarget {
       headers['X-Server-Password'] = this.serverPassword
     }
 
-    const init: RequestInit = { method, headers, cache: 'no-store' }
+    const init: RequestInit = { method, headers }
 
     if (method === 'GET' && body) {
       for (const [k, v] of Object.entries(body)) {
