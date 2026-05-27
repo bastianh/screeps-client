@@ -9,7 +9,7 @@ export class AtlasCache {
     if (cached) return Promise.resolve(cached)
     const inFlight = this.pending.get(atlasUrl)
     if (inFlight) return inFlight
-    const p = Assets.load<Spritesheet>(atlasUrl).then(sheet => {
+    const p = Assets.load<Spritesheet>({ src: atlasUrl, data: { generateMipmaps: true } }).then(sheet => {
       this.cache.set(atlasUrl, sheet)
       this.pending.delete(atlasUrl)
       return sheet
