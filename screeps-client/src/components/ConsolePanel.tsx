@@ -21,7 +21,6 @@ interface ConsoleEntry {
 
 function MemoryPane(props: { shard: string | null; width: number }) {
   const [addInput, setAddInput] = createSignal('')
-<<<<<<< HEAD
   // Props shard may be null on private servers; fall back to the currently viewed room's shard
   const effectiveShard = () => props.shard ?? currentShard()
 
@@ -90,73 +89,6 @@ function MemoryPane(props: { shard: string | null; width: number }) {
                 path={`Memory.${path}`}
                 label={path}
                 shard={effectiveShard()}
-||||||| parent of d02d5c5 (feat(memory): add memory watch panel with live WebSocket subscriptions)
-=======
-
-  onMount(() => {
-    initMemorySubscriptions(props.shard)
-  })
-
-  const monoStyle = {
-    'font-family': 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-    'font-size': '12px',
-    'line-height': '1.5',
-  } as const
-
-  const iconBtnStyle = {
-    background: 'transparent',
-    border: 'none',
-    color: '#8b949e',
-    cursor: 'pointer',
-    padding: '4px',
-    'border-radius': '4px',
-    display: 'flex',
-    'align-items': 'center',
-    'justify-content': 'center',
-  } as const
-
-  return (
-    <div style={{ width: `${props.width * 100}%`, 'flex-shrink': 0, display: 'flex', 'flex-direction': 'column', overflow: 'hidden' }}>
-      <div class="console-scroll" style={{ flex: 1, overflow: 'auto', padding: '8px', ...monoStyle }}>
-
-        {/* Temporary watch (creep) */}
-        <Show when={tempWatch()}>
-          {(tw) => {
-            const creepPath = `creeps.${tw().name}`
-            return (
-              <div style={{ 'margin-bottom': '8px' }}>
-                <div style={{ display: 'flex', 'align-items': 'center', gap: '4px', 'border-bottom': '1px solid #21262d', 'padding-bottom': '4px', 'margin-bottom': '4px' }}>
-                  <span style={{ color: '#f0883e', 'font-weight': 600, flex: 1 }}>{creepPath}</span>
-                  <span style={{ color: '#484f58', 'font-size': '10px', 'font-style': 'italic' }}>temp</span>
-                  <button style={iconBtnStyle} title="Remove temp watch" onClick={clearTempWatch}>
-                    <X size={12} />
-                  </button>
-                </div>
-                <MemoryTree
-                  value={memoryValues[creepPath]}
-                  path={`Memory.${creepPath}`}
-                  label={creepPath}
-                />
-              </div>
-            )
-          }}
-        </Show>
-
-        {/* Persistent watchlist */}
-        <For each={watches()}>
-          {(path) => (
-            <div style={{ 'margin-bottom': '8px' }}>
-              <div style={{ display: 'flex', 'align-items': 'center', gap: '4px', 'border-bottom': '1px solid #21262d', 'padding-bottom': '4px', 'margin-bottom': '4px' }}>
-                <span style={{ color: '#c9d1d9', 'font-weight': 600, flex: 1 }}>{path}</span>
-                <button style={iconBtnStyle} title="Remove watch" onClick={() => removeWatch(path)}>
-                  <X size={12} />
-                </button>
-              </div>
-              <MemoryTree
-                value={memoryValues[path]}
-                path={`Memory.${path}`}
-                label={path}
->>>>>>> d02d5c5 (feat(memory): add memory watch panel with live WebSocket subscriptions)
               />
             </div>
           )}
