@@ -1,10 +1,10 @@
-import { createSignal, For, Show } from 'solid-js'
-import { ChevronRight, ChevronDown, Terminal, Pencil, Loader } from 'lucide-solid'
+import { createSignal, For, Show, onMount } from 'solid-js'
+import { ChevronRight, ChevronDown, Terminal, Pencil, Loader, Check, X, RefreshCw } from 'lucide-solid'
 import { insertConsole } from '~/stores/consoleStore.js'
 import { client } from '~/stores/clientStore.js'
 import { createLogger } from '~/utils/log.js'
 
-const { error } = createLogger('MemoryTree')
+const { error, log } = createLogger('MemoryTree')
 
 /** Sentinel emitted by subscribeMemory when the server can't serialize the object over WS. */
 function isPending(v: unknown): boolean {
@@ -18,6 +18,7 @@ interface MemoryTreeProps {
   label: string
   shard: string | null
   depth?: number
+  onRefresh?: () => void
 }
 
 const monoStyle = {
@@ -65,25 +66,44 @@ function MemoryNode(props: MemoryTreeProps) {
   const entries = () => isObject() ? Object.entries(effectiveValue() as Record<string, unknown>) : []
   const childCount = () => entries().length
 
+  const fetchPending = async () => {
+    setLoading(true)
+    try {
+      const c = client()
+      if (!c) return
+      const apiPath = toApiPath(props.path)
+      log('GET memory', apiPath, 'shard=', props.shard)
+      const res = await c.http.user.memory.get(apiPath, props.shard) as { data: unknown }
+      log('GET memory result', JSON.stringify(res))
+      // Private servers may return '[object Object]' even via HTTP — re-use the WS sentinel
+      const value = res.data === '[object Object]' ? { __screeps_object__: true } : res.data
+      log('effective value', JSON.stringify(value))
+      setFetchedValue(value)
+    } catch (err) {
+      error('fetch memory failed', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const refetch = () => {
+    setFetchedValue(undefined)
+    void fetchPending()
+  }
+
+  onMount(() => {
+    if (expanded() && isPending(props.value) && fetchedValue() === undefined) {
+      void fetchPending()
+    }
+  })
+
   const handleExpand = async () => {
-    if (!expanded() && isPending(props.value) && fetchedValue() === undefined) {
-      setLoading(true)
-      try {
-        const c = client()
-        if (!c) return
-        const apiPath = toApiPath(props.path)
-        console.log('[MemoryTree] fetching', apiPath, 'shard:', props.shard)
-        const res = await c.http.user.memory.get(apiPath, props.shard) as { data: unknown }
-        console.log('[MemoryTree] fetched', apiPath, typeof res.data, res.data)
-        setFetchedValue(res.data)
-        setExpanded(true)
-      } catch (err) {
-        console.error('[MemoryTree] fetch failed', err)
-      } finally {
-        setLoading(false)
-      }
+    if (isPending(props.value) && fetchedValue() === undefined) {
+      await fetchPending()
+      setExpanded(true)
       return
     }
+    if (expanded()) setFetchedValue(undefined)
     setExpanded((v) => !v)
   }
 
@@ -110,6 +130,7 @@ function MemoryNode(props: MemoryTreeProps) {
       error('set memory failed', err)
     }
     setEditing(false)
+    props.onRefresh?.()
   }
 
   const labelColor = () => {
@@ -168,6 +189,13 @@ function MemoryNode(props: MemoryTreeProps) {
           </span>
         </Show>
 
+        {/* Reload button for HTTP-fetched nodes */}
+        <Show when={isPending(props.value) && !loading()}>
+          <button style={iconBtnStyle} title="Reload" onClick={() => refetch()}>
+            <RefreshCw size={11} />
+          </button>
+        </Show>
+
         <Show when={!isObject() && !isPending(effectiveValue())}>
           <Show when={!editing()}>
             <span
@@ -187,7 +215,6 @@ function MemoryNode(props: MemoryTreeProps) {
                 if (e.key === 'Enter') void commitEdit()
                 if (e.key === 'Escape') setEditing(false)
               }}
-              onBlur={() => void commitEdit()}
               autofocus
               style={{
                 background: '#161b22',
@@ -201,6 +228,8 @@ function MemoryNode(props: MemoryTreeProps) {
                 'min-width': '60px',
               }}
             />
+            <button style={{ ...iconBtnStyle, color: '#3fb950' }} title="Save" onMouseDown={(e) => { e.preventDefault(); void commitEdit() }}><Check size={12} /></button>
+            <button style={{ ...iconBtnStyle, color: '#f85149' }} title="Discard" onMouseDown={(e) => { e.preventDefault(); setEditing(false) }}><X size={12} /></button>
           </Show>
         </Show>
 
@@ -239,6 +268,7 @@ function MemoryNode(props: MemoryTreeProps) {
                 label={key}
                 shard={props.shard}
                 depth={nodeDepth() + 1}
+                onRefresh={isPending(props.value) ? refetch : props.onRefresh}
               />
             )
           }}

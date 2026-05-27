@@ -94,7 +94,7 @@ export class HttpClient extends EventTarget {
       headers['X-Server-Password'] = this.serverPassword
     }
 
-    const init: RequestInit = { method, headers }
+    const init: RequestInit = { method, headers, cache: 'no-store' }
 
     if (method === 'GET' && body) {
       for (const [k, v] of Object.entries(body)) {
@@ -120,7 +120,8 @@ export class HttpClient extends EventTarget {
       return this.request<T>(method, path, body, true)
     }
 
-    if (!res.ok) {
+    // 304: some servers (e.g. private Screeps) send a body with 304 — treat it as success
+    if (!res.ok && res.status !== 304) {
       let body = ''
       try { body = await res.text() } catch { /* ignore */ }
       const error = new Error(`HTTP ${res.status}: ${body}`)
