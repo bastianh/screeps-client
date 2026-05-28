@@ -47,6 +47,7 @@ const rootRedirect = readBool('SCREEPS_MOD_CLIENT_ROOT_REDIRECT', true)
 
 // Paths that should never be handled by the client mod, even when mounted at '/'.
 // Can be overridden via SCREEPS_MOD_CLIENT_EXCLUDE (comma-separated prefixes).
+// Note: /assets/ is reserved by the game server; the client bundle uses /_client/ instead.
 const DEFAULT_EXCLUDES = ['/api/', '/socket', '/backend/', '/auth/', '/assets/', '/map/']
 const excludePrefixes = process.env.SCREEPS_MOD_CLIENT_EXCLUDE
   ? process.env.SCREEPS_MOD_CLIENT_EXCLUDE.split(',').map(s => s.trim()).filter(Boolean)

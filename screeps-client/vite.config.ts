@@ -6,6 +6,7 @@ import { HttpsProxyAgent } from 'https-proxy-agent'
 
 const base = process.env.VITE_BASE ?? '/'
 const outDir = process.env.VITE_OUT_DIR ?? 'dist/standalone'
+const assetsDir = process.env.VITE_ASSETS_DIR ?? '_client'
 const clientPkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version: string }
 const clientVersion = process.env.VITE_CLIENT_VERSION ?? clientPkg.version
 
@@ -34,6 +35,7 @@ export default defineConfig(({ mode }) => {
     ],
     build: {
       outDir,
+      assetsDir,
       emptyOutDir: true,
       chunkSizeWarningLimit: 600,
       rollupOptions: {
