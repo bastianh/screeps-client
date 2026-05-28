@@ -577,36 +577,48 @@ export function RoomViewer(props: RoomViewerProps) {
       updateSelectionFromObjects(objs)
     }
 
+    // Drive timings off a single base tick duration so motion + action beams + say bubbles stay in sync.
+    const tickMs = historyMode()
+      ? Math.round(1000 / untrack(playbackSpeed))
+      : (tickDuration() ?? 2000)
+    const beamDuration = tickMs * 0.6           // action animations (harvest / build / upgrade beam)
+    const moveDuration = Math.round(tickMs * 0.9)  // creep motion — fills most of a tick
+
+    objLayer.setMoveDuration(moveDuration)
     objLayer.update(objs, diff, users)
     objLayer.setShowLabels(untrack(showCreepLabels))
 
+    const sayingIds = new Set<string>()
     if (animLayer) {
       animLayer.clear()
-      const duration = historyMode()
-        ? Math.round(1000 / untrack(playbackSpeed))
-        : (tickDuration() ?? 2000) * 0.6
       // Use for...in over Object.entries to avoid allocating a new array of arrays every tick
       for (const id in objs) {
         const obj = objs[id]
         if (!obj || obj.type !== 'creep') continue
-        const actionLog = obj.actionLog as Record<string, { x: number; y: number } | null> | null | undefined
+        const actionLog = obj.actionLog as Record<string, unknown> | null | undefined
         if (!actionLog) continue
 
-        if (actionLog.harvest) {
-          const target = actionLog.harvest
-          animLayer.addHarvest(target.x, target.y, obj.x, obj.y, duration)
+        const harvest = actionLog.harvest as { x: number; y: number } | null | undefined
+        if (harvest) {
+          animLayer.addHarvest(harvest.x, harvest.y, obj.x, obj.y, beamDuration)
         }
-        if (actionLog.upgradeController) {
-          const target = actionLog.upgradeController
-          animLayer.addUpgradeController(obj.x, obj.y, target.x, target.y, duration)
+        const upgrade = actionLog.upgradeController as { x: number; y: number } | null | undefined
+        if (upgrade) {
+          animLayer.addUpgradeController(obj.x, obj.y, upgrade.x, upgrade.y, beamDuration)
         }
-        if (actionLog.build) {
-          const target = actionLog.build
-          animLayer.addBuild(obj.x, obj.y, target.x, target.y, duration)
-          objLayer?.triggerBuildAt(target.x, target.y, duration)
+        const build = actionLog.build as { x: number; y: number } | null | undefined
+        if (build) {
+          animLayer.addBuild(obj.x, obj.y, build.x, build.y, beamDuration)
+          objLayer?.triggerBuildAt(build.x, build.y, beamDuration)
+        }
+        const say = actionLog.say as { message?: unknown } | null | undefined
+        if (say && typeof say.message === 'string' && say.message.length > 0) {
+          objLayer?.triggerSay(id, say.message)
+          sayingIds.add(id)
         }
       }
     }
+    objLayer.pruneSayBubblesExcept(sayingIds)
   })
 
   // Update RoomVisuals overlay each tick (layer is created in the objects effect).

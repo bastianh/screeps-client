@@ -26,6 +26,19 @@ const LABEL_FONT_SCALE = 12 / LABEL_FONT_SIZE  // base scale: ~12px height at wo
 const LABEL_CREEP_TOP = TILE_SIZE / 2 - TILE_SIZE * 0.44  // CREEP_OUTER_R in container space
 const LABEL_GAP_PX    = 2
 
+// Speech bubble (creep.say) — designed in "world units" with SAY_FONT_SCALE baked into the
+// text scale. The whole bubble container then gets (1 / worldScale) applied so its on-screen
+// size stays constant across zoom levels (same trick as __nameLabel).
+const SAY_FONT_SCALE = (12 * 1.2) / LABEL_FONT_SIZE  // ~14.4px tall at world-scale=1 (20% bigger than name labels)
+const SAY_PAD_X      = 5
+const SAY_PAD_Y      = 2.5
+const SAY_TAIL_W     = 2.0
+const SAY_TAIL_H     = 2.6
+const SAY_GAP_PX     = 2     // screen-pixel gap between creep edge and tail tip
+const SAY_MAX_CHARS  = 12    // server already caps say() at 10 chars; defensive trim
+const SAY_BG_COLOR   = 0xf0f0f0
+const SAY_TX_COLOR   = 0x1a1a1a
+
 const EXT_OUTER_R = TILE_SIZE * 0.42
 const EXT_INNER_R = TILE_SIZE * 0.30
 const EXT_STROKE_W = Math.max(1, TILE_SIZE * 0.08)
@@ -1082,10 +1095,16 @@ function createObjectVisual(
 type ContainerWithTarget = Container & {
   __targetX?: number
   __targetY?: number
+  __moveStartX?: number
+  __moveStartY?: number
+  __moveStartT?: number
+  __moveDur?: number
   __tileX?: number
   __tileY?: number
   __angle?: number
   __bodyContainer?: Container
+  __sayBubble?: Container
+  __sayMessage?: string
   __creepFillGraphics?: Graphics
   __creepUsed?: number
   __creepCapacity?: number
@@ -1125,6 +1144,49 @@ function destroyVisual(visual: ContainerWithTarget): void {
   visual.destroy({ children: true })
 }
 
+function buildSayBubble(message: string): Container {
+  const trimmed = message.length > SAY_MAX_CHARS ? message.slice(0, SAY_MAX_CHARS) : message
+
+  const text = new Text({
+    text: trimmed,
+    style: { fontSize: LABEL_FONT_SIZE, fill: SAY_TX_COLOR, fontWeight: '600' },
+  })
+  text.scale.set(SAY_FONT_SCALE)
+  text.anchor.set(0.5, 0.5)
+
+  // text.width / text.height are post-scale (i.e. in world units after LABEL_FONT_SCALE)
+  const tw = text.width
+  const th = text.height
+  const bw = tw + SAY_PAD_X * 2
+  const bh = th + SAY_PAD_Y * 2
+  const r  = bh / 2
+
+  const bg = new Graphics()
+  bg.roundRect(-bw / 2, -bh / 2, bw, bh, r)
+  bg.fill(SAY_BG_COLOR)
+  bg.roundRect(-bw / 2, -bh / 2, bw, bh, r)
+  bg.stroke({ width: 0.4, color: 0x111111, alpha: 0.55 })
+
+  // Tail pointing down — filled, then stroked along the two outer edges so the
+  // pill's lower border still reads cleanly across the join.
+  bg.moveTo(-SAY_TAIL_W, bh / 2 - 0.1)
+  bg.lineTo(0, bh / 2 + SAY_TAIL_H)
+  bg.lineTo(SAY_TAIL_W, bh / 2 - 0.1)
+  bg.closePath()
+  bg.fill(SAY_BG_COLOR)
+  bg.moveTo(-SAY_TAIL_W, bh / 2 - 0.1)
+  bg.lineTo(0, bh / 2 + SAY_TAIL_H)
+  bg.lineTo(SAY_TAIL_W, bh / 2 - 0.1)
+  bg.stroke({ width: 0.4, color: 0x111111, alpha: 0.55 })
+
+  const bubble = new Container()
+  bubble.addChild(bg)
+  bubble.addChild(text)
+  // Pivot at tail tip so positioning aligns the tail tip to the desired coordinate.
+  bubble.pivot.set(0, bh / 2 + SAY_TAIL_H)
+  return bubble
+}
+
 interface ExtAnimation {
   visual: ContainerWithTarget
   fromRadius: number
@@ -1152,6 +1214,8 @@ export class ObjectLayer {
   private storageFillAnimations = new Map<string, ExtAnimation>()
   private sourceAnimations = new Map<string, ExtAnimation>()
   private buildGlowAnimations = new Map<string, { startTime: number; duration: number }>()
+  private sayBubbles = new Set<string>()
+  private moveDuration = 600
   private readonly EXT_ANIM_DURATION = 300
   private instantMode = false
   private lastWorldScale = 1
@@ -1181,23 +1245,34 @@ export class ObjectLayer {
   }
 
   private tick(): void {
-    // Creep movement interpolation
+    const tNow = performance.now()
+
+    // Creep movement interpolation — linear over ~90% of the current tick duration
+    // (driven from RoomViewer via setMoveDuration()).
     for (const visual of this.objects.values()) {
-      const targetX = visual.__targetX
-      const targetY = visual.__targetY
-      if (targetX !== undefined && targetY !== undefined) {
-        const dx = targetX - visual.x
-        const dy = targetY - visual.y
-        if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) {
-          visual.position.set(targetX, targetY)
-          visual.__targetX = undefined
-          visual.__targetY = undefined
-        } else {
-          visual.x += dx * 0.15
-          visual.y += dy * 0.15
-        }
+      if (visual.__targetX === undefined || visual.__targetY === undefined) continue
+      const dur = visual.__moveDur ?? 0
+      const startT = visual.__moveStartT ?? tNow
+      const elapsed = tNow - startT
+      if (dur <= 0 || elapsed >= dur) {
+        visual.position.set(visual.__targetX, visual.__targetY)
+        visual.__targetX = undefined
+        visual.__targetY = undefined
+        visual.__moveStartX = undefined
+        visual.__moveStartY = undefined
+        visual.__moveStartT = undefined
+        visual.__moveDur = undefined
+        continue
       }
+      const t = elapsed / dur
+      const sx = visual.__moveStartX ?? visual.x
+      const sy = visual.__moveStartY ?? visual.y
+      visual.x = sx + (visual.__targetX - sx) * t
+      visual.y = sy + (visual.__targetY - sy) * t
     }
+
+    // Say bubbles intentionally have no timer-based expiry — their lifecycle is
+    // driven entirely by the room:update tick signal (triggerSay + pruneSayBubblesExcept).
 
     // Label scale: invert world zoom so labels stay at constant screen size.
     // Relative to the (now larger) creep this makes them appear smaller on zoom-in.
@@ -1411,6 +1486,7 @@ export class ObjectLayer {
             this.storageFillAnimations.delete(id)
             this.sourceAnimations.delete(id)
             this.buildGlowAnimations.delete(id)
+            this.sayBubbles.delete(id)
           }
         } else {
           const obj = objects[id]
@@ -1448,9 +1524,17 @@ export class ObjectLayer {
                 existing.position.set(tx, ty)
                 existing.__targetX = undefined
                 existing.__targetY = undefined
+                existing.__moveStartX = undefined
+                existing.__moveStartY = undefined
+                existing.__moveStartT = undefined
+                existing.__moveDur = undefined
               } else if (existing.x !== tx || existing.y !== ty) {
                 existing.__targetX = tx
                 existing.__targetY = ty
+                existing.__moveStartX = existing.x
+                existing.__moveStartY = existing.y
+                existing.__moveStartT = performance.now()
+                existing.__moveDur = this.moveDuration
               }
               const { used, capacity } = getCreepStore(obj)
               if (existing.__creepUsed !== used || existing.__creepCapacity !== capacity) {
@@ -1582,9 +1666,17 @@ export class ObjectLayer {
               existing.position.set(tx, ty)
               existing.__targetX = undefined
               existing.__targetY = undefined
+              existing.__moveStartX = undefined
+              existing.__moveStartY = undefined
+              existing.__moveStartT = undefined
+              existing.__moveDur = undefined
             } else if (existing.x !== tx || existing.y !== ty) {
               existing.__targetX = tx
               existing.__targetY = ty
+              existing.__moveStartX = existing.x
+              existing.__moveStartY = existing.y
+              existing.__moveStartT = performance.now()
+              existing.__moveDur = this.moveDuration
             }
             const { used, capacity } = getCreepStore(obj)
             if (existing.__creepUsed !== used || existing.__creepCapacity !== capacity) {
@@ -1686,6 +1778,7 @@ export class ObjectLayer {
           this.towerFillAnimations.delete(id)
           this.sourceAnimations.delete(id)
           this.buildGlowAnimations.delete(id)
+          this.sayBubbles.delete(id)
         }
       }
 
@@ -1903,15 +1996,21 @@ export class ObjectLayer {
    * even when the room is already zoomed (lastWorldScale ≠ 1).
    */
   private applyLabelScale(visual: ContainerWithTarget): void {
-    if (!visual.__nameLabel) return
     const worldScale = this.lastWorldScale || 1
-    visual.__nameLabel.scale.set(LABEL_FONT_SCALE / worldScale)
-    if (visual.__nameLabel.anchor.y === 0) {
-      // Flag label — anchored at top, positioned below the flag
-      visual.__nameLabel.y = TILE_SIZE / 2 + TILE_SIZE * 0.55
-    } else {
-      // Creep label — anchored at bottom, positioned above the creep
-      visual.__nameLabel.y = LABEL_CREEP_TOP - LABEL_GAP_PX / worldScale
+    if (visual.__nameLabel) {
+      visual.__nameLabel.scale.set(LABEL_FONT_SCALE / worldScale)
+      if (visual.__nameLabel.anchor.y === 0) {
+        // Flag label — anchored at top, positioned below the flag
+        visual.__nameLabel.y = TILE_SIZE / 2 + TILE_SIZE * 0.55
+      } else {
+        // Creep label — anchored at bottom, positioned above the creep
+        visual.__nameLabel.y = LABEL_CREEP_TOP - LABEL_GAP_PX / worldScale
+      }
+    }
+    if (visual.__sayBubble && !visual.__sayBubble.destroyed) {
+      // Pivot is at tail tip; place tail tip just above the creep with a fixed screen-pixel gap.
+      visual.__sayBubble.scale.set(1 / worldScale)
+      visual.__sayBubble.position.set(TILE_SIZE / 2, LABEL_CREEP_TOP - SAY_GAP_PX / worldScale)
     }
   }
 
@@ -1993,6 +2092,60 @@ export class ObjectLayer {
     }
   }
 
+  /**
+   * Show a speech bubble above the given creep. Lifetime is governed by the
+   * caller — see pruneSayBubblesExcept(). Calling with the same message for a
+   * creep already showing a bubble is a no-op (no destroy/recreate flicker).
+   */
+  triggerSay(creepId: string, message: string): void {
+    const visual = this.objects.get(creepId)
+    if (!visual) return
+
+    if (visual.__sayMessage === message && visual.__sayBubble && !visual.__sayBubble.destroyed) {
+      return
+    }
+
+    if (visual.__sayBubble && !visual.__sayBubble.destroyed) {
+      visual.removeChild(visual.__sayBubble)
+      visual.__sayBubble.destroy({ children: true })
+    }
+
+    const bubble = buildSayBubble(message)
+    visual.addChild(bubble)
+    visual.__sayBubble = bubble
+    visual.__sayMessage = message
+    this.applyLabelScale(visual)
+    this.sayBubbles.add(creepId)
+  }
+
+  /** Duration (ms) that creep movement interpolations should span. */
+  setMoveDuration(ms: number): void {
+    this.moveDuration = Math.max(0, ms)
+  }
+
+  /**
+   * Remove say bubbles for creeps that did *not* speak this tick. The only
+   * lifecycle signal for bubbles — called from RoomViewer after the per-tick
+   * actionLog loop, so the bubble is on while the creep is in `activeSayers`
+   * and off otherwise. No timers involved.
+   */
+  pruneSayBubblesExcept(activeSayers: ReadonlySet<string>): void {
+    if (this.sayBubbles.size === 0) return
+    for (const id of this.sayBubbles) {
+      if (activeSayers.has(id)) continue
+      const visual = this.objects.get(id)
+      if (visual?.__sayBubble && !visual.__sayBubble.destroyed) {
+        visual.removeChild(visual.__sayBubble)
+        visual.__sayBubble.destroy({ children: true })
+      }
+      if (visual) {
+        visual.__sayBubble = undefined
+        visual.__sayMessage = undefined
+      }
+      this.sayBubbles.delete(id)
+    }
+  }
+
   setInstantMode(enabled: boolean): void {
     this.instantMode = enabled
     if (!enabled) return
@@ -2001,8 +2154,19 @@ export class ObjectLayer {
         visual.position.set(visual.__targetX, visual.__targetY!)
         visual.__targetX = undefined
         visual.__targetY = undefined
+        visual.__moveStartX = undefined
+        visual.__moveStartY = undefined
+        visual.__moveStartT = undefined
+        visual.__moveDur = undefined
+      }
+      if (visual.__sayBubble && !visual.__sayBubble.destroyed) {
+        visual.removeChild(visual.__sayBubble)
+        visual.__sayBubble.destroy({ children: true })
+        visual.__sayBubble = undefined
+        visual.__sayMessage = undefined
       }
     }
+    this.sayBubbles.clear()
     for (const anim of this.extAnimations.values()) updateExtensionFill(anim.visual, anim.toRadius)
     this.extAnimations.clear()
     for (const anim of this.creepFillAnimations.values()) updateCreepFill(anim.visual, anim.toRadius)
@@ -2037,6 +2201,7 @@ export class ObjectLayer {
     this.towerFillAnimations.clear()
     this.sourceAnimations.clear()
     this.buildGlowAnimations.clear()
+    this.sayBubbles.clear()
     this.roadGraphics.clear()
     this.rampartGraphics.clear()
     this.container.removeChildren()
