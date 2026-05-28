@@ -18,4 +18,14 @@ export const defaultSpriteTheme: Theme = {
     segmentFrame: 'controller/segment',
     tileScale: 1.5,
   },
+  flag: {
+    mainFrame: 'flag/main',
+    secondFrame: 'flag/second',
+    tileScale: 1.0,
+  },
+  tombstone: {
+    shellFrame: 'grave/shell',
+    crossFrame: 'grave/cross',
+    tileScale: 1.0,
+  },
 }

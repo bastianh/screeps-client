@@ -14,10 +14,24 @@ export interface ControllerSpec {
   tileScale: number
 }
 
+export interface FlagSpec {
+  mainFrame: string
+  secondFrame: string
+  tileScale: number
+}
+
+export interface TombstoneSpec {
+  shellFrame: string
+  crossFrame: string
+  tileScale: number
+}
+
 export interface Theme {
   id: string
   name: string
   atlasUrl: string
   sprites: Partial<Record<string, SpriteSpec>>
   controller?: ControllerSpec
+  flag?: FlagSpec
+  tombstone?: TombstoneSpec
 }

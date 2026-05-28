@@ -1,7 +1,7 @@
 import { Container, Graphics, Text, Ticker, Sprite, Texture } from 'pixi.js'
 import type { RoomObject, RoomObjectMap, RoomObjectDiff, Badge } from 'screeps-connectivity'
 import { BadgeTextureCache } from './BadgeTextureCache.js'
-import type { Theme, ControllerSpec } from './themes/Theme.js'
+import type { Theme, ControllerSpec, FlagSpec, TombstoneSpec } from './themes/Theme.js'
 import type { AtlasCache } from './AtlasCache.js'
 
 const sharedBadgeCache = new BadgeTextureCache()
@@ -1020,38 +1020,82 @@ function createObjectVisual(
       const secColorIdx = typeof obj.secondaryColor === 'number' ? obj.secondaryColor : 0
       const flagColor = FLAG_COLORS[colorIdx] ?? FLAG_COLORS[0]
       const secColor = FLAG_COLORS[secColorIdx] ?? FLAG_COLORS[0]
-      const S = 1.5
 
-      // Flag pole — centered in tile, 50% bigger
-      const poleW = TILE_SIZE * 0.08 * S
-      const poleH = TILE_SIZE * 0.7 * S
-      const poleX = cx - poleW / 2
-      const poleY = cy - TILE_SIZE * 0.25 * S
-      g.rect(poleX, poleY, poleW, poleH)
-      g.fill(0x888888)
+      const flagSpec: FlagSpec | undefined = theme?.flag
+      if (flagSpec && atlasCache) {
+        const targetSize = TILE_SIZE * flagSpec.tileScale
+        const loadAtlas = (): Promise<import('pixi.js').Spritesheet> => atlasCache.getOrLoad(theme!.atlasUrl)
 
-      // One flag triangle split into upper (primary) and lower (secondary) halves
-      const attachX = poleX + poleW
-      const attachY = poleY
-      const tipX = attachX + TILE_SIZE * 0.45 * S
-      const topY = attachY
-      const bottomY = attachY + TILE_SIZE * 0.44 * S
-      const tipY = (topY + bottomY) / 2
-      const splitY = tipY
+        const mainSprite = new Sprite()
+        mainSprite.anchor.set(0.5, 0.5)
+        mainSprite.x = cx
+        mainSprite.y = cy
+        mainSprite.width = targetSize
+        mainSprite.height = targetSize
+        mainSprite.tint = flagColor
+        container.addChild(mainSprite)
 
-      g.moveTo(attachX, topY)
-      g.lineTo(tipX, tipY)
-      g.lineTo(attachX, splitY)
-      g.closePath()
-      g.fill(flagColor)
+        const mainTex = atlasCache.getTexture(theme!.atlasUrl, flagSpec.mainFrame)
+        if (mainTex) {
+          mainSprite.texture = mainTex
+        } else {
+          loadAtlas().then(sheet => {
+            if (!mainSprite.destroyed) mainSprite.texture = sheet.textures[flagSpec.mainFrame] ?? Texture.EMPTY
+          }).catch(() => {})
+        }
 
-      g.moveTo(attachX, splitY)
-      g.lineTo(tipX, tipY)
-      g.lineTo(attachX, bottomY)
-      g.closePath()
-      g.fill(secColor)
+        if (secColorIdx !== colorIdx) {
+          const secondSprite = new Sprite()
+          secondSprite.anchor.set(0.5, 0.5)
+          secondSprite.x = cx
+          secondSprite.y = cy
+          secondSprite.width = targetSize
+          secondSprite.height = targetSize
+          secondSprite.tint = secColor
+          container.addChild(secondSprite)
 
-      container.addChild(g)
+          const secondTex = atlasCache.getTexture(theme!.atlasUrl, flagSpec.secondFrame)
+          if (secondTex) {
+            secondSprite.texture = secondTex
+          } else {
+            loadAtlas().then(sheet => {
+              if (!secondSprite.destroyed) secondSprite.texture = sheet.textures[flagSpec.secondFrame] ?? Texture.EMPTY
+            }).catch(() => {})
+          }
+        }
+      } else {
+        // Graphics fallback
+        const S = 1.5
+        const poleW = TILE_SIZE * 0.08 * S
+        const poleH = TILE_SIZE * 0.7 * S
+        const poleX = cx - poleW / 2
+        const poleY = cy - TILE_SIZE * 0.25 * S
+        g.rect(poleX, poleY, poleW, poleH)
+        g.fill(0x888888)
+
+        const attachX = poleX + poleW
+        const attachY = poleY
+        const tipX = attachX + TILE_SIZE * 0.45 * S
+        const topY = attachY
+        const bottomY = attachY + TILE_SIZE * 0.44 * S
+        const tipY = (topY + bottomY) / 2
+        const splitY = tipY
+
+        g.moveTo(attachX, topY)
+        g.lineTo(tipX, tipY)
+        g.lineTo(attachX, splitY)
+        g.closePath()
+        g.fill(flagColor)
+
+        g.moveTo(attachX, splitY)
+        g.lineTo(tipX, tipY)
+        g.lineTo(attachX, bottomY)
+        g.closePath()
+        g.fill(secColor)
+
+        container.addChild(g)
+      }
+
       ;(container as ContainerWithTarget).__flagColor = colorIdx
       ;(container as ContainerWithTarget).__flagSecondaryColor = secColorIdx
 
@@ -1109,37 +1153,77 @@ function createObjectVisual(
       const isMine = tsUser !== undefined && tsUser === currentUserId
       const tsColor = isMine ? CS_OWN : OBJ_FOREIGN
 
-      // Tombstone silhouette: rectangle body with a half-circle dome on top
-      const w = TILE_SIZE * 0.62
-      const h = TILE_SIZE * 0.82
-      const x0 = cx - w / 2
-      const y0 = cy - h / 2
-      const r = w / 2
+      const tsSpec: TombstoneSpec | undefined = theme?.tombstone
+      if (tsSpec && atlasCache) {
+        const targetSize = TILE_SIZE * tsSpec.tileScale
+        const loadAtlas = (): Promise<import('pixi.js').Spritesheet> => atlasCache.getOrLoad(theme!.atlasUrl)
 
-      const tg = new Graphics()
-      tg.moveTo(x0, y0 + r)
-      tg.arc(cx, y0 + r, r, Math.PI, 0, false)
-      tg.lineTo(x0 + w, y0 + h)
-      tg.lineTo(x0, y0 + h)
-      tg.closePath()
-      tg.fill(ST_DARK)
-      tg.moveTo(x0, y0 + r)
-      tg.arc(cx, y0 + r, r, Math.PI, 0, false)
-      tg.lineTo(x0 + w, y0 + h)
-      tg.lineTo(x0, y0 + h)
-      tg.closePath()
-      tg.stroke({ width: TILE_SIZE * 0.07, color: tsColor, alpha: 0.9 })
-      container.addChild(tg)
+        const shellSprite = new Sprite()
+        shellSprite.anchor.set(0.5, 0.5)
+        shellSprite.x = cx
+        shellSprite.y = cy
+        shellSprite.width = targetSize
+        shellSprite.height = targetSize
+        container.addChild(shellSprite)
 
-      // X mark — cause-of-death glyph in owner color
-      const xR = TILE_SIZE * 0.18
-      const xMark = new Graphics()
-      xMark.moveTo(cx - xR, cy - xR * 0.6)
-      xMark.lineTo(cx + xR, cy + xR * 0.6)
-      xMark.moveTo(cx + xR, cy - xR * 0.6)
-      xMark.lineTo(cx - xR, cy + xR * 0.6)
-      xMark.stroke({ width: TILE_SIZE * 0.09, color: tsColor, cap: 'round' })
-      container.addChild(xMark)
+        const crossSprite = new Sprite()
+        crossSprite.anchor.set(0.5, 0.5)
+        crossSprite.x = cx
+        crossSprite.y = cy
+        crossSprite.width = targetSize
+        crossSprite.height = targetSize
+        crossSprite.tint = tsColor
+        container.addChild(crossSprite)
+
+        const shellTex = atlasCache.getTexture(theme!.atlasUrl, tsSpec.shellFrame)
+        if (shellTex) {
+          shellSprite.texture = shellTex
+        } else {
+          loadAtlas().then(sheet => {
+            if (!shellSprite.destroyed) shellSprite.texture = sheet.textures[tsSpec.shellFrame] ?? Texture.EMPTY
+          }).catch(() => {})
+        }
+
+        const crossTex = atlasCache.getTexture(theme!.atlasUrl, tsSpec.crossFrame)
+        if (crossTex) {
+          crossSprite.texture = crossTex
+        } else {
+          loadAtlas().then(sheet => {
+            if (!crossSprite.destroyed) crossSprite.texture = sheet.textures[tsSpec.crossFrame] ?? Texture.EMPTY
+          }).catch(() => {})
+        }
+      } else {
+        // Graphics fallback
+        const w = TILE_SIZE * 0.62
+        const h = TILE_SIZE * 0.82
+        const x0 = cx - w / 2
+        const y0 = cy - h / 2
+        const r = w / 2
+
+        const tg = new Graphics()
+        tg.moveTo(x0, y0 + r)
+        tg.arc(cx, y0 + r, r, Math.PI, 0, false)
+        tg.lineTo(x0 + w, y0 + h)
+        tg.lineTo(x0, y0 + h)
+        tg.closePath()
+        tg.fill(ST_DARK)
+        tg.moveTo(x0, y0 + r)
+        tg.arc(cx, y0 + r, r, Math.PI, 0, false)
+        tg.lineTo(x0 + w, y0 + h)
+        tg.lineTo(x0, y0 + h)
+        tg.closePath()
+        tg.stroke({ width: TILE_SIZE * 0.07, color: tsColor, alpha: 0.9 })
+        container.addChild(tg)
+
+        const xR = TILE_SIZE * 0.18
+        const xMark = new Graphics()
+        xMark.moveTo(cx - xR, cy - xR * 0.6)
+        xMark.lineTo(cx + xR, cy + xR * 0.6)
+        xMark.moveTo(cx + xR, cy - xR * 0.6)
+        xMark.lineTo(cx - xR, cy + xR * 0.6)
+        xMark.stroke({ width: TILE_SIZE * 0.09, color: tsColor, cap: 'round' })
+        container.addChild(xMark)
+      }
       break
     }
     default: {
