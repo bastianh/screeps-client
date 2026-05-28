@@ -6,24 +6,28 @@ export interface SpriteLayer {
 export interface SpriteSpec {
   layers: SpriteLayer[]
   tileScale: number  // 1.0 = one tile; >1.0 = overhang (future)
+  zIndex?: number   // added to the type's base zIndex tier
 }
 
 export interface ControllerSpec {
   backgroundFrame: string
   segmentFrame: string
   tileScale: number
+  zIndex?: number
 }
 
 export interface FlagSpec {
   mainFrame: string
   secondFrame: string
   tileScale: number
+  zIndex?: number
 }
 
 export interface TombstoneSpec {
   shellFrame: string
   crossFrame: string
   tileScale: number
+  zIndex?: number
 }
 
 export interface Theme {

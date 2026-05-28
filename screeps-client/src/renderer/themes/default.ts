@@ -16,16 +16,18 @@ export const defaultSpriteTheme: Theme = {
   controller: {
     backgroundFrame: 'controller/background',
     segmentFrame: 'controller/segment',
-    tileScale: 1.5,
+    tileScale: 2,
   },
   flag: {
     mainFrame: 'flag/main',
     secondFrame: 'flag/second',
-    tileScale: 1.0,
+    tileScale: 3,
+    zIndex: 5,
   },
   tombstone: {
     shellFrame: 'grave/shell',
     crossFrame: 'grave/cross',
     tileScale: 1.0,
+    zIndex: 4,
   },
 }

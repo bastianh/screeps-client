@@ -1025,22 +1025,25 @@ function createObjectVisual(
       if (flagSpec && atlasCache) {
         const targetSize = TILE_SIZE * flagSpec.tileScale
         const loadAtlas = (): Promise<import('pixi.js').Spritesheet> => atlasCache.getOrLoad(theme!.atlasUrl)
+        const applyTex = (sprite: Sprite, tex: Texture) => {
+          sprite.texture = tex
+          sprite.width = targetSize
+          sprite.height = targetSize
+        }
 
         const mainSprite = new Sprite()
         mainSprite.anchor.set(0.5, 0.5)
         mainSprite.x = cx
         mainSprite.y = cy
-        mainSprite.width = targetSize
-        mainSprite.height = targetSize
         mainSprite.tint = flagColor
         container.addChild(mainSprite)
 
         const mainTex = atlasCache.getTexture(theme!.atlasUrl, flagSpec.mainFrame)
         if (mainTex) {
-          mainSprite.texture = mainTex
+          applyTex(mainSprite, mainTex)
         } else {
           loadAtlas().then(sheet => {
-            if (!mainSprite.destroyed) mainSprite.texture = sheet.textures[flagSpec.mainFrame] ?? Texture.EMPTY
+            if (!mainSprite.destroyed) applyTex(mainSprite, sheet.textures[flagSpec.mainFrame] ?? Texture.EMPTY)
           }).catch(() => {})
         }
 
@@ -1049,17 +1052,15 @@ function createObjectVisual(
           secondSprite.anchor.set(0.5, 0.5)
           secondSprite.x = cx
           secondSprite.y = cy
-          secondSprite.width = targetSize
-          secondSprite.height = targetSize
           secondSprite.tint = secColor
           container.addChild(secondSprite)
 
           const secondTex = atlasCache.getTexture(theme!.atlasUrl, flagSpec.secondFrame)
           if (secondTex) {
-            secondSprite.texture = secondTex
+            applyTex(secondSprite, secondTex)
           } else {
             loadAtlas().then(sheet => {
-              if (!secondSprite.destroyed) secondSprite.texture = sheet.textures[flagSpec.secondFrame] ?? Texture.EMPTY
+              if (!secondSprite.destroyed) applyTex(secondSprite, sheet.textures[flagSpec.secondFrame] ?? Texture.EMPTY)
             }).catch(() => {})
           }
         }
@@ -1264,8 +1265,14 @@ function createObjectVisual(
     container.addChild(label)
   }
 
-  if (obj.type === 'creep') container.zIndex = 1
-  if (obj.type === 'flag') container.zIndex = 10
+  // Tier-based zIndex: structures=0, creeps=100, flags=200
+  // Each spec can add an offset within its tier via zIndex field
+  const baseZ = obj.type === 'creep' ? 100 : obj.type === 'flag' ? 200 : 0
+  const specZ = obj.type === 'flag' ? (theme?.flag?.zIndex ?? 0)
+    : obj.type === 'controller' ? (theme?.controller?.zIndex ?? 0)
+    : obj.type === 'tombstone' ? (theme?.tombstone?.zIndex ?? 0)
+    : (theme?.sprites[obj.type]?.zIndex ?? 0)
+  container.zIndex = baseZ + specZ
 
   container.position.set(obj.x * TILE_SIZE, obj.y * TILE_SIZE)
   return container
