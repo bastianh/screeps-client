@@ -1,6 +1,6 @@
 {
   "name": "xxscreeps-mod-client",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "description": "xxscreeps mod that serves the screeps-client and connects it to the same server.",
   "type": "module",
   "xxscreeps": true,
