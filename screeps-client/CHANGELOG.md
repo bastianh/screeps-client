@@ -1,5 +1,25 @@
 # screeps-client
 
+## 0.4.0
+
+### Minor Changes
+
+- 1f571fb: Add dedicated detail panels for controllers, extensions, and store structures in the selection sidebar. Controller panel shows RCL progress bar, safe-mode activation, and unclaim action. Extensions show energy fill and notify-when-attacked toggle. Storage, terminal, container, lab, factory, nuker, and powerSpawn show a fill level bar with per-resource breakdown. RoomInfoPanel now displays the current RCL percentage inline. Adds `y` keyboard shortcut for the memory panel.
+- 9c24c2f: Add memory watch panel with live WebSocket subscriptions, persistent watchlist, temp creep watch, and inline editing.
+
+  `screeps-connectivity` gains `UserStore.subscribeMemory(path, shard?)` and a new `user:memory` event on `UserStoreEvents`. `screeps-client` adds a full Memory pane to the bottom bar: a persistent watchlist, a temporary per-creep watch triggered from the Eye button on the selection panel, a recursive type-aware `MemoryTree` with expand/collapse, insert-to-console, and inline leaf editing.
+
+### Patch Changes
+
+- 31e9570: Fix destroying roads and walls in the property viewer when the user owns the room.
+
+  Roads and walls carry no `user` field, so the destroy button was never shown.
+  The fix falls back to `roomOwner().userId` for ownerless structures and
+  correctly passes `room`, `roomName`, and an optional `shard` in the
+  `destroyStructure` intent — matching the format the official client sends.
+  `addObjectIntent` in `screeps-connectivity` now accepts an optional `shard`
+  parameter.
+
 ## 0.3.5
 
 ### Patch Changes

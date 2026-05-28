@@ -1,5 +1,15 @@
 # xxscreeps-mod-client
 
+## 0.2.5
+
+### Patch Changes
+
+- 05a01a9: Default mount path changed from `/` to `/client` to avoid interfering with xxscreeps game server routes. When mounted at `/` explicitly, known server paths (`/api/`, `/socket`, `/backend/`, `/auth/`, `/assets/`, `/map/`) are now skipped via a configurable `SCREEPS_MOD_CLIENT_EXCLUDE` env var.
+- Updated dependencies [1f571fb]
+- Updated dependencies [31e9570]
+- Updated dependencies [9c24c2f]
+  - screeps-client@0.4.0
+
 ## 0.2.4
 
 ### Patch Changes
