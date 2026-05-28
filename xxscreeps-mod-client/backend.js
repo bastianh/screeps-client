@@ -42,8 +42,15 @@ function normalizeMount(input) {
   return p === '' ? '/' : p
 }
 
-const mountPath = normalizeMount(process.env.SCREEPS_MOD_CLIENT_MOUNT_PATH ?? '/')
-const rootRedirect = readBool('SCREEPS_MOD_CLIENT_ROOT_REDIRECT', mountPath !== '/')
+const mountPath = normalizeMount(process.env.SCREEPS_MOD_CLIENT_MOUNT_PATH ?? '/client')
+const rootRedirect = readBool('SCREEPS_MOD_CLIENT_ROOT_REDIRECT', true)
+
+// Paths that should never be handled by the client mod, even when mounted at '/'.
+// Can be overridden via SCREEPS_MOD_CLIENT_EXCLUDE (comma-separated prefixes).
+const DEFAULT_EXCLUDES = ['/api/', '/socket', '/backend/', '/auth/', '/assets/', '/map/']
+const excludePrefixes = process.env.SCREEPS_MOD_CLIENT_EXCLUDE
+  ? process.env.SCREEPS_MOD_CLIENT_EXCLUDE.split(',').map(s => s.trim()).filter(Boolean)
+  : DEFAULT_EXCLUDES
 
 function resolveFile(relPath) {
   const rel = relPath.replace(/^\/+/, '')
@@ -86,18 +93,24 @@ hooks.register('middleware', koa => {
     return
   }
 
-  console.log(`[xxscreeps-mod-client] serving client at ${mountPath === '/' ? '/' : mountPath + '/'} (rootRedirect=${rootRedirect})`)
+  const mountDisplay = mountPath === '/' ? '/' : mountPath + '/'
+  console.log(`[xxscreeps-mod-client] serving client at ${mountDisplay} (rootRedirect=${rootRedirect})`)
+  if (mountPath === '/') {
+    console.log(`[xxscreeps-mod-client] excluded prefixes: ${excludePrefixes.join(', ')}`)
+  }
 
   koa.use(async (ctx, next) => {
     if (ctx.method !== 'GET' && ctx.method !== 'HEAD') return next()
 
-    if (mountPath !== '/' && ctx.path === '/' && rootRedirect) {
+    if (ctx.path === '/' && rootRedirect && mountPath !== '/') {
       ctx.redirect(mountPath + '/')
       return
     }
 
     let relPath
     if (mountPath === '/') {
+      // When mounted at root, skip paths that belong to the game server.
+      if (excludePrefixes.some(p => ctx.path.startsWith(p))) return next()
       relPath = ctx.path
     } else if (ctx.path === mountPath || ctx.path === mountPath + '/') {
       relPath = '/'
