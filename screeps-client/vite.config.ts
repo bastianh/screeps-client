@@ -2,6 +2,7 @@ import { defineConfig, loadEnv } from 'vite'
 import solid from 'vite-plugin-solid'
 import devtools from 'solid-devtools/vite'
 import { readFileSync } from 'node:fs'
+import { HttpsProxyAgent } from 'https-proxy-agent'
 
 const base = process.env.VITE_BASE ?? '/'
 const outDir = process.env.VITE_OUT_DIR ?? 'dist/standalone'
@@ -18,8 +19,12 @@ export default defineConfig(({ mode }) => {
   const viteHost = env.VITE_HOST
   const viteHostPort = env.VITE_HOST_PORT ? parseInt(env.VITE_HOST_PORT) : 443
 
+  const debugProxy = env.VITE_DEBUG_PROXY
+  const debugAgent = debugProxy ? new HttpsProxyAgent(debugProxy, { rejectUnauthorized: false }) : undefined
+
   console.log('[vite.config] VITE_PROXY_TARGET =', proxyTarget)
   if (viteHost) console.log('[vite.config] VITE_HOST =', viteHost, 'port', viteHostPort)
+  if (debugProxy) console.log('[vite.config] VITE_DEBUG_PROXY =', debugProxy)
 
   return {
     base,
@@ -54,8 +59,8 @@ export default defineConfig(({ mode }) => {
       allowedHosts: viteHost ? [viteHost] : undefined,
       hmr: viteHost ? { protocol: 'wss', clientPort: viteHostPort } : undefined,
       proxy: proxyTarget ? {
-        '/api': { target: proxyTarget, changeOrigin: true },
-        '/socket': { target: proxyTarget, changeOrigin: true, ws: true },
+        '/api': { target: proxyTarget, changeOrigin: true, agent: debugAgent, secure: !debugAgent },
+        '/socket': { target: proxyTarget, changeOrigin: true, ws: true, agent: debugAgent, secure: !debugAgent },
       } : undefined,
     },
     resolve: {

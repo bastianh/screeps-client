@@ -9,7 +9,7 @@ import { overlayAction, setOverlayAction } from '~/stores/roomViewStore.js'
 import { historyMode } from '~/stores/historyStore.js'
 import { roomOwner, roomUsers, currentShard, currentRoom } from '~/stores/roomDataStore.js'
 import { createLogger } from '~/utils/log.js'
-import { CONTROLLER_DOWNGRADE } from '~/utils/gameConstants.js'
+import { CONTROLLER_DOWNGRADE, CONTROLLER_LEVEL_TOTAL } from '~/utils/gameConstants.js'
 import { ColorPicker } from '~/components/ColorPicker.js'
 import type { SelectedObject } from '~/stores/selectionStore.js'
 
@@ -305,10 +305,10 @@ function CreepDetails(props: { item: SelectedObject }) {
           </>
         </Show>
 
-        <Show when={fatigue() !== null && fatigue()! > 0}>
+        <Show when={fatigue() !== null}>
           <>
             <div style={kvCell(true)}>Fatigue</div>
-            <div style={{ ...kvCell(), 'font-variant-numeric': 'tabular-nums' }}>{fatigue()}</div>
+            <div style={{ ...kvCell(), 'font-variant-numeric': 'tabular-nums', color: fatigue()! > 0 ? '#e3b341' : undefined }}>{fatigue()}</div>
           </>
         </Show>
       </div>
@@ -472,7 +472,10 @@ function ControllerDetails(props: { item: SelectedObject }) {
 
   const level = () => typeof raw().level === 'number' ? (raw().level as number) : 0
   const progress = () => typeof raw().progress === 'number' ? (raw().progress as number) : null
-  const progressTotal = () => typeof raw().progressTotal === 'number' ? (raw().progressTotal as number) : null
+  const progressTotal = () => {
+    if (typeof raw().progressTotal === 'number') return raw().progressTotal as number
+    return CONTROLLER_LEVEL_TOTAL[level()] ?? null
+  }
   const downgradeTime = () => typeof raw().downgradeTime === 'number' ? (raw().downgradeTime as number) : null
   const safeModeAvailable = () => typeof raw().safeModeAvailable === 'number' ? (raw().safeModeAvailable as number) : 0
   const safeMode = () => typeof raw().safeMode === 'number' ? (raw().safeMode as number) : null
@@ -547,15 +550,6 @@ function ControllerDetails(props: { item: SelectedObject }) {
             <div style={kvCell(true)}>Level</div>
             <div style={kvCell()}>{level()}</div>
 
-            <Show when={progress() !== null && progressTotal() !== null}>
-              <>
-                <div style={kvCell(true)}>Progress</div>
-                <div style={{ ...kvCell(), 'font-variant-numeric': 'tabular-nums' }}>
-                  {formatLargeNumber(progress()!)} / {formatLargeNumber(progressTotal()!)}
-                </div>
-              </>
-            </Show>
-
             <div style={kvCell(true)}>Safe modes</div>
             <div style={kvCell()}>{safeModeAvailable()}</div>
 
@@ -574,6 +568,25 @@ function ControllerDetails(props: { item: SelectedObject }) {
           </>
         </Show>
       </div>
+
+      <Show when={level() > 0 && level() < 8 && progress() !== null && progressTotal() !== null}>
+        <div style={{ padding: '5px 8px', background: '#0d1117', 'border-top': '1px solid #21262d' }}>
+          <div style={{ display: 'flex', 'justify-content': 'space-between', 'font-size': '10px', 'margin-bottom': '4px' }}>
+            <span style={{ color: '#8b949e' }}>RCL {level()} → {level() + 1}</span>
+            <span style={{ color: '#c9d1d9', 'font-variant-numeric': 'tabular-nums' }}>
+              {formatLargeNumber(progress()!)} / {formatLargeNumber(progressTotal()!)} ({((progress()! / progressTotal()!) * 100).toFixed(1)}%)
+            </span>
+          </div>
+          <div style={{ height: '5px', background: '#21262d', 'border-radius': '3px', overflow: 'hidden' }}>
+            <div style={{
+              height: '100%',
+              width: `${Math.min(100, (progress()! / progressTotal()!) * 100)}%`,
+              background: '#58a6ff',
+              'border-radius': '3px',
+            }} />
+          </div>
+        </div>
+      </Show>
 
       <Show when={isMyRoom() && !historyMode()}>
         <div style={{ padding: '8px', display: 'flex', 'flex-direction': 'column', gap: '6px', background: '#0d1117' }}>
@@ -1017,6 +1030,29 @@ function SelectionItem(props: { item: SelectedObject }) {
       </div>
 
       <Dynamic component={detailsComponent()} item={props.item} />
+
+      {/* ID row — shown for every object that has one */}
+      <Show when={props.item.id}>
+        {(id) => (
+          <div
+            style={{
+              padding: '3px 8px',
+              'border-top': '1px solid #21262d',
+              'font-size': '9px',
+              color: '#484f58',
+              'font-family': 'monospace',
+              overflow: 'hidden',
+              'text-overflow': 'ellipsis',
+              'white-space': 'nowrap',
+              cursor: 'pointer',
+            }}
+            title={id()}
+            onClick={() => navigator.clipboard?.writeText(id())}
+          >
+            {id()}
+          </div>
+        )}
+      </Show>
     </div>
   )
 }

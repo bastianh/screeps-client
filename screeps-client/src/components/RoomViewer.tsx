@@ -9,7 +9,7 @@ import { client, gameTime, setGameTime, recordGameTime, tickDuration, worldBound
 import { showCreepLabels, terrainEffects, showRoomVisuals } from '~/stores/settingsStore.js'
 import { setSelection, clearSelection, selection, updateSelectionWithDiff, updateSelectionFromObjects, createSelectedObject } from '~/stores/selectionStore.js'
 import { addToast } from '~/stores/toastStore.js'
-import { setRoomObjectCount, setRoomOwner, setControllerLevel, setStructureCounts, setRoomUsers, roomUsers, setCurrentShard, setCurrentRoom } from '~/stores/roomDataStore.js'
+import { setRoomObjectCount, setRoomOwner, setControllerLevel, setControllerProgress, setStructureCounts, setRoomUsers, roomUsers, setCurrentShard, setCurrentRoom } from '~/stores/roomDataStore.js'
 import { parseRoomName, formatRoomName, isRoomInWorld } from '~/utils/roomName.js'
 import { useRoomNavigationKeys } from '~/utils/useRoomNavigationKeys.js'
 import type { Badge, RoomTerrain, RoomObjectMap, RoomObjectDiff } from 'screeps-connectivity'
@@ -80,6 +80,7 @@ export function RoomViewer(props: RoomViewerProps) {
     setRoomObjectCount(null)
     setRoomOwner(null)
     setControllerLevel(null)
+    setControllerProgress(null)
     setStructureCounts({})
     setRoomUsers(null)
 
@@ -105,6 +106,7 @@ export function RoomViewer(props: RoomViewerProps) {
       let objectCount = 0
       const structCounts: Record<string, number> = {}
       let ctrlLevel = 0
+      let ctrlProgress: number | null = null
       let owner: { userId: string; username: string } | null = null
 
       for (const id in data.objects) {
@@ -131,6 +133,9 @@ export function RoomViewer(props: RoomViewerProps) {
           if (typeof obj.level === 'number') {
             ctrlLevel = obj.level
           }
+          if (typeof obj.progress === 'number') {
+            ctrlProgress = obj.progress
+          }
         }
       }
 
@@ -144,6 +149,7 @@ export function RoomViewer(props: RoomViewerProps) {
       setRoomObjectCount(objectCount)
       setRoomOwner(owner)
       setControllerLevel(ctrlLevel || null)
+      setControllerProgress(ctrlProgress)
       setStructureCounts(structCounts)
       setRoomUsers(data.users ?? null)
     }))
@@ -191,6 +197,7 @@ export function RoomViewer(props: RoomViewerProps) {
           let objectCount = 0
           const structCounts: Record<string, number> = {}
           let ctrlLevel = 0
+          let ctrlProgress: number | null = null
           let owner: { userId: string; username: string } | null = null
 
           for (const id in state.objects) {
@@ -213,12 +220,14 @@ export function RoomViewer(props: RoomViewerProps) {
               const username = cachedUsers?.[userId]?.username ?? userId
               owner = { userId, username }
               if (typeof obj.level === 'number') ctrlLevel = obj.level
+              if (typeof obj.progress === 'number') ctrlProgress = obj.progress
             }
           }
 
           setRoomObjectCount(objectCount)
           setRoomOwner(owner)
           setControllerLevel(ctrlLevel || null)
+          setControllerProgress(ctrlProgress)
           setStructureCounts(structCounts)
         })
         .catch((err: Error) => {

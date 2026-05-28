@@ -15,7 +15,7 @@ const CodePanel = lazy(() =>
 const MapViewer = lazy(() =>
   import('~/components/MapViewer.js').then((m) => ({ default: m.MapViewer })),
 )
-import { client, disconnect, isGuest, userInfo, gameTime } from '~/stores/clientStore.js'
+import { client, disconnect, isGuest, userInfo, gameTime, isPrivateServer, serverVersion } from '~/stores/clientStore.js'
 import { historyMode, historyTick, enterHistoryMode, exitHistoryMode, seekToTick } from '~/stores/historyStore.js'
 import { widescreenMode } from '~/stores/settingsStore.js'
 import { toggleShowLog, toggleShowConsole, toggleShowMemory } from '~/stores/consoleStore.js'
@@ -124,6 +124,14 @@ export function Dashboard() {
   createEffect(() => {
     if (isGuest()) setRoomViewMode('view')
   })
+  // No shard in URL/localStorage but server has shards — fall back to the first reported shard.
+  createEffect(() => {
+    if (shard() !== null) return
+    if (isPrivateServer() !== false) return
+    const firstShard = serverVersion()?.serverData?.shards?.[0]
+    if (firstShard) setShard(firstShard)
+  })
+
   const [mapOriginRoom, setMapOriginRoom] = createSignal<string | undefined>(undefined)
   const [hoveredRoomInfo, setHoveredRoomInfo] = createSignal<RoomInfo | null>(null)
   const [selectedRoomInfo, setSelectedRoomInfo] = createSignal<RoomInfo | null>(null)

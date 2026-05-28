@@ -1,10 +1,11 @@
 import { For, Show, type JSX } from 'solid-js'
 import { Eye, Flag, Hammer, Clock } from 'lucide-solid'
 import { gameTime, tickDuration, isGuest } from '~/stores/clientStore.js'
-import { roomObjectCount, roomOwner } from '~/stores/roomDataStore.js'
+import { roomObjectCount, roomOwner, controllerLevel, controllerProgress } from '~/stores/roomDataStore.js'
 import { roomViewMode, setRoomViewMode, type RoomViewMode } from '~/stores/roomViewStore.js'
 import { historyMode, enterHistoryMode, exitHistoryMode } from '~/stores/historyStore.js'
 import { showCreepLabels, setShowCreepLabels, showRoomVisuals, setShowRoomVisuals } from '~/stores/settingsStore.js'
+import { CONTROLLER_LEVEL_TOTAL } from '~/utils/gameConstants.js'
 
 interface RoomInfoPanelProps {
   room: string
@@ -53,6 +54,20 @@ export function RoomInfoPanel(props: RoomInfoPanelProps) {
         <div style={{ padding: '3px 0', color: '#c9d1d9' }}>{roomObjectCount() ?? '—'}</div>
         <div style={{ padding: '3px 0', color: '#8b949e' }}>Owner</div>
         <div style={{ padding: '3px 0', color: '#c9d1d9' }}>{roomOwner()?.username ?? '—'}</div>
+        <Show when={controllerLevel() !== null && controllerLevel()! > 0}>
+          <div style={{ padding: '3px 0', color: '#8b949e' }}>RCL</div>
+          <div style={{ padding: '3px 0', color: '#c9d1d9', 'font-variant-numeric': 'tabular-nums' }}>
+            <Show
+              when={controllerLevel()! < 8 && controllerProgress() !== null}
+              fallback={<span>{controllerLevel()}</span>}
+            >
+              {controllerLevel()} → {controllerLevel()! + 1}&nbsp;
+              <span style={{ color: '#8b949e' }}>
+                ({((controllerProgress()! / (CONTROLLER_LEVEL_TOTAL[controllerLevel()!] ?? 1)) * 100).toFixed(1)}%)
+              </span>
+            </Show>
+          </div>
+        </Show>
       </div>
       <label
         style={{
