@@ -13,4 +13,9 @@ export const defaultSpriteTheme: Theme = {
       tileScale: 1.75,
     },
   },
+  controller: {
+    backgroundFrame: 'controller/background',
+    segmentFrame: 'controller/segment',
+    tileScale: 1.5,
+  },
 }

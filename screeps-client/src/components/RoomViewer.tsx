@@ -592,7 +592,7 @@ export function RoomViewer(props: RoomViewerProps) {
 
     objLayer.setMoveDuration(moveDuration)
     lastRawState = { objects: objs, users }
-    objLayer.update(objs, diff, users)
+    objLayer.update(objs, diff, users, gameTime() ?? undefined)
     objLayer.setShowLabels(untrack(showCreepLabels))
 
     const sayingIds = new Set<string>()
