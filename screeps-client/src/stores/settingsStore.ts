@@ -19,4 +19,4 @@ export const [showMapRoomNames, setShowMapRoomNames] = boolSetting(LS.showMapRoo
 export const [showUnclaimableRooms, setShowUnclaimableRooms] = boolSetting(LS.showUnclaimableRooms, true)
 export const [terrainEffects, setTerrainEffects] = boolSetting(LS.terrainEffects, true)
 export const [showRoomVisuals, setShowRoomVisuals] = boolSetting(LS.showRoomVisuals, true)
-export const [spriteTheme, setSpriteTheme] = strSetting(LS.spriteTheme, 'vector')
+export const [spriteTheme, setSpriteTheme] = strSetting(LS.spriteTheme, 'default')
