@@ -18,7 +18,7 @@
     "build": "tsc && vite build",
     "build:bundle": "tsc && vite build --config vite-singlefile.config.ts",
     "build:embedded": "tsc && VITE_BASE=/client/ VITE_EMBEDDED=true VITE_OUT_DIR=dist/embedded vite build",
-    "build:embedded:xxscreeps": "tsc && VITE_BASE=/ VITE_EMBEDDED=true VITE_XXSCREEPS=true VITE_OUT_DIR=dist/xxscreeps-mod vite build",
+    "build:embedded:xxscreeps": "tsc && VITE_BASE=./ VITE_EMBEDDED=true VITE_XXSCREEPS=true VITE_OUT_DIR=dist/xxscreeps-mod vite build",
     "build:all": "pnpm build && pnpm build:embedded && pnpm build:embedded:xxscreeps",
     "preview": "vite preview",
     "lint": "eslint src",
