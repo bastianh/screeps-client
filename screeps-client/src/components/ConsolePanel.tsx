@@ -275,12 +275,48 @@ export function ConsolePanel(props: { shard?: string | null; isCollapsed?: boole
     window.removeEventListener('pointermove', handlePointerMove)
   }
 
+  const [history, setHistory] = createSignal<string[]>([])
+  const [historyIdx, setHistoryIdx] = createSignal<number | null>(null)
+  const [historyDraft, setHistoryDraft] = createSignal('')
+
+  const handleKeyDown = (e: KeyboardEvent) => {
+    const h = history()
+    if (h.length === 0) return
+    if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      const idx = historyIdx()
+      if (idx === null) {
+        setHistoryDraft(consoleInput())
+        setHistoryIdx(h.length - 1)
+        setConsoleInput(h[h.length - 1])
+      } else if (idx > 0) {
+        setHistoryIdx(idx - 1)
+        setConsoleInput(h[idx - 1])
+      }
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      const idx = historyIdx()
+      if (idx === null) return
+      if (idx < h.length - 1) {
+        setHistoryIdx(idx + 1)
+        setConsoleInput(h[idx + 1])
+      } else {
+        setHistoryIdx(null)
+        setConsoleInput(historyDraft())
+      }
+    }
+  }
+
   const handleSubmit = async (e: Event) => {
     e.preventDefault()
     const c = client()
-    if (!c || !consoleInput().trim()) return
+    const cmd = consoleInput().trim()
+    if (!c || !cmd) return
     try {
-      await c.http.user.console(consoleInput().trim(), props.shard ?? 'shard0')
+      await c.http.user.console(cmd, props.shard ?? 'shard0')
+      setHistory((prev) => [...prev, cmd])
+      setHistoryIdx(null)
+      setHistoryDraft('')
       setConsoleInput('')
     } catch (err) {
       error('command failed:', err)
@@ -482,7 +518,8 @@ export function ConsolePanel(props: { shard?: string | null; isCollapsed?: boole
                   type="text"
                   ref={(el) => registerConsoleInput(el)}
                   value={consoleInput()}
-                  onInput={(e) => setConsoleInput(e.currentTarget.value)}
+                  onInput={(e) => { setHistoryIdx(null); setConsoleInput(e.currentTarget.value) }}
+                  onKeyDown={handleKeyDown}
                   placeholder="Game.creeps.Harvester1.moveTo(10, 10)"
                   style={{
                     flex: 1,
