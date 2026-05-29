@@ -5,7 +5,7 @@ import { selection, deselectItem } from '~/stores/selectionStore.js'
 import { client, gameTime, userInfo } from '~/stores/clientStore.js'
 import { setTempWatchFor } from '~/stores/memoryStore.js'
 import { setShowMemory } from '~/stores/consoleStore.js'
-import { overlayAction, setOverlayAction } from '~/stores/roomViewStore.js'
+import { overlayAction, setOverlayAction, type MoveFlagAction } from '~/stores/roomViewStore.js'
 import { historyMode } from '~/stores/historyStore.js'
 import { roomOwner, roomUsers, currentShard, currentRoom } from '~/stores/roomDataStore.js'
 import { createLogger } from '~/utils/log.js'
@@ -396,7 +396,13 @@ function FlagDetails(props: { item: SelectedObject }) {
       room: room(),
       color: draftColor(),
       secondaryColor: draftSecondaryColor(),
+      targetRoom: currentRoom() ?? room(),
     })
+  }
+
+  const moveFlagOverlay = (): MoveFlagAction | null => {
+    const oa = overlayAction()
+    return oa?.type === 'moveFlag' && oa.id === props.item.id ? oa : null
   }
 
   const labelStyle = {
@@ -462,6 +468,29 @@ function FlagDetails(props: { item: SelectedObject }) {
           {isMovingThisFlag() ? <X size={13} /> : <Move size={13} />}
         </button>
       </div>
+      <Show when={moveFlagOverlay()}>
+        {(oa) => (
+          <label style={labelStyle}>
+            Target room
+            <input
+              value={oa().targetRoom}
+              onInput={(e) => setOverlayAction({ ...oa(), targetRoom: e.currentTarget.value.toUpperCase() })}
+              style={{
+                background: '#010409',
+                color: '#c9d1d9',
+                border: '1px solid #30363d',
+                'border-radius': '4px',
+                padding: '5px 6px',
+                'font-size': '12px',
+                outline: 'none',
+              }}
+            />
+            <span style={{ 'font-size': '10px', color: '#484f58' }}>
+              Navigate to target room, then click a tile
+            </span>
+          </label>
+        )}
+      </Show>
       </Show>
     </div>
   )

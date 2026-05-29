@@ -1,5 +1,5 @@
 // screeps-client/src/stores/roomViewStore.tsx
-import { createEffect, createRoot, createSignal, type JSX } from 'solid-js'
+import { createEffect, createRoot, createSignal, untrack, type JSX } from 'solid-js'
 import { controllerLevel, structureCounts } from './roomDataStore.js'
 import { client, worldStatus } from './clientStore.js'
 import { addToast } from './toastStore.js'
@@ -64,6 +64,7 @@ export interface MoveFlagAction {
   room: string
   color: number
   secondaryColor: number
+  targetRoom: string
 }
 
 export type OverlayAction = MoveFlagAction | null
@@ -190,6 +191,16 @@ export function resetRoomViewMode(): void {
     clearBuildDraft()
 }
 
+export function resetRoomViewModeOnNavigate(): void {
+    setRoomViewMode('view')
+    clearPendingTile()
+    // untrack: must not add overlayAction as a dependency of whatever effect calls this
+    if (untrack(overlayAction)?.type !== 'moveFlag') {
+        clearOverlayAction()
+    }
+    clearBuildDraft()
+}
+
 export function modeHint(): JSX.Element | null {
   const mode = roomViewMode()
   const pending = pendingTile()
@@ -261,8 +272,8 @@ export function modeHint(): JSX.Element | null {
   if (overlay?.type === 'moveFlag') {
     return (
       <div style={{ display: 'flex', 'flex-direction': 'column', gap: '2px', 'text-align': 'center' }}>
-        <span>Choose new flag position</span>
-        <span style={{ opacity: '0.6', 'font-size': '0.9em' }}>Right-click to cancel</span>
+        <span>Moving "{overlay.name}" → {overlay.targetRoom}</span>
+        <span style={{ opacity: '0.6', 'font-size': '0.9em' }}>Navigate rooms or change target in sidebar · Right-click to cancel</span>
       </div>
     )
   }

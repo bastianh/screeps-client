@@ -18,7 +18,7 @@ import type { Badge, RoomTerrain, RoomObjectMap, RoomObjectDiff } from 'screeps-
 import { SubscriptionGroup } from 'screeps-connectivity'
 import { historyMode, historyTick, historyMinTick, historyMaxTick, setHistoryMaxTick, historyLoading, setHistoryLoading, seekToTick, playbackSpeed } from '~/stores/historyStore.js'
 import { HistoryPlayer } from '~/stores/HistoryPlayer.js'
-import {flagDraft, roomViewMode, FLAG_COLOR_MAP, pendingTile, setPendingTile, clearPendingTile, setFlagDraft, modeHint, overlayAction, clearOverlayAction, buildDraft, confirmBuild, resetRoomViewMode} from '~/stores/roomViewStore';
+import {flagDraft, roomViewMode, FLAG_COLOR_MAP, pendingTile, setPendingTile, clearPendingTile, setFlagDraft, modeHint, overlayAction, setOverlayAction, clearOverlayAction, buildDraft, confirmBuild, resetRoomViewMode, resetRoomViewModeOnNavigate} from '~/stores/roomViewStore';
 import { createLogger } from '~/utils/log.js'
 
 const { log, error } = createLogger('room')
@@ -254,8 +254,16 @@ export function RoomViewer(props: RoomViewerProps) {
     void props.room
     void props.shard
 
-    resetRoomViewMode()
+    resetRoomViewModeOnNavigate()
     r.hoverLayer.clearPendingTile()
+
+    // Keep the overlay alive for cross-room flag moves; update targetRoom to the new room
+    const activeOverlay = untrack(overlayAction)
+    if (activeOverlay?.type === 'moveFlag') {
+      setOverlayAction({ ...activeOverlay, targetRoom: props.room })
+    } else {
+      r.resetView()
+    }
 
     terrainLayerRef?.destroy()
     terrainLayerRef = null
@@ -430,11 +438,11 @@ export function RoomViewer(props: RoomViewerProps) {
               const c = client()
               if (!c) return
 
-              const { name, room: flagRoom, color, secondaryColor } = overlay
+              const { name, room: flagRoom, color, secondaryColor, targetRoom } = overlay
               c.http.game.removeFlag(flagRoom, name)
                 .then(() => {
                   return c.http.game.createFlag(
-                    currentRoom, tx, ty, name, color, secondaryColor, currentShard ?? undefined
+                    targetRoom, tx, ty, name, color, secondaryColor, currentShard ?? undefined
                   )
                 })
                 .then(() => {
