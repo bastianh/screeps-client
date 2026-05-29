@@ -1,5 +1,20 @@
 # screeps-client
 
+## 0.5.0
+
+### Minor Changes
+
+- de4fd47: Add memory watch panel with live WebSocket subscriptions, persistent watchlist, temp creep watch, and inline editing.
+
+  `screeps-connectivity` gains `UserStore.subscribeMemory(path, shard?)` and a new `user:memory` event on `UserStoreEvents`. `screeps-client` adds a full Memory pane to the bottom bar: a persistent watchlist, a temporary per-creep watch triggered from the Eye button on the selection panel, a recursive type-aware `MemoryTree` with expand/collapse, insert-to-console, and inline leaf editing.
+
+### Patch Changes
+
+- f87b2a4: Fix unclaim, activateSafeMode and suicide buttons: all three sent an empty intent and a missing/undefined room. Now correctly sends room (currentRoom()), shard and intent: { id } as the official client does. Fix controller badge not updating when the room owner changes: the visual is now rebuilt whenever the owner field changes so the inner circle style and badge appear/disappear correctly.
+- e018214: Render creep.say() messages as speech bubbles anchored to the creep, and interpolate creep movement linearly over the tick duration so motion stays smooth across slow ticks and history playback.
+- 4e838c1: Use relative base path (`./`) for the xxscreeps embedded build so that asset references in `index.html` resolve relative to the served page URL. This ensures assets under `_client/` are requested at the correct subpath (e.g. `/client/_client/...`) regardless of where the mod mounts the client.
+- 14a4f03: Fix flag move mode: setting the overlay action no longer re-triggers the room-change effect (was calling r.clear() + objLayer.destroy(), breaking rendering). Zoom is now preserved when navigating between rooms during a move. A "Target room" input in the flag detail panel lets you move flags to any room without navigating there first.
+
 ## 0.4.1
 
 ### Patch Changes
