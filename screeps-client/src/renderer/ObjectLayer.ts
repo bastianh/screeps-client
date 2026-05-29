@@ -767,6 +767,7 @@ function createObjectVisual(
       ;(container as ContainerWithTarget).__ctrlProgress      = progress
       ;(container as ContainerWithTarget).__ctrlProgressTotal = progressTotal
       ;(container as ContainerWithTarget).__ctrlDowngradeTime = typeof obj.downgradeTime === 'number' ? obj.downgradeTime : undefined
+      ;(container as ContainerWithTarget).__ctrlUserId        = ctrlUserId
 
       // Inner circle — backdrop behind badge (owned) or neutral disc + center dot (unowned)
       const innerCircleG = new Graphics()
@@ -1311,6 +1312,7 @@ type ContainerWithTarget = Container & {
   __ctrlProgress?: number
   __ctrlProgressTotal?: number
   __ctrlDowngradeTime?: number
+  __ctrlUserId?: string
   __flagColor?: number
   __flagSecondaryColor?: number
   __sourceGraphics?: Graphics
@@ -1862,6 +1864,19 @@ export class ObjectLayer {
               const level         = typeof obj.level         === 'number' ? obj.level         : 0
               const progress      = typeof obj.progress      === 'number' ? obj.progress      : 0
               const progressTotal = typeof obj.progressTotal === 'number' ? obj.progressTotal : 0
+              const newUserId     = typeof obj.user          === 'string' ? obj.user          : undefined
+              if (existing.__ctrlUserId !== newUserId) {
+                this.container.removeChild(existing)
+                destroyVisual(existing)
+                this.objects.delete(id)
+                const visual: ContainerWithTarget = createObjectVisual(obj, this.showLabels, this.currentUserId, this.badge, this.badgeCache, this.users, this.activeTheme, this.atlasCache)
+                visual.__tileX = obj.x
+                visual.__tileY = obj.y
+                this.applyLabelScale(visual)
+                this.objects.set(id, visual)
+                this.container.addChild(visual)
+                continue
+              }
               if (existing.__ctrlLevel !== level || existing.__ctrlProgress !== progress || existing.__ctrlProgressTotal !== progressTotal) {
                 if (existing.__ctrlSegSprites) {
                   if (!this.instantMode && level < 8 && progress > (existing.__ctrlProgress ?? 0)) {
@@ -2003,6 +2018,19 @@ export class ObjectLayer {
             const level         = typeof obj.level         === 'number' ? obj.level         : 0
             const progress      = typeof obj.progress      === 'number' ? obj.progress      : 0
             const progressTotal = typeof obj.progressTotal === 'number' ? obj.progressTotal : 0
+            const newUserId     = typeof obj.user          === 'string' ? obj.user          : undefined
+            if (existing.__ctrlUserId !== newUserId) {
+              this.container.removeChild(existing)
+              destroyVisual(existing)
+              this.objects.delete(id)
+              const visual: ContainerWithTarget = createObjectVisual(obj, this.showLabels, this.currentUserId, this.badge, this.badgeCache, this.users, this.activeTheme, this.atlasCache)
+              visual.__tileX = obj.x
+              visual.__tileY = obj.y
+              this.applyLabelScale(visual)
+              this.objects.set(id, visual)
+              this.container.addChild(visual)
+              continue
+            }
             if (existing.__ctrlLevel !== level || existing.__ctrlProgress !== progress || existing.__ctrlProgressTotal !== progressTotal) {
               if (existing.__ctrlSegSprites) {
                 if (!this.instantMode && level > (existing.__ctrlLevel ?? 0) && level > 0) {

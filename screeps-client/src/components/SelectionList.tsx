@@ -512,7 +512,7 @@ function ControllerDetails(props: { item: SelectedObject }) {
   const handleActivateSafeMode = () => {
     const c = client()
     if (!c) return
-    c.http.game.addObjectIntent(props.item.id, raw().room as string, 'activateSafeMode', {})
+    c.http.game.addObjectIntent(props.item.id, currentRoom() ?? (raw().room as string) ?? '', 'activateSafeMode', { id: props.item.id }, currentShard())
       .catch((err: Error) => error('activateSafeMode failed:', err))
   }
 
@@ -526,7 +526,7 @@ function ControllerDetails(props: { item: SelectedObject }) {
     setUnclaimConfirming(false)
     const c = client()
     if (!c) return
-    c.http.game.addObjectIntent(props.item.id, raw().room as string, 'unclaim', {})
+    c.http.game.addObjectIntent(props.item.id, currentRoom() ?? (raw().room as string) ?? '', 'unclaim', { id: props.item.id }, currentShard())
       .catch((err: Error) => error('unclaim failed:', err))
   }
 
@@ -862,7 +862,7 @@ function SelectionItem(props: { item: SelectedObject }) {
     const c = client()
     if (!c) return
     const id = props.item.id
-    c.http.game.addObjectIntent(id, props.item.raw.room as string, 'suicide', {})
+    c.http.game.addObjectIntent(id, currentRoom() ?? (props.item.raw.room as string) ?? '', 'suicide', { id }, currentShard())
       .then(() => deselectItem(id))
       .catch((err: Error) => error('suicide failed:', err))
   }
