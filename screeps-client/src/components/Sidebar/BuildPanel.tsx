@@ -1,4 +1,4 @@
-import { For, Show, createSignal, createEffect, on } from 'solid-js'
+import { For, Show, createSignal, createEffect, on, onCleanup } from 'solid-js'
 import { buildDraft, setBuildDraft, CONTROLLER_STRUCTURES } from '~/stores/roomViewStore.js'
 import { worldStatus, client } from '~/stores/clientStore.js'
 import { controllerLevel, structureCounts } from '~/stores/roomDataStore.js'
@@ -37,18 +37,22 @@ export function BuildPanel(props: BuildPanelProps) {
   // Fetch a suggested name only when structureType switches to 'spawn'
   createEffect(on(
     () => buildDraft().structureType,
-    (type) => {
-      if (type !== 'spawn') return
+    (type, prevType) => {
+      if (type !== 'spawn' || type === prevType) return
       const c = client()
       if (!c) return
       setNameStatus('loading')
       setNameError('')
+      let stale = false
+      onCleanup(() => { stale = true })
       c.http.game.genUniqueObjectName('spawn', props.shard)
         .then((res) => {
+          if (stale) return
           setBuildDraft({ structureType: 'spawn', structureName: res.name })
           setNameStatus('valid')
         })
         .catch(() => {
+          if (stale) return
           setBuildDraft({ structureType: 'spawn', structureName: 'Spawn1' })
           setNameStatus('idle')
         })

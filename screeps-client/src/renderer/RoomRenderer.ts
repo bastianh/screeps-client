@@ -231,10 +231,6 @@ export class RoomRenderer {
     let pinchStartDist = 0
     let pinchStartScale = 0
 
-    // Prevent context menu so Ctrl+Click works on macOS
-    canvas.addEventListener('contextmenu', (e) => {
-      e.preventDefault()
-    })
 
     canvas.addEventListener('pointerdown', (e) => {
       this.cancelBounce()
@@ -340,7 +336,8 @@ export class RoomRenderer {
 
     canvas.addEventListener('contextmenu', (e) => {
       e.preventDefault()
-      this.onRightClick?.()
+      // button === 0 means Ctrl+Click on macOS — treat that as a regular click, not right-click
+      if (e.button === 2) this.onRightClick?.()
     })
 
     canvas.addEventListener('pointerleave', () => {

@@ -838,10 +838,16 @@ function SelectionItem(props: { item: SelectedObject }) {
     const id = props.item.id
     const raw = props.item.raw as Record<string, unknown>
     const room = (typeof raw.room === 'string' ? raw.room : null) ?? currentRoom() ?? ''
-    const userId = typeof raw.user === 'string' ? raw.user : (roomOwner()?.userId ?? '')
-    c.http.game.addObjectIntent('room', room, 'destroyStructure', [{ id, roomName: room, user: userId }], currentShard())
-      .then(() => deselectItem(id))
-      .catch((err: Error) => error('destroyStructure failed:', err))
+    if (props.item.type === 'constructionSite') {
+      c.http.game.removeConstructionSite(room, [id], currentShard() ?? undefined)
+        .then(() => deselectItem(id))
+        .catch((err: Error) => error('removeConstructionSite failed:', err))
+    } else {
+      const userId = typeof raw.user === 'string' ? raw.user : (roomOwner()?.userId ?? '')
+      c.http.game.addObjectIntent('room', room, 'destroyStructure', [{ id, roomName: room, user: userId }], currentShard())
+        .then(() => deselectItem(id))
+        .catch((err: Error) => error('destroyStructure failed:', err))
+    }
   }
 
   const handleSuicide = (e: MouseEvent) => {
@@ -968,7 +974,7 @@ function SelectionItem(props: { item: SelectedObject }) {
         <Show when={isOwnStructure() && !historyMode()}>
           <button
             onClick={handleDestroyStructure}
-            title={destroyConfirming() ? 'Click again to confirm destruction' : 'Destroy structure'}
+            title={destroyConfirming() ? 'Click again to confirm' : props.item.type === 'constructionSite' ? 'Remove construction site' : 'Destroy structure'}
             style={{
               background: 'transparent',
               border: 'none',
