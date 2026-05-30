@@ -207,4 +207,32 @@ describe('game endpoints', () => {
     expect(url).toContain('/api/game/tick')
     expect(res.tick).toBe(500)
   })
+
+  it('roomHistory uses path URL for official server (shard provided)', async () => {
+    const chunk = { timestamp: 1000, room: 'W1N1', base: 1000, ticks: {} }
+    fetchMock.mockResolvedValue(mockResponse(chunk))
+    const http = new HttpClient({ url: 'http://test.local', auth: new TokenAuth({ token: 't' }) })
+
+    const res = await http.game.roomHistory('W1N1', 1000, 'shard0')
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(init.method).toBe('GET')
+    expect(url).toBe('http://test.local/room-history/shard0/W1N1/1000.json')
+    expect(res.base).toBe(1000)
+  })
+
+  it('roomHistory uses query params for private server (no shard)', async () => {
+    const chunk = { timestamp: 1000, room: 'W1N1', base: 1000, ticks: {} }
+    fetchMock.mockResolvedValue(mockResponse(chunk))
+    const http = new HttpClient({ url: 'http://test.local', auth: new TokenAuth({ token: 't' }) })
+
+    const res = await http.game.roomHistory('W1N1', 1000)
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(init.method).toBe('GET')
+    expect(url).toMatch(/\/room-history/)
+    expect(url).toContain('room=W1N1')
+    expect(url).toContain('time=1000')
+    expect(res.base).toBe(1000)
+  })
 })

@@ -179,7 +179,7 @@ export function RoomViewer(props: RoomViewerProps) {
     const chunkSize = serverVersion()?.serverData?.historyChunkSize ?? (isPriv ? 20 : 100)
     const cachedUsers = untrack(roomUsers) ?? undefined
 
-    const player = new HistoryPlayer(room, shard, c.http.baseUrl, () => c.http.token, chunkSize, isPriv)
+    const player = new HistoryPlayer(room, shard, c.http, chunkSize)
 
     createEffect(() => {
       const tick = historyTick()

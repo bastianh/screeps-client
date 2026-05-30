@@ -39,6 +39,7 @@ export type {
 
 export { fetchServerVersion, fetchAuthModInfo, checkUsername, checkEmail, registerUser, getServerFeature, getScreepsmodAuth } from './http/fetchServerVersion.js'
 export type { ApiAuthModInfoResponse } from './http/fetchServerVersion.js'
+export type { RoomHistoryChunk } from './types/api.js'
 
 export { badgeToSvg } from './badge/index.js'
 export { BadgeColors } from './badge/colors.js'

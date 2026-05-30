@@ -2,6 +2,13 @@ export interface ApiOkResponse {
   ok: number
 }
 
+export interface RoomHistoryChunk {
+  timestamp: number
+  room: string
+  base: number
+  ticks: Record<string, import('./game.js').RoomObjectDiff>
+}
+
 export interface ApiAuthSigninResponse {
   ok: number
   token: string

@@ -13,6 +13,7 @@ import type {
   ApiGenUniqueObjectNameResponse,
   ApiCheckUniqueObjectNameResponse,
   ApiGameTickResponse,
+  RoomHistoryChunk,
 } from '../../types/api.js'
 import { createPowerCreepsEndpoints, type PowerCreepsEndpoints } from './power-creeps.js'
 
@@ -39,6 +40,8 @@ export interface GameEndpoints {
   removeConstructionSite(room: string, ids: string[], shard?: string | null): Promise<{ ok: number }>
   addObjectIntent(id: string, room: string, name: string, intent: unknown, shard?: string | null): Promise<{ ok: number }>
   addGlobalIntent(name: string, intent: unknown): Promise<{ ok: number }>
+  /** Fetch a room history chunk. Pass shard for official multi-shard servers; omit for private servers. */
+  roomHistory(room: string, time: number, shard?: string | null): Promise<RoomHistoryChunk>
   setNotifyWhenAttacked(id: string, enabled: boolean): Promise<{ ok: number }>
   createInvader(room: string, x: number, y: number, size: number, type: string, boosted?: boolean): Promise<{ ok: number }>
   removeInvader(id: string): Promise<{ ok: number }>
@@ -85,6 +88,10 @@ export function createGameEndpoints(http: HttpClient): GameEndpoints {
     removeConstructionSite: (room, ids, shard) => http.request('POST', '/api/game/add-object-intent', withShard({ _id: 'room', room, name: 'removeConstructionSite', intent: ids.map(id => ({ id, roomName: room })) }, shard)),
     addObjectIntent: (id, room, name, intent, shard) => http.request('POST', '/api/game/add-object-intent', withShard({ _id: id, room, name, intent }, shard)),
     addGlobalIntent: (name, intent) => http.request('POST', '/api/game/add-global-intent', { name, intent }),
+    roomHistory: (room, time, shard) =>
+      shard
+        ? http.request('GET', `/room-history/${encodeURIComponent(shard)}/${encodeURIComponent(room)}/${time}.json`)
+        : http.request('GET', '/room-history', { room, time }),
     setNotifyWhenAttacked: (id, enabled) => http.request('POST', '/api/game/set-notify-when-attacked', { _id: id, enabled }),
     createInvader: (room, x, y, size, type, boosted) => http.request('POST', '/api/game/create-invader', { room, x, y, size, type, ...(boosted != null ? { boosted } : {}) }),
     removeInvader: (id) => http.request('POST', '/api/game/remove-invader', { _id: id }),

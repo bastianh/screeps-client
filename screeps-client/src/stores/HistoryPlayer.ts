@@ -1,10 +1,9 @@
-import type { RoomObjectMap, RoomObjectDiff, RoomObject } from 'screeps-connectivity'
+import type { RoomObjectMap, RoomObjectDiff, RoomObject, RoomHistoryChunk } from 'screeps-connectivity'
 
-interface RoomHistoryChunk {
-  timestamp: number
-  room: string
-  base: number
-  ticks: Record<string, RoomObjectDiff>
+interface GameHttpClient {
+  game: {
+    roomHistory(room: string, time: number, shard?: string | null): Promise<RoomHistoryChunk>
+  }
 }
 
 export class HistoryPlayer {
@@ -14,23 +13,12 @@ export class HistoryPlayer {
   constructor(
     private readonly room: string,
     private readonly shard: string | null,
-    private readonly baseUrl: string,  // from c.http.baseUrl — ends with '/'
-    private readonly getToken: () => string | null,
+    private readonly http: GameHttpClient,
     private readonly chunkSize: number,
-    private readonly isPrivate: boolean,
   ) {}
 
   chunkBase(tick: number): number {
     return tick - (tick % this.chunkSize)
-  }
-
-  private buildUrl(base: number): string {
-    if (this.isPrivate || this.shard === null) {
-      // Private server: GET /room-history?room=W1N1&time=1000
-      return `${this.baseUrl}room-history?room=${encodeURIComponent(this.room)}&time=${base}`
-    }
-    // Official server: GET /room-history/shard0/W1N1/1000.json
-    return `${this.baseUrl}room-history/${encodeURIComponent(this.shard)}/${encodeURIComponent(this.room)}/${base}.json`
   }
 
   private loadChunk(base: number): Promise<RoomHistoryChunk> {
@@ -40,19 +28,7 @@ export class HistoryPlayer {
     const existing = this.inflight.get(base)
     if (existing) return existing
 
-    const url = this.buildUrl(base)
-    const token = this.getToken()
-    const headers: Record<string, string> = {}
-    if (token) {
-      headers['X-Token'] = token
-      headers['X-Username'] = token
-    }
-
-    const promise = fetch(url, { headers })
-      .then((res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        return res.json() as Promise<RoomHistoryChunk>
-      })
+    const promise = this.http.game.roomHistory(this.room, base, this.shard)
       .then((chunk) => {
         this.chunkCache.set(base, chunk)
         this.inflight.delete(base)
