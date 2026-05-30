@@ -1,5 +1,12 @@
 # screeps-client
 
+## 0.5.1
+
+### Patch Changes
+
+- f576993: Fix URL accumulation when navigating between room and map views in the xxscreeps build. The relative `BASE_URL` (`./`) used for the xxscreeps bundle was causing `basePath()` to return `'.'`, which made `history.pushState` calls use relative URLs that compounded `/room/` into the path on every navigation. Page reload also failed to parse the room from the URL for the same reason.
+- 1e7161f: Add `http.game.roomHistory(room, time, shard?)` to `GameEndpoints` — handles both official server (path-based URL) and private server (query-param URL) automatically. `HistoryPlayer` in `screeps-client` is refactored to use this endpoint instead of a raw `fetch()` with manual token injection.
+
 ## 0.5.0
 
 ### Minor Changes
