@@ -42,6 +42,10 @@ export function embeddedModInfo(): EmbeddedModInfo | null {
 
 // Returns the path prefix where the app is mounted, without trailing slash.
 // e.g. '/client' when mounted as a server mod, '' for standalone.
+// BASE_URL may be relative (e.g. './') when built for xxscreeps where the
+// mount path is configurable at runtime — treat that as a root mount.
 export function basePath(): string {
-  return import.meta.env.BASE_URL.replace(/\/$/, '')
+  const base = import.meta.env.BASE_URL
+  if (base.startsWith('.')) return ''
+  return base.replace(/\/$/, '')
 }
