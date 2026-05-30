@@ -73,14 +73,19 @@ function sendFile(ctx, filePath, stat) {
 }
 
 function renderInjectedIndex(filePath) {
+  const mountDisplay = mountPath === '/' ? '/' : mountPath + '/'
+  const baseTag = `<base href="${mountDisplay}">`
   const metadata = JSON.stringify({
     kind: 'xxscreeps-mod',
     packageName: pkg.name,
     version: pkg.version,
   }).replace(/</g, '\\u003c')
   const script = `<script>window.__SCREEPS_CLIENT_EMBEDDED__=${metadata}</script>`
-  const html = readFileSync(filePath, 'utf8')
-  return html.includes('</head>') ? html.replace('</head>', `${script}</head>`) : script + html
+  let html = readFileSync(filePath, 'utf8')
+  // Inject base tag first so relative asset URLs resolve from the mount root,
+  // not from the current SPA route (e.g. /room/E11N2).
+  html = html.includes('<head>') ? html.replace('<head>', `<head>${baseTag}`) : baseTag + html
+  return html.includes('</head>') ? html.replace('</head>', `${script}</head>`) : html + script
 }
 
 function sendInjectedIndex(ctx) {
