@@ -1,5 +1,5 @@
 import { createEffect, createSignal, lazy, onCleanup, onMount, Show, untrack, type JSX } from 'solid-js'
-import { Map, LayoutGrid, Code2, Settings, LogOut, ChevronLeft, ChevronRight } from 'lucide-solid'
+import { Map, LayoutGrid, Code2, Settings, LogOut, LogIn, ChevronLeft, ChevronRight } from 'lucide-solid'
 import { ConnectionStatus } from '~/components/ConnectionStatus.js'
 import { RoomViewer } from '~/components/RoomViewer.js'
 import { ToastContainer } from '~/components/ToastContainer.js'
@@ -152,9 +152,12 @@ export function Dashboard() {
     seekToTick(targetTick)
   })
 
-  // Sync history tick to URL hash via replaceState (no history entry created)
+  // Sync room URL / history-tick hash while in room view.
+  // mapMode is read via untrack so that mode transitions (handled by explicit
+  // pushState calls in toggleMap / openMap / the navigation handler) don't
+  // trigger a redundant replaceState that races with those pushState calls.
   createEffect(() => {
-    if (mapMode()) return
+    if (untrack(mapMode)) return
     const base = buildRoomUrl(room(), shard())
     if (historyMode()) {
       history.replaceState(null, '', `${base}#tick=${historyTick()}`)
@@ -440,20 +443,22 @@ export function Dashboard() {
         <HeaderButton title={mapMode() ? 'Room View' : 'Map'} active={mapMode()} onClick={toggleMap}>
           {mapMode() ? <LayoutGrid size={16} /> : <Map size={16} />}
         </HeaderButton>
-        <HeaderButton title="Code Editor" active={showCode()} onClick={() => { setShowCode((v) => !v); setShowSettings(false) }}>
-          <Code2 size={16} />
-        </HeaderButton>
+        <Show when={!isGuest()}>
+          <HeaderButton title="Code Editor" active={showCode()} onClick={() => { setShowCode((v) => !v); setShowSettings(false) }}>
+            <Code2 size={16} />
+          </HeaderButton>
+        </Show>
         <HeaderButton title="Settings" active={showSettings()} onClick={() => { setShowSettings((v) => !v); setShowCode(false) }}>
           <Settings size={16} />
         </HeaderButton>
         <button
-          title="Logout"
+          title={isGuest() ? 'Login' : 'Logout'}
           onClick={disconnect}
           style={{
             padding: '7px',
             'border-radius': '4px',
             border: 'none',
-            background: '#da3633',
+            background: isGuest() ? '#238636' : '#da3633',
             color: '#fff',
             cursor: 'pointer',
             margin: '0 16px 0 8px',
@@ -461,7 +466,7 @@ export function Dashboard() {
             'align-items': 'center',
           }}
         >
-          <LogOut size={16} />
+          {isGuest() ? <LogIn size={16} /> : <LogOut size={16} />}
         </button>
       </div>
 

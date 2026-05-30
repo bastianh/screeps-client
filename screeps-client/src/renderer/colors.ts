@@ -103,9 +103,10 @@ export const OBJECT_COLORS: Record<string, number> = {
 export const ENERGY_FILL = 0xFFE87B  // extension fill, source, dropped energy, harvest beam (same as ST_ENERGY)
 
 // ── Animations ─────────────────────────────────────────────────────────────
-export const ANIM_HARVEST = ENERGY_FILL
-export const ANIM_UPGRADE = OBJ_CYAN
-export const ANIM_BUILD   = ENERGY_FILL
+export const ANIM_HARVEST  = ENERGY_FILL
+export const ANIM_UPGRADE  = OBJ_CYAN
+export const ANIM_BUILD    = ENERGY_FILL
+export const ANIM_TRANSFER = ENERGY_FILL
 
 // ── Construction sites ────────────────────────────────────────────────────
 // Base (used for the static pie fill); the ring pulses between *_DARK and *_LIGHT.

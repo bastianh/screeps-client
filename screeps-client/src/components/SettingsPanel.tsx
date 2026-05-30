@@ -7,6 +7,7 @@ import {
   showUnclaimableRooms, setShowUnclaimableRooms,
   terrainEffects, setTerrainEffects,
   spriteTheme, setSpriteTheme,
+  verboseCreepDetails, setVerboseCreepDetails,
 } from '~/stores/settingsStore.js'
 import { clientVersion, embeddedModInfo } from '~/utils/embedded.js'
 import { userInfo, isGuest } from '~/stores/clientStore.js'
@@ -212,6 +213,12 @@ export function SettingsPanel(props: { onClose: () => void }) {
               description="Swamp glow and wall noise texture overlay."
               value={terrainEffects()}
               onChange={setTerrainEffects}
+            />
+            <Toggle
+              label="Verbose creep details"
+              description="Show a colour-coded body part breakdown (e.g. 8×MOVE, 4×WORK) in the creep property panel."
+              value={verboseCreepDetails()}
+              onChange={setVerboseCreepDetails}
             />
             <div style={{ display: 'flex', 'flex-direction': 'column', gap: '4px' }}>
               <label style={{ 'font-size': '13px', 'font-weight': '500' }}>Structure theme</label>

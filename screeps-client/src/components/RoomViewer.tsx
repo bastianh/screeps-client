@@ -626,6 +626,10 @@ export function RoomViewer(props: RoomViewerProps) {
           animLayer.addBuild(obj.x, obj.y, build.x, build.y, beamDuration)
           objLayer?.triggerBuildAt(build.x, build.y, beamDuration)
         }
+        const transfer = actionLog.transfer as { x: number; y: number } | null | undefined
+        if (transfer) {
+          animLayer.addTransfer(obj.x, obj.y, transfer.x, transfer.y, beamDuration)
+        }
         const say = actionLog.say as { message?: unknown } | null | undefined
         if (say && typeof say.message === 'string' && say.message.length > 0) {
           objLayer?.triggerSay(id, say.message)

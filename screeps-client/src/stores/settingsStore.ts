@@ -20,3 +20,4 @@ export const [showUnclaimableRooms, setShowUnclaimableRooms] = boolSetting(LS.sh
 export const [terrainEffects, setTerrainEffects] = boolSetting(LS.terrainEffects, true)
 export const [showRoomVisuals, setShowRoomVisuals] = boolSetting(LS.showRoomVisuals, true)
 export const [spriteTheme, setSpriteTheme] = strSetting(LS.spriteTheme, 'default')
+export const [verboseCreepDetails, setVerboseCreepDetails] = boolSetting(LS.verboseCreepDetails, false)

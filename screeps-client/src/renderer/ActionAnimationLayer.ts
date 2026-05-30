@@ -1,6 +1,6 @@
 import { Container, Graphics, Ticker } from 'pixi.js'
 import { TILE_SIZE } from './RoomRenderer.js'
-import { ANIM_HARVEST, ANIM_UPGRADE, ANIM_BUILD } from './colors.js'
+import { ANIM_HARVEST, ANIM_UPGRADE, ANIM_BUILD, ANIM_TRANSFER } from './colors.js'
 
 interface BeamAnimation {
   fromX: number
@@ -67,6 +67,21 @@ export class ActionAnimationLayer {
       startTime: performance.now(),
       duration: durationMs,
       color: ANIM_UPGRADE,
+      width: BEAM_WIDTH,
+    })
+  }
+
+  addTransfer(fromX: number, fromY: number, toX: number, toY: number, durationMs: number): void {
+    const from = tileCenter(fromX, fromY)
+    const to = tileCenter(toX, toY)
+    this.animations.push({
+      fromX: from.cx,
+      fromY: from.cy,
+      toX: to.cx,
+      toY: to.cy,
+      startTime: performance.now(),
+      duration: durationMs,
+      color: ANIM_TRANSFER,
       width: BEAM_WIDTH,
     })
   }

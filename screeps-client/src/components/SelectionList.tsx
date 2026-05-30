@@ -11,6 +11,7 @@ import { roomOwner, roomUsers, currentShard, currentRoom } from '~/stores/roomDa
 import { createLogger } from '~/utils/log.js'
 import { CONTROLLER_DOWNGRADE, CONTROLLER_LEVEL_TOTAL } from '~/utils/gameConstants.js'
 import { ColorPicker } from '~/components/ColorPicker.js'
+import { verboseCreepDetails } from '~/stores/settingsStore.js'
 import type { SelectedObject } from '~/stores/selectionStore.js'
 
 const { log, error } = createLogger('SelectionList')
@@ -280,6 +281,11 @@ function CreepDetails(props: { item: SelectedObject }) {
   const store = () => raw().store as Record<string, number> | undefined
   const storeCapacity = () => typeof raw().storeCapacity === 'number' ? (raw().storeCapacity as number) : null
   const body = () => (raw().body as Array<{ type: string; hits?: number }> | undefined) ?? []
+  const bodyGroups = () => {
+    const counts = new Map<string, number>()
+    for (const part of body()) counts.set(part.type, (counts.get(part.type) ?? 0) + 1)
+    return [...counts.entries()].map(([type, count]) => ({ type, count }))
+  }
 
   return (
     <div>
@@ -343,6 +349,24 @@ function CreepDetails(props: { item: SelectedObject }) {
               )}
             </For>
           </div>
+          <Show when={verboseCreepDetails()}>
+            <div style={{
+              display: 'flex',
+              'flex-wrap': 'wrap',
+              gap: '2px 10px',
+              padding: '0 8px 8px',
+              background: '#0d1117',
+            }}>
+              <For each={bodyGroups()}>
+                {({ type, count }) => (
+                  <span style={{ 'font-size': '10px', 'font-variant-numeric': 'tabular-nums' }}>
+                    <span style={{ color: '#8b949e' }}>{count}×</span>
+                    <span style={{ color: BODY_PART_CSS[type] ?? '#484f58' }}>{type.replace('_', ' ').toUpperCase()}</span>
+                  </span>
+                )}
+              </For>
+            </div>
+          </Show>
         </div>
       </Show>
     </div>
