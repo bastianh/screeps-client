@@ -257,3 +257,71 @@ export interface ApiUserMessagesUnreadCountResponse {
   ok: number
   count: number
 }
+
+export interface ApiRoomDecorationGraphic {
+  url: string
+  color?: string
+  alpha?: string
+  visible?: string
+}
+
+export interface ApiRoomDecorationDef {
+  _id: string
+  type: 'floorLandscape' | 'wallLandscape' | 'wallGraffiti' | 'creep' | 'object' | 'metadata'
+  graphics?: ApiRoomDecorationGraphic[]
+  foregroundUrl?: string
+  floorForegroundUrl?: string
+  tileScale?: number | string
+  [key: string]: unknown
+}
+
+/** User-configured properties for an activated decoration. Number fields may arrive as strings from the API. */
+export interface ApiRoomDecorationActive {
+  // floorLandscape
+  floorBackgroundColor?: string
+  floorBackgroundBrightness?: number | string
+  floorForegroundColor?: string
+  floorForegroundBrightness?: number | string
+  floorForegroundAlpha?: number | string
+  swampColor?: string
+  swampStrokeColor?: string
+  swampStrokeWidth?: number | string
+  roadsColor?: string
+  roadsBrightness?: number | string
+  // wallLandscape
+  backgroundColor?: string
+  backgroundBrightness?: number | string
+  strokeColor?: string
+  strokeBrightness?: number | string
+  strokeWidth?: number | string
+  strokeLighting?: number | string
+  foregroundColor?: string
+  foregroundAlpha?: number | string
+  foregroundBrightness?: number | string
+  // creep / object
+  user?: string
+  nameFilter?: string
+  exclude?: boolean
+  width?: number | string
+  height?: number | string
+  brightness?: number | string
+  lighting?: boolean
+  animation?: string
+  position?: string
+  syncRotate?: boolean
+  flip?: boolean
+  [key: string]: unknown
+}
+
+/** Raw decoration item as returned by /api/game/room-decorations. */
+export interface ApiRoomDecorationItem {
+  _id: string
+  user: string
+  active: ApiRoomDecorationActive
+  decoration: ApiRoomDecorationDef
+}
+
+export interface ApiRoomDecorationsResponse {
+  ok: number
+  decorations: ApiRoomDecorationItem[]
+}

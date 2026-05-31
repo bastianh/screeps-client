@@ -32,7 +32,7 @@ export class HttpClient extends EventTarget {
   readonly leaderboard: LeaderboardEndpoints
   readonly experimental: ExperimentalEndpoints
 
-  constructor(opts: { url: string; auth: AuthStrategy; logger?: Logger; serverPassword?: string }) {
+  constructor(opts: { url: string; auth: AuthStrategy; logger?: Logger; serverPassword?: string; decorationsMock?: import('../types/api.js').ApiRoomDecorationsResponse }) {
     super()
     this.baseUrl = opts.url.endsWith('/') ? opts.url : `${opts.url}/`
     this.authStrategy = opts.auth
@@ -40,7 +40,7 @@ export class HttpClient extends EventTarget {
     this.serverPassword = opts.serverPassword ?? null
     this.auth = createAuthEndpoints(this)
     this.register = createRegisterEndpoints(this)
-    this.game = createGameEndpoints(this)
+    this.game = createGameEndpoints(this, opts.decorationsMock)
     this.user = createUserEndpoints(this)
     this.leaderboard = createLeaderboardEndpoints(this)
     this.experimental = createExperimentalEndpoints(this)

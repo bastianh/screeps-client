@@ -18,6 +18,7 @@ export const [showCreepLabels, setShowCreepLabels] = boolSetting(LS.showCreepLab
 export const [showMapRoomNames, setShowMapRoomNames] = boolSetting(LS.showMapRoomNames, false)
 export const [showUnclaimableRooms, setShowUnclaimableRooms] = boolSetting(LS.showUnclaimableRooms, true)
 export const [terrainEffects, setTerrainEffects] = boolSetting(LS.terrainEffects, true)
+export const [showRoomDecorations, setShowRoomDecorations] = boolSetting(LS.showRoomDecorations, true)
 export const [showRoomVisuals, setShowRoomVisuals] = boolSetting(LS.showRoomVisuals, true)
 export const [spriteTheme, setSpriteTheme] = strSetting(LS.spriteTheme, 'default')
 export const [verboseCreepDetails, setVerboseCreepDetails] = boolSetting(LS.verboseCreepDetails, false)

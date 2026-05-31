@@ -13,6 +13,7 @@ import type { LogFn } from './logger.js'
 import type { AuthStrategy } from './http/auth/AuthStrategy.js'
 import type { StorageAdapter } from './storage/StorageAdapter.js'
 import type { Subscription } from './subscription/index.js'
+import type { ApiRoomDecorationsResponse } from './types/api.js'
 
 type WsConstructor = typeof globalThis.WebSocket
 
@@ -39,6 +40,8 @@ export interface ScreepsClientOptions {
    * Pass `false` to disable.
    */
   tokenRefresh?: TokenRefreshOptions | false
+  /** Override the /api/game/room-decorations response with static data (useful for dev/testing when the server doesn't support the endpoint). */
+  decorationsMock?: ApiRoomDecorationsResponse
 }
 
 export class ScreepsClient {
@@ -70,7 +73,7 @@ export class ScreepsClient {
     this.logger = Logger.create(opts.debug)
     this.logger.log(`[screeps:client] init ${opts.url}`)
     this.cache = new Cache(namespace, opts.storage ?? null)
-    this.http = new HttpClient({ url: opts.url, auth: opts.auth, logger: this.logger.child('http'), serverPassword: opts.serverPassword })
+    this.http = new HttpClient({ url: opts.url, auth: opts.auth, logger: this.logger.child('http'), serverPassword: opts.serverPassword, decorationsMock: opts.decorationsMock })
     this.socket = new SocketClient({ url: opts.url, WebSocket: opts.WebSocket, logger: this.logger.child('socket') })
     const map2Storage = new Map2Storage({
       adapter: opts.storage ?? null,

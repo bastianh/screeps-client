@@ -6,6 +6,7 @@ import {
   showMapRoomNames, setShowMapRoomNames,
   showUnclaimableRooms, setShowUnclaimableRooms,
   terrainEffects, setTerrainEffects,
+  showRoomDecorations, setShowRoomDecorations,
   spriteTheme, setSpriteTheme,
   verboseCreepDetails, setVerboseCreepDetails,
 } from '~/stores/settingsStore.js'
@@ -219,6 +220,12 @@ export function SettingsPanel(props: { onClose: () => void }) {
               description="Show a colour-coded body part breakdown (e.g. 8×MOVE, 4×WORK) in the creep property panel."
               value={verboseCreepDetails()}
               onChange={setVerboseCreepDetails}
+            />
+            <Toggle
+              label="Room decorations"
+              description="Load player-activated theme decorations (floor, wall, road colors) from the server."
+              value={showRoomDecorations()}
+              onChange={setShowRoomDecorations}
             />
             <div style={{ display: 'flex', 'flex-direction': 'column', gap: '4px' }}>
               <label style={{ 'font-size': '13px', 'font-weight': '500' }}>Structure theme</label>

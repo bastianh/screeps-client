@@ -1418,6 +1418,7 @@ export class ObjectLayer {
   private users?: Record<string, { _id: string; username: string; badge?: Badge }>
   private activeTheme: Theme | null = null
   private atlasCache: AtlasCache | null = null
+  private roadColor: number = OBJ_ROAD
 
   constructor(ticker?: Ticker, showLabels = true, currentUserId?: string, badge?: Badge, users?: Record<string, { _id: string; username: string; badge?: Badge }>) {
     this.showLabels = showLabels
@@ -1441,6 +1442,11 @@ export class ObjectLayer {
   setTheme(theme: Theme | null, cache: AtlasCache | null): void {
     this.activeTheme = theme
     this.atlasCache = cache
+  }
+
+  setRoadColor(color: number): void {
+    this.roadColor = color
+    this.redrawRoads()
   }
 
   private tick(): void {
@@ -2099,7 +2105,7 @@ export class ObjectLayer {
 
   private redrawRoads(): void {
     this.roadGraphics.clear()
-    const color = OBJ_ROAD
+    const color = this.roadColor
 
     const roadGrid = Array.from({ length: 50 }, () => new Array(50).fill(false))
     const roads: RoomObject[] = []

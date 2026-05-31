@@ -7,11 +7,54 @@ import {
   TERRAIN_SWAMP_FILL, TERRAIN_SWAMP_BORDER, TERRAIN_SWAMP_GLOW,
 } from './colors.js'
 
-type ApplyStyle = (g: Graphics) => void
+export interface TerrainDecoration {
+  /** Floor background color (replaces plain ground color) */
+  floorColor?: number
+  /** Swamp fill color */
+  swampFillColor?: number
+  /** Swamp border color */
+  swampBorderColor?: number
+  /** Swamp border width as a fraction of TILE_SIZE (default 0.20) */
+  swampBorderWidth?: number
+  /** Color of the soft swamp glow blur layer */
+  swampGlowColor?: number
+  /** Wall fill color */
+  wallFillColor?: number
+  /** Wall border color */
+  wallBorderColor?: number
+  /** Wall border width as a fraction of TILE_SIZE (default 0.05) */
+  wallBorderWidth?: number
+  /** Wall noise overlay color */
+  wallNoiseColor?: number
+}
 
-// Border widths (relative to TILE_SIZE = 12). Swamp is thicker per design.
-const WALL_BORDER_W  = TILE_SIZE * 0.05
-const SWAMP_BORDER_W = TILE_SIZE * 0.20
+interface ResolvedColors {
+  floorColor: number
+  swampFillColor: number
+  swampBorderColor: number
+  swampBorderWidth: number
+  swampGlowColor: number
+  wallFillColor: number
+  wallBorderColor: number
+  wallBorderWidth: number
+  wallNoiseColor: number
+}
+
+function resolveColors(d?: TerrainDecoration): ResolvedColors {
+  return {
+    floorColor:       d?.floorColor       ?? TERRAIN_PLAIN,
+    swampFillColor:   d?.swampFillColor   ?? TERRAIN_SWAMP_FILL,
+    swampBorderColor: d?.swampBorderColor ?? TERRAIN_SWAMP_BORDER,
+    swampBorderWidth: d?.swampBorderWidth ?? 0.20,
+    swampGlowColor:   d?.swampGlowColor   ?? TERRAIN_SWAMP_GLOW,
+    wallFillColor:    d?.wallFillColor    ?? TERRAIN_WALL_FILL,
+    wallBorderColor:  d?.wallBorderColor  ?? TERRAIN_WALL_BORDER,
+    wallBorderWidth:  d?.wallBorderWidth  ?? 0.05,
+    wallNoiseColor:   d?.wallNoiseColor   ?? TERRAIN_WALL_NOISE,
+  }
+}
+
+type ApplyStyle = (g: Graphics) => void
 
 // Walks every quadrant of every tile of `targetType` and calls `apply(g)`
 // after each sub-path. Used to apply either a stroke (border pass) or fill
@@ -170,12 +213,12 @@ function drawExits(g: Graphics, terrain: RoomTerrain) {
   }
 }
 
-function createMainTerrain(terrain: RoomTerrain): Graphics {
+function createMainTerrain(terrain: RoomTerrain, colors: ResolvedColors): Graphics {
   const g = new Graphics()
 
   // Base plain layer
   g.rect(0, 0, 50 * TILE_SIZE, 50 * TILE_SIZE)
-  g.fill(TERRAIN_PLAIN)
+  g.fill(colors.floorColor)
 
   // Per terrain type, two passes:
   //   Pass 1: outside-aligned stroke (border) — paints a halo around the path
@@ -185,13 +228,13 @@ function createMainTerrain(terrain: RoomTerrain): Graphics {
   // at a side midpoint (top-center, left-center, …). With butt caps the strokes
   // from the two neighbouring quadrants don't quite meet, leaving 1-px notches
   // at every convex apex. Round caps/joins make them overlap cleanly.
-  const swampStroke: StrokeStyle = { color: TERRAIN_SWAMP_BORDER, width: SWAMP_BORDER_W, alignment: 0, cap: 'round', join: 'round' }
+  const swampStroke: StrokeStyle = { color: colors.swampBorderColor, width: TILE_SIZE * colors.swampBorderWidth, alignment: 0, cap: 'round', join: 'round' }
   drawTerrainQuadrants(g, terrain, TerrainType.Swamp, (gg) => gg.stroke(swampStroke))
-  drawTerrainQuadrants(g, terrain, TerrainType.Swamp, (gg) => gg.fill(TERRAIN_SWAMP_FILL))
+  drawTerrainQuadrants(g, terrain, TerrainType.Swamp, (gg) => gg.fill(colors.swampFillColor))
 
-  const wallStroke: StrokeStyle = { color: TERRAIN_WALL_BORDER, width: WALL_BORDER_W, alignment: 0, cap: 'round', join: 'round' }
+  const wallStroke: StrokeStyle = { color: colors.wallBorderColor, width: TILE_SIZE * colors.wallBorderWidth, alignment: 0, cap: 'round', join: 'round' }
   drawTerrainQuadrants(g, terrain, TerrainType.Wall, (gg) => gg.stroke(wallStroke))
-  drawTerrainQuadrants(g, terrain, TerrainType.Wall, (gg) => gg.fill(TERRAIN_WALL_FILL))
+  drawTerrainQuadrants(g, terrain, TerrainType.Wall, (gg) => gg.fill(colors.wallFillColor))
 
   drawExits(g, terrain)
 
@@ -202,18 +245,18 @@ function createMainTerrain(terrain: RoomTerrain): Graphics {
   return g
 }
 
-function createSwampGlow(terrain: RoomTerrain): Graphics {
+function createSwampGlow(terrain: RoomTerrain, colors: ResolvedColors): Graphics {
   const g = new Graphics()
   g.label = 'swampGlow'
-  drawTerrainQuadrants(g, terrain, TerrainType.Swamp, (gg) => gg.fill(TERRAIN_SWAMP_GLOW))
+  drawTerrainQuadrants(g, terrain, TerrainType.Swamp, (gg) => gg.fill(colors.swampGlowColor))
   g.alpha = 0.45
   g.filters = [new BlurFilter({ strength: 5, quality: 3 })]
   return g
 }
 
-function createWallNoise(terrain: RoomTerrain, renderer: Renderer): Sprite {
+function createWallNoise(terrain: RoomTerrain, renderer: Renderer, colors: ResolvedColors): Sprite {
   const g = new Graphics()
-  drawTerrainQuadrants(g, terrain, TerrainType.Wall, (gg) => gg.fill(TERRAIN_WALL_NOISE))
+  drawTerrainQuadrants(g, terrain, TerrainType.Wall, (gg) => gg.fill(colors.wallNoiseColor))
   g.alpha = 0.5
   g.filters = [new NoiseFilter({ noise: 0.12, seed: 1 })]
   g.filterArea = new Rectangle(0, 0, 50 * TILE_SIZE, 50 * TILE_SIZE)
@@ -231,9 +274,10 @@ function createWallNoise(terrain: RoomTerrain, renderer: Renderer): Sprite {
   return sprite
 }
 
-export function createTerrainLayer(terrain: RoomTerrain, renderer: Renderer): Container {
+export function createTerrainLayer(terrain: RoomTerrain, renderer: Renderer, decoration?: TerrainDecoration): Container {
+  const colors = resolveColors(decoration)
   const container = new Container()
-  const wallNoise = createWallNoise(terrain, renderer)
+  const wallNoise = createWallNoise(terrain, renderer, colors)
   const baseDestroy = container.destroy.bind(container)
 
   container.destroy = (options?: DestroyOptions) => {
@@ -244,8 +288,8 @@ export function createTerrainLayer(terrain: RoomTerrain, renderer: Renderer): Co
     baseDestroy(options)
   }
 
-  container.addChild(createMainTerrain(terrain))
-  container.addChild(createSwampGlow(terrain))
+  container.addChild(createMainTerrain(terrain, colors))
+  container.addChild(createSwampGlow(terrain, colors))
   container.addChild(wallNoise)
   return container
 }

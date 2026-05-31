@@ -14,6 +14,7 @@ import type {
   ApiCheckUniqueObjectNameResponse,
   ApiGameTickResponse,
   RoomHistoryChunk,
+  ApiRoomDecorationsResponse,
 } from '../../types/api.js'
 import { createPowerCreepsEndpoints, type PowerCreepsEndpoints } from './power-creeps.js'
 
@@ -21,6 +22,7 @@ export interface GameEndpoints {
   roomTerrain(room: string, shard?: string | null): Promise<ApiRoomTerrainResponse>
   /** @deprecated Not available on private servers (backend-local). Room objects are delivered via the `room:<name>` WebSocket channel. */
   roomObjects(room: string, shard?: string | null): Promise<ApiRoomObjectsResponse>
+  roomDecorations(room: string, shard?: string | null): Promise<ApiRoomDecorationsResponse>
   roomStatus(room: string, shard?: string | null): Promise<{ ok: number; status: string; novice?: string }>
   roomOverview(room: string, interval?: number, shard?: string | null): Promise<unknown>
   time(shard?: string | null): Promise<{ ok: number; time: number }>
@@ -62,10 +64,13 @@ function withShard(params: Record<string, unknown>, shard?: string | null): Reco
   return params
 }
 
-export function createGameEndpoints(http: HttpClient): GameEndpoints {
+export function createGameEndpoints(http: HttpClient, decorationsMock?: ApiRoomDecorationsResponse): GameEndpoints {
   return {
     roomTerrain: (room, shard) => http.request('GET', '/api/game/room-terrain', withShard({ room, encoded: 1 }, shard)),
     roomObjects: (room, shard) => http.request('GET', '/api/game/room-objects', withShard({ room }, shard)),
+    roomDecorations: decorationsMock
+      ? () => Promise.resolve(decorationsMock)
+      : (room, shard) => http.request('GET', '/api/game/room-decorations', withShard({ room }, shard)),
     roomStatus: (room, shard) => http.request('GET', '/api/game/room-status', withShard({ room }, shard)),
     roomOverview: (room, interval = 8, shard) => http.request('GET', '/api/game/room-overview', withShard({ room, interval }, shard)),
     time: (shard) => http.request('GET', '/api/game/time', withShard({}, shard)),

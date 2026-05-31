@@ -2,11 +2,13 @@ import { createEffect, createSignal, onCleanup, onMount, untrack, Show } from 's
 
 import { RoomRenderer } from '~/renderer/RoomRenderer.js'
 import { createTerrainLayer, setTerrainEffectsVisible } from '~/renderer/TerrainLayer.js'
+import { parseRoomDecorations, type RoomDecoration } from '~/renderer/roomDecorations.js'
+import { OBJ_ROAD } from '~/renderer/colors.js'
 import { ObjectLayer } from '~/renderer/ObjectLayer.js'
 import { ActionAnimationLayer } from '~/renderer/ActionAnimationLayer.js'
 import { VisualLayer } from '~/renderer/VisualLayer.js'
 import { client, gameTime, setGameTime, recordGameTime, tickDuration, worldBounds, userInfo, worldStatus, serverVersion, isPrivateServer } from '~/stores/clientStore.js'
-import { showCreepLabels, terrainEffects, showRoomVisuals, spriteTheme } from '~/stores/settingsStore.js'
+import { showCreepLabels, terrainEffects, showRoomVisuals, spriteTheme, showRoomDecorations } from '~/stores/settingsStore.js'
 import { defaultSpriteTheme } from '~/renderer/themes/default.js'
 import { sharedAtlasCache } from '~/renderer/AtlasCache.js'
 import { setSelection, clearSelection, selection, updateSelectionWithDiff, updateSelectionFromObjects, createSelectedObject } from '~/stores/selectionStore.js'
@@ -40,6 +42,7 @@ export function RoomViewer(props: RoomViewerProps) {
   let terrainLayerRef: ReturnType<typeof createTerrainLayer> | null = null
   const [renderer, setRenderer] = createSignal<RoomRenderer | null>(null)
   const [terrain, setTerrain] = createSignal<{ room: string, data: RoomTerrain } | null>(null)
+  const [roomDecoration, setRoomDecoration] = createSignal<{ room: string; decoration: RoomDecoration } | null>(null)
   const [objectState, setObjectState] = createSignal<{ objects: RoomObjectMap, diff?: RoomObjectDiff, users?: Record<string, { _id: string; username: string; badge?: Badge }> } | null>(null)
   const [visualState, setVisualState] = createSignal<string>('')
   const [sliderValue, setSliderValue] = createSignal(historyTick())
@@ -76,6 +79,7 @@ export function RoomViewer(props: RoomViewerProps) {
 
     log(`navigate → ${room} (shard=${shard ?? 'default'})`)
     setTerrain(null)
+    setRoomDecoration(null)
     setObjectState(null)
     setVisualState('')
     setGameTime(null)
@@ -100,6 +104,17 @@ export function RoomViewer(props: RoomViewerProps) {
         }
       })
       .catch((err) => { if (!terrainCancelled) error(`terrain load failed for ${room}:`, err) })
+
+    if (untrack(showRoomDecorations)) {
+      c.http.game.roomDecorations(room, shard)
+        .then((resp) => {
+          if (!terrainCancelled) {
+            log(`decorations loaded — ${room}: ${resp.decorations.length} item(s)`)
+            setRoomDecoration({ room, decoration: parseRoomDecorations(resp) })
+          }
+        })
+        .catch((err) => { if (!terrainCancelled) log(`no decorations for ${room}: ${err}`) })
+    }
 
     group.add(c.stores.room.subscribe(room, shard))
     group.add(c.stores.room.on('room:error', (data) => {
@@ -280,7 +295,8 @@ export function RoomViewer(props: RoomViewerProps) {
     const t = untrack(terrain)
     if (t && t.room === props.room) {
       log(`terrain applied immediately (pre-loaded) — ${props.room}`)
-      terrainLayerRef = createTerrainLayer(t.data, r.app.renderer)
+      const dec = untrack(roomDecoration)
+      terrainLayerRef = createTerrainLayer(t.data, r.app.renderer, dec?.room === props.room ? dec.decoration.terrain : undefined)
       setTerrainEffectsVisible(terrainLayerRef, untrack(terrainEffects))
       r.world.addChildAt(terrainLayerRef, 0)
       r.bringNavOverlayToTop()
@@ -383,10 +399,48 @@ export function RoomViewer(props: RoomViewerProps) {
       return
     }
     log(`terrain applied (async) — ${props.room}`)
+    const dec = untrack(roomDecoration)
+    terrainLayerRef = createTerrainLayer(t.data, r.app.renderer, dec?.room === props.room ? dec.decoration.terrain : undefined)
+    setTerrainEffectsVisible(terrainLayerRef, untrack(terrainEffects))
+    r.world.addChildAt(terrainLayerRef, 0)
+    r.bringNavOverlayToTop()
+  })
+
+  // Clear decorations when the setting is turned off
+  createEffect(() => {
+    if (showRoomDecorations()) return
+    setRoomDecoration(null)
+    const r = untrack(renderer)
+    const t = untrack(terrain)
+    if (!r || !t || t.room !== props.room) return
+    if (!terrainLayerRef?.parent) return
+    terrainLayerRef.destroy()
     terrainLayerRef = createTerrainLayer(t.data, r.app.renderer)
     setTerrainEffectsVisible(terrainLayerRef, untrack(terrainEffects))
     r.world.addChildAt(terrainLayerRef, 0)
     r.bringNavOverlayToTop()
+    objLayer?.setRoadColor(OBJ_ROAD)
+  })
+
+  // Re-apply terrain colors when decoration arrives after terrain (common async case)
+  createEffect(() => {
+    const r = renderer()
+    const dec = roomDecoration()
+    const t = untrack(terrain)
+    if (!r || !dec || dec.room !== props.room) return
+    if (!t || t.room !== props.room) return
+    if (!terrainLayerRef?.parent) return
+
+    log(`decoration arrived, rebuilding terrain layer — ${props.room}`)
+    terrainLayerRef.destroy()
+    terrainLayerRef = createTerrainLayer(t.data, r.app.renderer, dec.decoration.terrain)
+    setTerrainEffectsVisible(terrainLayerRef, untrack(terrainEffects))
+    r.world.addChildAt(terrainLayerRef, 0)
+    r.bringNavOverlayToTop()
+
+    if (objLayer && dec.decoration.roadColor != null) {
+      objLayer.setRoadColor(dec.decoration.roadColor)
+    }
   })
 
   // Render objects when they update
@@ -407,6 +461,10 @@ export function RoomViewer(props: RoomViewerProps) {
       objLayer = new ObjectLayer(r.app.ticker, showCreepLabels(), userInfo()?._id, userInfo()?.badge, users)
       objLayer.setTheme(resolveTheme(untrack(spriteTheme)), sharedAtlasCache)
       objLayer.setInstantMode(untrack(historyMode))
+      const dec = untrack(roomDecoration)
+      if (dec?.room === props.room && dec.decoration.roadColor != null) {
+        objLayer.setRoadColor(dec.decoration.roadColor)
+      }
       objLayer.container.label = 'objects'
       r.world.addChild(objLayer.container)
       r.bringNavOverlayToTop()
