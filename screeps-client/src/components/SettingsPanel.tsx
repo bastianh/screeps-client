@@ -7,6 +7,7 @@ import {
   showUnclaimableRooms, setShowUnclaimableRooms,
   terrainEffects, setTerrainEffects,
   showRoomDecorations, setShowRoomDecorations,
+  roomDarkOverlay, setRoomDarkOverlay,
   spriteTheme, setSpriteTheme,
   verboseCreepDetails, setVerboseCreepDetails,
 } from '~/stores/settingsStore.js'
@@ -226,6 +227,12 @@ export function SettingsPanel(props: { onClose: () => void }) {
               description="Load player-activated theme decorations (floor, wall, road colors) from the server."
               value={showRoomDecorations()}
               onChange={setShowRoomDecorations}
+            />
+            <Toggle
+              label="Dark overlay + lights"
+              description="Darken the room and add per-object light glows."
+              value={roomDarkOverlay()}
+              onChange={setRoomDarkOverlay}
             />
             <div style={{ display: 'flex', 'flex-direction': 'column', gap: '4px' }}>
               <label style={{ 'font-size': '13px', 'font-weight': '500' }}>Structure theme</label>

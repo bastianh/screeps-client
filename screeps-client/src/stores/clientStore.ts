@@ -1,5 +1,5 @@
 import { createSignal } from 'solid-js'
-import { ScreepsClient, PasswordAuth, TokenAuth, GuestAuth, IndexedDBStorage } from 'screeps-connectivity'
+import { ScreepsClient, PasswordAuth, TokenAuth, GuestAuth, IndexedDBStorage, ROOM_DECORATIONS_MOCK } from 'screeps-connectivity'
 import type { AuthStrategy, StorageAdapter, UserInfo, ServerVersion, WorldInfo, WorldStatus, ApiRoomDecorationsResponse } from 'screeps-connectivity'
 import { addToast } from './toastStore.js'
 import { isEmbedded, embeddedServerUrl } from '~/utils/embedded.js'
@@ -110,7 +110,7 @@ export async function connect(opts: {
       storage: opts.storage ?? new IndexedDBStorage('screeps-client'),
       debug: false,
       serverPassword: opts.serverPassword,
-      decorationsMock: opts.decorationsMock,
+      decorationsMock: ROOM_DECORATIONS_MOCK,
     })
 
     screepsClient.http.on('http:tokenRefresh', ({ token }) => {

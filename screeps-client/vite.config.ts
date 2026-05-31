@@ -60,10 +60,18 @@ export default defineConfig(({ mode }) => {
       host: viteHost ? true : undefined,
       allowedHosts: viteHost ? [viteHost] : undefined,
       hmr: viteHost ? { protocol: 'wss', clientPort: viteHostPort } : undefined,
-      proxy: proxyTarget ? {
-        '/api': { target: proxyTarget, changeOrigin: true, agent: debugAgent, secure: !debugAgent },
-        '/socket': { target: proxyTarget, changeOrigin: true, ws: true, agent: debugAgent, secure: !debugAgent },
-      } : undefined,
+      proxy: {
+        // Proxy Screeps decoration textures from S3 to avoid CORS in dev
+        '/__screeps_s3__': {
+          target: 'https://s3.amazonaws.com',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/__screeps_s3__/, ''),
+        },
+        ...(proxyTarget ? {
+          '/api': { target: proxyTarget, changeOrigin: true, agent: debugAgent, secure: !debugAgent },
+          '/socket': { target: proxyTarget, changeOrigin: true, ws: true, agent: debugAgent, secure: !debugAgent },
+        } : {}),
+      },
     },
     resolve: {
       conditions: ['development'],

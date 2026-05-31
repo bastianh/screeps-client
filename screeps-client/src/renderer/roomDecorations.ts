@@ -1,4 +1,4 @@
-import type { ApiRoomDecorationsResponse, ApiRoomDecorationActive } from 'screeps-connectivity'
+import type { ApiRoomDecorationsResponse, ApiRoomDecorationActive, ApiRoomDecorationDef } from 'screeps-connectivity'
 import type { TerrainDecoration } from './TerrainLayer.js'
 
 /** Parsed room decoration ready for use by renderer layers. */
@@ -27,7 +27,7 @@ function num(v: number | string | undefined, fallback: number): number {
   return isNaN(n) ? fallback : n
 }
 
-function parseFloorLandscape(a: ApiRoomDecorationActive, out: RoomDecoration): void {
+function parseFloorLandscape(a: ApiRoomDecorationActive, d: ApiRoomDecorationDef, out: RoomDecoration): void {
   const t: TerrainDecoration = out.terrain ?? {}
   if (a.floorBackgroundColor) {
     t.floorColor = applyBrightness(a.floorBackgroundColor, num(a.floorBackgroundBrightness, 1))
@@ -42,10 +42,18 @@ function parseFloorLandscape(a: ApiRoomDecorationActive, out: RoomDecoration): v
   if (a.roadsColor) {
     out.roadColor = applyBrightness(a.roadsColor, num(a.roadsBrightness, 1))
   }
+  if (d.floorForegroundUrl) {
+    t.floorTextureUrl = d.floorForegroundUrl
+    if (a.floorForegroundColor) {
+      t.floorTextureTint = applyBrightness(a.floorForegroundColor, num(a.floorForegroundBrightness, 1))
+    }
+    t.floorTextureAlpha = num(a.floorForegroundAlpha, 1)
+    t.floorTextureTileScale = num((a as Record<string, unknown>)['tileScale'] as number | string | undefined ?? d.tileScale, 1)
+  }
   out.terrain = t
 }
 
-function parseWallLandscape(a: ApiRoomDecorationActive, out: RoomDecoration): void {
+function parseWallLandscape(a: ApiRoomDecorationActive, d: ApiRoomDecorationDef, out: RoomDecoration): void {
   const t: TerrainDecoration = out.terrain ?? {}
   if (a.backgroundColor) {
     t.wallFillColor = applyBrightness(a.backgroundColor, num(a.backgroundBrightness, 1))
@@ -55,6 +63,14 @@ function parseWallLandscape(a: ApiRoomDecorationActive, out: RoomDecoration): vo
   }
   if (a.strokeWidth != null) {
     t.wallBorderWidth = num(a.strokeWidth, 10) / 250
+  }
+  if (d.foregroundUrl) {
+    t.wallTextureUrl = d.foregroundUrl
+    if (a.foregroundColor) {
+      t.wallTextureTint = applyBrightness(a.foregroundColor, num(a.foregroundBrightness, 1))
+    }
+    t.wallTextureAlpha = num(a.foregroundAlpha, 1)
+    t.wallTextureTileScale = num((a as Record<string, unknown>)['tileScale'] as number | string | undefined ?? d.tileScale, 1)
   }
   out.terrain = t
 }
@@ -68,8 +84,8 @@ export function parseRoomDecorations(response: ApiRoomDecorationsResponse): Room
   const out: RoomDecoration = {}
   for (const item of response.decorations) {
     const type = item.decoration.type
-    if (type === 'floorLandscape')  parseFloorLandscape(item.active, out)
-    else if (type === 'wallLandscape') parseWallLandscape(item.active, out)
+    if (type === 'floorLandscape')  parseFloorLandscape(item.active, item.decoration, out)
+    else if (type === 'wallLandscape') parseWallLandscape(item.active, item.decoration, out)
   }
   return out
 }

@@ -1,4 +1,4 @@
-import { Container, Graphics, BlurFilter, NoiseFilter, Rectangle, Sprite, type DestroyOptions, type Renderer, type StrokeStyle } from 'pixi.js'
+import { Assets, Container, Graphics, BlurFilter, NoiseFilter, Rectangle, Sprite, TilingSprite, type DestroyOptions, type Renderer, type StrokeStyle } from 'pixi.js'
 import { TerrainType, RoomTerrain } from 'screeps-connectivity'
 import { TILE_SIZE } from './RoomRenderer.js'
 import {
@@ -6,6 +6,14 @@ import {
   TERRAIN_WALL_FILL, TERRAIN_WALL_BORDER, TERRAIN_WALL_NOISE,
   TERRAIN_SWAMP_FILL, TERRAIN_SWAMP_BORDER, TERRAIN_SWAMP_GLOW,
 } from './colors.js'
+
+// In dev, route Screeps S3 decoration textures through the Vite proxy to avoid CORS.
+function devProxyUrl(url: string): string {
+  if (import.meta.env.DEV && url.startsWith('https://s3.amazonaws.com/')) {
+    return url.replace('https://s3.amazonaws.com', '/__screeps_s3__')
+  }
+  return url
+}
 
 export interface TerrainDecoration {
   /** Floor background color (replaces plain ground color) */
@@ -26,6 +34,22 @@ export interface TerrainDecoration {
   wallBorderWidth?: number
   /** Wall noise overlay color */
   wallNoiseColor?: number
+  /** URL for a tiling floor texture overlay (floorLandscape foreground) */
+  floorTextureUrl?: string
+  /** Tint color for the floor texture */
+  floorTextureTint?: number
+  /** Alpha for the floor texture (0–1) */
+  floorTextureAlpha?: number
+  /** Tile scale for the floor texture (default 1) */
+  floorTextureTileScale?: number
+  /** URL for a tiling wall texture overlay (wallLandscape foreground), masked to wall shape */
+  wallTextureUrl?: string
+  /** Tint color for the wall texture */
+  wallTextureTint?: number
+  /** Alpha for the wall texture (0–1) */
+  wallTextureAlpha?: number
+  /** Tile scale for the wall texture (default 1) */
+  wallTextureTileScale?: number
 }
 
 interface ResolvedColors {
@@ -213,35 +237,36 @@ function drawExits(g: Graphics, terrain: RoomTerrain) {
   }
 }
 
-function createMainTerrain(terrain: RoomTerrain, colors: ResolvedColors): Graphics {
+function createFloorBase(colors: ResolvedColors): Graphics {
   const g = new Graphics()
-
-  // Base plain layer
   g.rect(0, 0, 50 * TILE_SIZE, 50 * TILE_SIZE)
   g.fill(colors.floorColor)
+  return g
+}
 
-  // Per terrain type, two passes:
-  //   Pass 1: outside-aligned stroke (border) — paints a halo around the path
-  //   Pass 2: fill (inner) — covers any stroke that landed inside the connected shape,
-  //           leaving only the outer halo visible as a border.
-  // cap/join: 'round' — quadrant paths are open, so each ends with a stroke cap
-  // at a side midpoint (top-center, left-center, …). With butt caps the strokes
-  // from the two neighbouring quadrants don't quite meet, leaving 1-px notches
-  // at every convex apex. Round caps/joins make them overlap cleanly.
+// Two passes per terrain type:
+//   Pass 1: outside-aligned stroke (border) — paints a halo around the path
+//   Pass 2: fill (inner) — covers any stroke that landed inside the shape,
+//           leaving only the outer halo visible as a border.
+// cap/join: 'round' — quadrant paths are open so each ends with a stroke cap at a
+// side midpoint. Butt caps leave 1-px notches at convex apexes; round caps overlap cleanly.
+
+function createSwampShapes(terrain: RoomTerrain, colors: ResolvedColors): Graphics {
+  const g = new Graphics()
   const swampStroke: StrokeStyle = { color: colors.swampBorderColor, width: TILE_SIZE * colors.swampBorderWidth, alignment: 0, cap: 'round', join: 'round' }
   drawTerrainQuadrants(g, terrain, TerrainType.Swamp, (gg) => gg.stroke(swampStroke))
   drawTerrainQuadrants(g, terrain, TerrainType.Swamp, (gg) => gg.fill(colors.swampFillColor))
+  return g
+}
 
+function createWallShapes(terrain: RoomTerrain, colors: ResolvedColors): Graphics {
+  const g = new Graphics()
   const wallStroke: StrokeStyle = { color: colors.wallBorderColor, width: TILE_SIZE * colors.wallBorderWidth, alignment: 0, cap: 'round', join: 'round' }
   drawTerrainQuadrants(g, terrain, TerrainType.Wall, (gg) => gg.stroke(wallStroke))
   drawTerrainQuadrants(g, terrain, TerrainType.Wall, (gg) => gg.fill(colors.wallFillColor))
-
   drawExits(g, terrain)
-
-  // Room border
   g.rect(0, 0, 50 * TILE_SIZE, 50 * TILE_SIZE)
   g.stroke({ width: 1, color: TERRAIN_BORDER })
-
   return g
 }
 
@@ -288,9 +313,45 @@ export function createTerrainLayer(terrain: RoomTerrain, renderer: Renderer, dec
     baseDestroy(options)
   }
 
-  container.addChild(createMainTerrain(terrain, colors))
-  container.addChild(createSwampGlow(terrain, colors))
-  container.addChild(wallNoise)
+  container.addChild(createFloorBase(colors))           // index 0: plain floor colour
+  container.addChild(createSwampShapes(terrain, colors)) // index 1: swamp fills + borders
+  container.addChild(createWallShapes(terrain, colors))  // index 2: wall fills + borders + exits + room border
+  container.addChild(createSwampGlow(terrain, colors))   // index 3
+  container.addChild(wallNoise)                          // index 4
+
+  if (decoration?.wallTextureUrl) wallNoise.visible = false
+
+  const W = 50 * TILE_SIZE
+
+  if (decoration?.floorTextureUrl) {
+    const { floorTextureUrl, floorTextureTint = 0xffffff, floorTextureAlpha = 1, floorTextureTileScale = 1 } = decoration
+    Assets.load(devProxyUrl(floorTextureUrl)).then((texture) => {
+      if (container.destroyed) return
+      const sprite = new TilingSprite({ texture, width: W, height: W })
+      sprite.tint = floorTextureTint
+      sprite.alpha = floorTextureAlpha
+      sprite.tileScale.set(floorTextureTileScale)
+      // Insert between swamp shapes (1) and wall shapes (2): texture covers swamp, walls cover texture
+      container.addChildAt(sprite, 2)
+    }).catch(() => { /* texture load failed — silently skip */ })
+  }
+
+  if (decoration?.wallTextureUrl) {
+    const { wallTextureUrl, wallTextureTint = 0xffffff, wallTextureAlpha = 1, wallTextureTileScale = 1 } = decoration
+    Assets.load(devProxyUrl(wallTextureUrl)).then((texture) => {
+      if (container.destroyed) return
+      const sprite = new TilingSprite({ texture, width: W, height: W })
+      sprite.tint = wallTextureTint
+      sprite.alpha = wallTextureAlpha
+      sprite.tileScale.set(wallTextureTileScale)
+      const maskG = new Graphics()
+      drawTerrainQuadrants(maskG, terrain, TerrainType.Wall, (gg) => gg.fill(0xffffff))
+      container.addChild(maskG)
+      sprite.mask = maskG
+      container.addChild(sprite)
+    }).catch(() => { /* texture load failed — silently skip */ })
+  }
+
   return container
 }
 

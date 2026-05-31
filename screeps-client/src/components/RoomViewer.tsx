@@ -1,6 +1,5 @@
 import { createEffect, createSignal, onCleanup, onMount, untrack, Show } from 'solid-js'
-
-import { RoomRenderer } from '~/renderer/RoomRenderer.js'
+import { RoomRenderer, Z } from '~/renderer/RoomRenderer.js'
 import { createTerrainLayer, setTerrainEffectsVisible } from '~/renderer/TerrainLayer.js'
 import { parseRoomDecorations, type RoomDecoration } from '~/renderer/roomDecorations.js'
 import { OBJ_ROAD } from '~/renderer/colors.js'
@@ -8,7 +7,7 @@ import { ObjectLayer } from '~/renderer/ObjectLayer.js'
 import { ActionAnimationLayer } from '~/renderer/ActionAnimationLayer.js'
 import { VisualLayer } from '~/renderer/VisualLayer.js'
 import { client, gameTime, setGameTime, recordGameTime, tickDuration, worldBounds, userInfo, worldStatus, serverVersion, isPrivateServer } from '~/stores/clientStore.js'
-import { showCreepLabels, terrainEffects, showRoomVisuals, spriteTheme, showRoomDecorations } from '~/stores/settingsStore.js'
+import { showCreepLabels, terrainEffects, showRoomVisuals, spriteTheme, showRoomDecorations, roomDarkOverlay } from '~/stores/settingsStore.js'
 import { defaultSpriteTheme } from '~/renderer/themes/default.js'
 import { sharedAtlasCache } from '~/renderer/AtlasCache.js'
 import { setSelection, clearSelection, selection, updateSelectionWithDiff, updateSelectionFromObjects, createSelectedObject } from '~/stores/selectionStore.js'
@@ -298,7 +297,8 @@ export function RoomViewer(props: RoomViewerProps) {
       const dec = untrack(roomDecoration)
       terrainLayerRef = createTerrainLayer(t.data, r.app.renderer, dec?.room === props.room ? dec.decoration.terrain : undefined)
       setTerrainEffectsVisible(terrainLayerRef, untrack(terrainEffects))
-      r.world.addChildAt(terrainLayerRef, 0)
+      terrainLayerRef.zIndex = Z.terrain
+      r.world.addChild(terrainLayerRef)
       r.bringNavOverlayToTop()
     }
 
@@ -451,6 +451,7 @@ export function RoomViewer(props: RoomViewerProps) {
     if (!state) {
       objLayer?.clear()
       animLayer?.clear()
+      r.clearLighting()
       return
     }
 
@@ -466,16 +467,17 @@ export function RoomViewer(props: RoomViewerProps) {
         objLayer.setRoadColor(dec.decoration.roadColor)
       }
       objLayer.container.label = 'objects'
+      objLayer.container.zIndex = Z.objects
       r.world.addChild(objLayer.container)
-      r.bringNavOverlayToTop()
 
       animLayer = new ActionAnimationLayer(r.app.ticker)
       animLayer.container.label = 'animations'
+      animLayer.container.zIndex = Z.animations
       r.world.addChild(animLayer.container)
 
       visualLayer = new VisualLayer()
+      visualLayer.container.zIndex = Z.visuals
       r.world.addChild(visualLayer.container)
-      r.bringNavOverlayToTop()
 
       // Wire up tile click → current room interaction mode.
       // setTileHandlers is registered once for the lifetime of the renderer;
@@ -696,6 +698,7 @@ export function RoomViewer(props: RoomViewerProps) {
       }
     }
     objLayer.pruneSayBubblesExcept(sayingIds)
+    if (untrack(roomDarkOverlay)) r.updateLighting(objs)
   })
 
   // Update RoomVisuals overlay each tick (layer is created in the objects effect).
@@ -716,6 +719,16 @@ export function RoomViewer(props: RoomViewerProps) {
   createEffect(() => {
     const enabled = terrainEffects()
     if (terrainLayerRef) setTerrainEffectsVisible(terrainLayerRef, enabled)
+  })
+
+  // Sync dark overlay + light layer visibility
+  createEffect(() => {
+    const r = renderer()
+    if (!r) return
+    const enabled = roomDarkOverlay()
+    r.darkOverlay.visible = enabled
+    r.lightLayer.visible = enabled
+    if (!enabled) r.clearLighting()
   })
 
   // Rebuild object layer when sprite theme changes
