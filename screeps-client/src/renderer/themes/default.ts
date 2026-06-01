@@ -1,9 +1,10 @@
 import type { Theme } from './Theme.js'
+import { basePath } from '../../utils/embedded.js'
 
 export const defaultSpriteTheme: Theme = {
   id: 'default',
   name: 'Default',
-  atlasUrl: '/themes/default/test.json',
+  atlasUrl: `${basePath()}/themes/default/test.json`,
   sprites: {
     storage: {
       layers: [
