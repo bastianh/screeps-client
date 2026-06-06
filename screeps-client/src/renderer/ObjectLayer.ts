@@ -15,6 +15,7 @@ import {
   ENERGY_FILL,
   CREEP_RING_DARK, CREEP_NOTCH,
   ST_DARK, ST_GRAY, ST_LIGHT, ST_OUTLINE, ST_ENERGY, ST_POWER, ST_RAMPART,
+  TERRAIN_WALL_BORDER,
   FLAG_COLORS,
   CS_OWN, CS_FOREIGN, CS_OWN_DARK, CS_OWN_LIGHT, CS_FOREIGN_DARK, CS_FOREIGN_LIGHT,
 } from './colors.js'
@@ -811,11 +812,9 @@ function createObjectVisual(
       // but we still need the empty container for selection tracking
       break
     }
-    case 'wall': {
-      g.circle(cx, cy, TILE_SIZE * 0.4)
-      g.fill(ST_DARK)
-      g.circle(cx, cy, TILE_SIZE * 0.4)
-      g.stroke({ width: TILE_SIZE * 0.05, color: ST_LIGHT })
+    case 'constructedWall': {
+      // Intentionally left empty: rendering is batched in ObjectLayer's wallGraphics
+      // but we still need the empty container for selection tracking
       break
     }
     case 'rampart': {
@@ -1236,7 +1235,7 @@ function createObjectVisual(
     }
   }
 
-  if (obj.type !== 'extension' && obj.type !== 'road' && obj.type !== 'creep' && obj.type !== 'tower' && obj.type !== 'controller' && obj.type !== 'flag' && obj.type !== 'source' && obj.type !== 'constructionSite' && obj.type !== 'mineral' && obj.type !== 'tombstone' && obj.type !== 'ruin' && obj.type !== 'storage') {
+  if (obj.type !== 'extension' && obj.type !== 'road' && obj.type !== 'creep' && obj.type !== 'tower' && obj.type !== 'controller' && obj.type !== 'flag' && obj.type !== 'source' && obj.type !== 'constructionSite' && obj.type !== 'mineral' && obj.type !== 'tombstone' && obj.type !== 'ruin' && obj.type !== 'storage' && obj.type !== 'constructedWall' && obj.type !== 'rampart') {
     container.addChild(g)
   }
 
@@ -1396,6 +1395,8 @@ export class ObjectLayer {
   private rawObjects = new Map<string, RoomObject>()
   private roadGraphics: Graphics
   private rampartGraphics: Graphics
+  private wallGraphics: Graphics
+  private wallMarkGraphics: Graphics
   private ticker: Ticker | null = null
   private tickerCallback: (() => void) | null = null
   private extAnimations = new Map<string, ExtAnimation>()
@@ -1427,6 +1428,12 @@ export class ObjectLayer {
     this.users = users
     this.container = new Container()
     this.container.sortableChildren = true
+    this.wallGraphics = new Graphics()
+    this.wallGraphics.zIndex = -3
+    this.container.addChild(this.wallGraphics)
+    this.wallMarkGraphics = new Graphics()
+    this.wallMarkGraphics.zIndex = -2
+    this.container.addChild(this.wallMarkGraphics)
     this.rampartGraphics = new Graphics()
     this.rampartGraphics.zIndex = -1
     this.container.addChild(this.rampartGraphics)
@@ -2095,12 +2102,118 @@ export class ObjectLayer {
       roadsChanged = true
     }
 
+    this.redrawWalls()
     this.redrawRamparts()
     if (roadsChanged) {
       this.redrawRoads()
     }
     this.refreshForeignCreepLabels()
     this.refreshForeignCreepBadges()
+  }
+
+  private redrawWalls(): void {
+    this.wallGraphics.clear()
+    this.wallMarkGraphics.clear()
+
+    const T = TILE_SIZE
+    const R = T / 2
+    const grid = Array.from({ length: 50 }, () => new Array<boolean>(50).fill(false))
+    const walls: Array<{ x: number; y: number }> = []
+
+    for (const obj of this.rawObjects.values()) {
+      if (obj.type === 'constructedWall' && typeof obj.x === 'number' && typeof obj.y === 'number' &&
+          obj.x >= 0 && obj.x < 50 && obj.y >= 0 && obj.y < 50) {
+        grid[obj.x][obj.y] = true
+        walls.push({ x: obj.x, y: obj.y })
+      }
+    }
+
+    if (walls.length === 0) return
+
+    const drawQuadrants = (g: Graphics) => {
+      let drawn = false
+      for (let y = 0; y < 50; y++) {
+        for (let x = 0; x < 50; x++) {
+          const center = grid[x][y]
+          const top    = y > 0  && grid[x][y - 1]
+          const bottom = y < 49 && grid[x][y + 1]
+          const left   = x > 0  && grid[x - 1][y]
+          const right  = x < 49 && grid[x + 1][y]
+          const cx = x * T + R
+          const cy = y * T + R
+
+          // Top-Left
+          if (center) {
+            drawn = true
+            if (!top && !left && y > 0 && x > 0) {
+              g.moveTo(cx, y * T); g.arc(cx, cy, R, -Math.PI / 2, Math.PI, true); g.lineTo(cx, cy); g.closePath()
+            } else {
+              g.rect(x * T, y * T, R, R)
+            }
+          } else if (top && left && grid[x - 1][y - 1]) {
+            drawn = true
+            g.moveTo(cx, y * T); g.lineTo(x * T, y * T); g.lineTo(x * T, cy)
+            g.arc(cx, cy, R, Math.PI, -Math.PI / 2, false); g.closePath()
+          }
+
+          // Top-Right
+          if (center) {
+            if (!top && !right && y > 0 && x < 49) {
+              g.moveTo(cx, y * T); g.arc(cx, cy, R, -Math.PI / 2, 0, false); g.lineTo(cx, cy); g.closePath()
+            } else {
+              g.rect(cx, y * T, R, R)
+            }
+          } else if (top && right && grid[x + 1][y - 1]) {
+            drawn = true
+            g.moveTo(cx, y * T); g.lineTo(x * T + T, y * T); g.lineTo(x * T + T, cy)
+            g.arc(cx, cy, R, 0, -Math.PI / 2, true); g.closePath()
+          }
+
+          // Bottom-Left
+          if (center) {
+            if (!bottom && !left && y < 49 && x > 0) {
+              g.moveTo(x * T, cy); g.arc(cx, cy, R, Math.PI, Math.PI / 2, true); g.lineTo(cx, cy); g.closePath()
+            } else {
+              g.rect(x * T, cy, R, R)
+            }
+          } else if (bottom && left && grid[x - 1][y + 1]) {
+            drawn = true
+            g.moveTo(x * T, cy); g.lineTo(x * T, y * T + T); g.lineTo(cx, y * T + T)
+            g.arc(cx, cy, R, Math.PI / 2, Math.PI, false); g.closePath()
+          }
+
+          // Bottom-Right
+          if (center) {
+            if (!bottom && !right && y < 49 && x < 49) {
+              g.moveTo(cx, y * T + T); g.arc(cx, cy, R, Math.PI / 2, 0, true); g.lineTo(cx, cy); g.closePath()
+            } else {
+              g.rect(cx, cy, R, R)
+            }
+          } else if (bottom && right && grid[x + 1][y + 1]) {
+            drawn = true
+            g.moveTo(cx, y * T + T); g.lineTo(x * T + T, y * T + T); g.lineTo(x * T + T, cy)
+            g.arc(cx, cy, R, 0, Math.PI / 2, false); g.closePath()
+          }
+        }
+      }
+      return drawn
+    }
+
+    const borderStroke = { color: TERRAIN_WALL_BORDER, width: T * 0.06, alignment: 0 as const, cap: 'round' as const, join: 'round' as const }
+    if (drawQuadrants(this.wallGraphics)) this.wallGraphics.stroke(borderStroke)
+    drawQuadrants(this.wallGraphics)
+    this.wallGraphics.fill(ST_DARK)
+
+    // Dash marks — two staggered short dashes per tile to distinguish from terrain walls
+    const dashW = T * 0.32
+    const dashH = T * 0.09
+    for (const { x, y } of walls) {
+      const tx = x * T
+      const ty = y * T
+      this.wallMarkGraphics.rect(tx + T * 0.12, ty + T * 0.30, dashW, dashH)
+      this.wallMarkGraphics.rect(tx + T * 0.56, ty + T * 0.58, dashW, dashH)
+    }
+    this.wallMarkGraphics.fill({ color: 0x404040 })
   }
 
   private redrawRoads(): void {

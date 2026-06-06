@@ -12,7 +12,6 @@ export const Z = {
   objects:    10,
   animations: 20,
   darkOverlay:30,
-  light:      31,
   visuals:    40,
   hover:      50,
   nav:        60,
@@ -24,11 +23,11 @@ export class RoomRenderer {
   readonly app: Application
   readonly world: Container
   readonly hoverLayer: HoverHighlightLayer
-  readonly darkOverlay: Graphics
+  readonly darkOverlay: Sprite
   readonly lightLayer: Container
-  private lightTexture: Texture | null = null
-  private lightPool: Sprite[] = []
-  private activeLights: Sprite[] = []
+  private readonly overlayCanvas: HTMLCanvasElement
+  private readonly overlayCtx: CanvasRenderingContext2D
+  private readonly overlayTexture: Texture
   private destroyed = false
   private canDrag = false
   private container: HTMLElement
@@ -49,16 +48,21 @@ export class RoomRenderer {
     this.world = new Container({ sortableChildren: true })
     this.app.stage.addChild(this.world)
 
-    this.darkOverlay = new Graphics()
+    this.overlayCanvas = document.createElement('canvas')
+    this.overlayCanvas.width = ROOM_SIZE
+    this.overlayCanvas.height = ROOM_SIZE
+    this.overlayCtx = this.overlayCanvas.getContext('2d')!
+    this.redrawOverlayCanvas([])
+    this.overlayTexture = Texture.from(this.overlayCanvas)
+
+    this.darkOverlay = new Sprite(this.overlayTexture)
     this.darkOverlay.label = 'darkOverlay'
-    this.darkOverlay.rect(0, 0, ROOM_SIZE, ROOM_SIZE).fill({ color: 0x000000, alpha: 0.4 })
     this.darkOverlay.zIndex = Z.darkOverlay
     this.world.addChild(this.darkOverlay)
 
+    // Kept as public dummy so external code can toggle .visible alongside darkOverlay
     this.lightLayer = new Container()
     this.lightLayer.label = 'lightLayer'
-    this.lightLayer.zIndex = Z.light
-    this.world.addChild(this.lightLayer)
 
     this.hoverLayer = new HoverHighlightLayer(app.ticker)
     this.hoverLayer.container.zIndex = Z.hover
@@ -596,7 +600,7 @@ export class RoomRenderer {
     // Remove all children except navOverlay and hoverLayer
     for (let i = this.world.children.length - 1; i >= 0; i--) {
       const child = this.world.children[i]
-      if (child !== this.navOverlay && child !== this.hoverLayer.container && child !== this.darkOverlay && child !== this.lightLayer) {
+      if (child !== this.navOverlay && child !== this.hoverLayer.container && child !== this.darkOverlay) {
         this.world.removeChild(child)
       }
     }
@@ -611,49 +615,43 @@ export class RoomRenderer {
   }
 
   clearLighting(): void {
-    for (const s of this.activeLights) {
-      this.lightLayer.removeChild(s)
-      this.lightPool.push(s)
-    }
-    this.activeLights.length = 0
+    this.redrawOverlayCanvas([])
+    this.overlayTexture.source.update()
   }
 
   updateLighting(objects: Record<string, { type?: unknown; x?: unknown; y?: unknown }>): void {
-    this.clearLighting()
-
-    if (!this.lightTexture) this.lightTexture = this.createLightTexture()
-
+    const lights: Array<{ x: number; y: number }> = []
     for (const obj of Object.values(objects)) {
       if (typeof obj.type === 'string' && LIGHT_EXCLUDED_TYPES.has(obj.type)) continue
       if (typeof obj.x !== 'number' || typeof obj.y !== 'number') continue
-
-      let sprite = this.lightPool.pop()
-      if (!sprite) {
-        sprite = new Sprite(this.lightTexture)
-        sprite.anchor.set(0.5)
-        sprite.blendMode = 'add'
-        sprite.alpha = 0.02
-      }
-      sprite.x = (obj.x + 0.5) * TILE_SIZE
-      sprite.y = (obj.y + 0.5) * TILE_SIZE
-      this.lightLayer.addChild(sprite)
-      this.activeLights.push(sprite)
+      lights.push({ x: obj.x, y: obj.y })
     }
+    this.redrawOverlayCanvas(lights)
+    this.overlayTexture.source.update()
   }
 
-  private createLightTexture(): Texture {
-    const radius = 3 * TILE_SIZE
-    const size = radius * 2
-    const canvas = document.createElement('canvas')
-    canvas.width = size
-    canvas.height = size
-    const ctx = canvas.getContext('2d')!
-    const grad = ctx.createRadialGradient(radius, radius, 0, radius, radius, radius)
-    grad.addColorStop(0, 'rgba(255,255,255,1)')
-    grad.addColorStop(1, 'rgba(255,255,255,0)')
-    ctx.fillStyle = grad
-    ctx.fillRect(0, 0, size, size)
-    return Texture.from(canvas)
+  private redrawOverlayCanvas(lights: Array<{ x: number; y: number }>): void {
+    const ctx = this.overlayCtx
+    ctx.clearRect(0, 0, ROOM_SIZE, ROOM_SIZE)
+    ctx.fillStyle = 'rgba(0,0,0,0.2)'
+    ctx.fillRect(0, 0, ROOM_SIZE, ROOM_SIZE)
+
+    if (lights.length > 0) {
+      ctx.globalCompositeOperation = 'destination-out'
+      for (const { x, y } of lights) {
+        const cx = (x + 0.5) * TILE_SIZE
+        const cy = (y + 0.5) * TILE_SIZE
+        const r = 3 * TILE_SIZE
+        const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r)
+        grad.addColorStop(0, 'rgba(0,0,0,1)')
+        grad.addColorStop(1, 'rgba(0,0,0,0)')
+        ctx.fillStyle = grad
+        ctx.beginPath()
+        ctx.arc(cx, cy, r, 0, Math.PI * 2)
+        ctx.fill()
+      }
+      ctx.globalCompositeOperation = 'source-over'
+    }
   }
 
   destroy(): void {
@@ -664,8 +662,7 @@ export class RoomRenderer {
     this.resizeObserver?.disconnect()
     this.resizeObserver = null
     this.hoverLayer.destroy()
-    this.lightTexture?.destroy(true)
-    this.lightTexture = null
+    this.overlayTexture.destroy(true)
     this.app.destroy(true, { children: true })
     if (import.meta.env.DEV) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

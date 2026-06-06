@@ -75,8 +75,8 @@ const TYPE_LABELS: Record<string, string> = {
 }
 
 /** Fields we want to surface as key-value rows (exclude noisy / structural ones) */
-const SKIP_FIELDS = new Set(['x', 'y', 'type', 'id', 'name', 'user', '_id', 'room', 'hitsMax', 'energyCapacity', 'body', 'storeCapacity', 'storeCapacityResource'])
-const NUMERIC_FIELDS = new Set(['hits', 'energy', 'energyCapacity', 'store', 'progress', 'progressTotal', 'nextDecayTime'])
+const SKIP_FIELDS = new Set(['x', 'y', 'type', 'id', 'name', 'user', '_id', 'room', 'hitsMax', 'energyCapacity', 'body', 'storeCapacity', 'storeCapacityResource', 'invaderHarvested', 'ticksToRegeneration'])
+const NUMERIC_FIELDS = new Set(['hits', 'energy', 'energyCapacity', 'store', 'progress', 'progressTotal', 'nextDecayTime', 'ticksToRegeneration', 'nextRegenerationTime'])
 
 const FIELD_LABELS: Record<string, string> = {
   hits:                 'Hits',
@@ -84,9 +84,9 @@ const FIELD_LABELS: Record<string, string> = {
   progress:             'Progress',
   progressTotal:        'Progress total',
   ticksToLive:          'Ticks to live',
-  ticksToRegeneration:  'Ticks to regen',
   ticksToDecay:         'Ticks to decay',
   nextDecayTime:        'Decays in',
+  nextRegenerationTime: 'Regens in',
   fatigue:              'Fatigue',
   cooldown:             'Cooldown',
   mineralType:          'Mineral type',
@@ -174,6 +174,12 @@ function DefaultDetails(props: { item: SelectedObject }) {
         const gt = gameTime()
         if (gt !== null) finalValue = String(v - gt)
       }
+
+      if (k === 'nextRegenerationTime' && typeof v === 'number') {
+        const gt = gameTime()
+        if (gt !== null) finalValue = String(v - gt)
+      }
+
 
       if (finalValue !== null) pairs.push({ key: k, label: camelToLabel(k), value: finalValue })
     }
@@ -819,6 +825,7 @@ const CUSTOM_DETAILS: Record<string, (props: { item: SelectedObject }) => JSX.El
   flag: FlagDetails,
   controller: ControllerDetails,
   extension: ExtensionDetails,
+  tower: ExtensionDetails,
   storage: StoreStructureDetails,
   terminal: StoreStructureDetails,
   container: StoreStructureDetails,

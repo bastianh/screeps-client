@@ -16,9 +16,9 @@ import type { MapOverlayMode } from '~/stores/mapOverlayStore.js'
 export const MAP_TILE_SIZE = 3
 export const MAP_ROOM_SIZE = MAP_TILE_SIZE * 50  // 150px per room
 
-// Screen pixel size for each control level (1–7) at zoom = 1.
+// Screen pixel size for each control level (1–8) at zoom = 1.
 // Adjust these values to tweak how large badges appear per level.
-export const BADGE_SIZES = [50, 60, 70, 80, 90, 100, 110]
+export const BADGE_SIZES = [50, 60, 70, 80, 90, 100, 105, 120]
 
 // Terrain baked to a GPU texture — two LOD tiers to avoid upscaling blur.
 // LOD 0 (zoom < 1): zoomed out, many rooms, small texture fine

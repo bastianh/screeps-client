@@ -30,7 +30,7 @@ export function StatsBar(props: StatsBarProps) {
     const stats = cpu()
     if (!stats) return '—'
     const limit = userInfo()?.cpu ?? '?'
-    return `${stats.cpu.toFixed(1)} / ${limit}`
+    return `${stats.cpu.toFixed(0)} / ${limit}`
   }
 
   const memoryText = () => {

@@ -82,7 +82,7 @@ export const OBJECT_COLORS: Record<string, number> = {
   link:        OBJ_PURPLE,
   rampart:     OBJ_BLUE,
   road:        OBJ_ROAD,
-  wall:        OBJ_WALL,
+  constructedWall: OBJ_WALL,
   extractor:   OBJ_GREY,
   lab:         OBJ_PINK,
   terminal:    OBJ_GOLD,
