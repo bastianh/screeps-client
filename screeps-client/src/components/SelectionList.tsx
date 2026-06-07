@@ -596,27 +596,16 @@ function ControllerDetails(props: { item: SelectedObject }) {
         <div style={kvCell()}>{ownerName() ?? 'None'}</div>
 
         <Show when={reservation()}>
-          {(res) => {
-            const resName = () => {
-              const uid = res().user
-              if (!uid) return null
-              return roomUsers()?.[uid]?.username
-                ?? (uid === userInfo()?._id ? userInfo()?.username : null)
-                ?? uid
-            }
-            const resTicks = () => {
-              const gt = gameTime()
-              return gt !== null ? Math.max(0, res().endTime - gt) : res().endTime
-            }
-            return (
-              <>
-                <div style={kvCell(true)}>Reserved by</div>
-                <div style={kvCell()}>{resName()}</div>
-                <div style={kvCell(true)}>Reservation</div>
-                <div style={{ ...kvCell(), 'font-variant-numeric': 'tabular-nums' }}>{resTicks()} ticks</div>
-              </>
-            )
-          }}
+          <>
+            <div style={kvCell(true)}>Reserved by</div>
+            <div style={kvCell()}>
+              {roomUsers()?.[reservation()!.user]?.username ?? reservation()!.user}
+            </div>
+            <div style={kvCell(true)}>Reservation</div>
+            <div style={{ ...kvCell(), 'font-variant-numeric': 'tabular-nums' }}>
+              {gameTime() !== null ? Math.max(0, reservation()!.endTime - gameTime()!) : reservation()!.endTime} ticks
+            </div>
+          </>
         </Show>
 
         <Show when={level() > 0}>
