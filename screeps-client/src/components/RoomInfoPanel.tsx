@@ -1,7 +1,7 @@
 import { For, Show, type JSX } from 'solid-js'
 import { Eye, Flag, Hammer, Clock } from 'lucide-solid'
 import { gameTime, tickDuration, isGuest } from '~/stores/clientStore.js'
-import { roomObjectCount, roomOwner, controllerLevel, controllerProgress } from '~/stores/roomDataStore.js'
+import { roomObjectCount, roomOwner, controllerLevel, controllerProgress, controllerReservation, roomUsers } from '~/stores/roomDataStore.js'
 import { roomViewMode, setRoomViewMode, type RoomViewMode } from '~/stores/roomViewStore.js'
 import { historyMode, enterHistoryMode, exitHistoryMode } from '~/stores/historyStore.js'
 import { showCreepLabels, setShowCreepLabels, showRoomVisuals, setShowRoomVisuals } from '~/stores/settingsStore.js'
@@ -54,6 +54,18 @@ export function RoomInfoPanel(props: RoomInfoPanelProps) {
         <div style={{ padding: '3px 0', color: '#c9d1d9' }}>{roomObjectCount() ?? '—'}</div>
         <div style={{ padding: '3px 0', color: '#8b949e' }}>Owner</div>
         <div style={{ padding: '3px 0', color: '#c9d1d9' }}>{roomOwner()?.username ?? '—'}</div>
+        <Show when={!roomOwner() && controllerReservation()}>
+          <>
+            <div style={{ padding: '3px 0', color: '#8b949e' }}>Reserved by</div>
+            <div style={{ padding: '3px 0', color: '#c9d1d9' }}>
+              {roomUsers()?.[controllerReservation()!.user]?.username ?? controllerReservation()!.user}
+            </div>
+            <div style={{ padding: '3px 0', color: '#8b949e' }}>Expires in</div>
+            <div style={{ padding: '3px 0', color: '#c9d1d9', 'font-variant-numeric': 'tabular-nums' }}>
+              {gameTime() !== null ? Math.max(0, controllerReservation()!.endTime - gameTime()!) : '—'} ticks
+            </div>
+          </>
+        </Show>
         <Show when={controllerLevel() !== null && controllerLevel()! > 0}>
           <div style={{ padding: '3px 0', color: '#8b949e' }}>RCL</div>
           <div style={{ padding: '3px 0', color: '#c9d1d9', 'font-variant-numeric': 'tabular-nums' }}>

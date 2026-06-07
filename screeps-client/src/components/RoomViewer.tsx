@@ -12,7 +12,7 @@ import { defaultSpriteTheme } from '~/renderer/themes/default.js'
 import { sharedAtlasCache } from '~/renderer/AtlasCache.js'
 import { setSelection, clearSelection, selection, updateSelectionWithDiff, updateSelectionFromObjects, createSelectedObject } from '~/stores/selectionStore.js'
 import { addToast } from '~/stores/toastStore.js'
-import { setRoomObjectCount, setRoomOwner, setControllerLevel, setControllerProgress, setStructureCounts, setRoomUsers, roomUsers, setCurrentShard, setCurrentRoom } from '~/stores/roomDataStore.js'
+import { setRoomObjectCount, setRoomOwner, setControllerLevel, setControllerProgress, setControllerReservation, setStructureCounts, setRoomUsers, roomUsers, setCurrentShard, setCurrentRoom } from '~/stores/roomDataStore.js'
 import { parseRoomName, formatRoomName, isRoomInWorld } from '~/utils/roomName.js'
 import { useRoomNavigationKeys } from '~/utils/useRoomNavigationKeys.js'
 import type { Badge, RoomTerrain, RoomObjectMap, RoomObjectDiff } from 'screeps-connectivity'
@@ -89,6 +89,7 @@ export function RoomViewer(props: RoomViewerProps) {
     setRoomOwner(null)
     setControllerLevel(null)
     setControllerProgress(null)
+    setControllerReservation(null)
     setStructureCounts({})
     setRoomUsers(null)
 
@@ -127,6 +128,7 @@ export function RoomViewer(props: RoomViewerProps) {
       let ctrlLevel = 0
       let ctrlProgress: number | null = null
       let owner: { userId: string; username: string } | null = null
+      let reservation: { user: string; endTime: number } | null = null
 
       for (const id in data.objects) {
         objectCount++
@@ -145,15 +147,17 @@ export function RoomViewer(props: RoomViewerProps) {
           }
         }
 
-        if (objType === 'controller' && typeof obj.user === 'string') {
-          const userId = obj.user
-          const username = data.users?.[userId]?.username ?? userId
-          owner = { userId, username }
-          if (typeof obj.level === 'number') {
-            ctrlLevel = obj.level
+        if (objType === 'controller') {
+          if (typeof obj.user === 'string') {
+            const userId = obj.user
+            const username = data.users?.[userId]?.username ?? userId
+            owner = { userId, username }
+            if (typeof obj.level === 'number') ctrlLevel = obj.level
+            if (typeof obj.progress === 'number') ctrlProgress = obj.progress
           }
-          if (typeof obj.progress === 'number') {
-            ctrlProgress = obj.progress
+          const res = obj.reservation as { user: string; endTime: number } | undefined
+          if (res && typeof res.user === 'string' && typeof res.endTime === 'number') {
+            reservation = { user: res.user, endTime: res.endTime }
           }
         }
       }
@@ -169,6 +173,7 @@ export function RoomViewer(props: RoomViewerProps) {
       setRoomOwner(owner)
       setControllerLevel(ctrlLevel || null)
       setControllerProgress(ctrlProgress)
+      setControllerReservation(reservation)
       setStructureCounts(structCounts)
       setRoomUsers(data.users ?? null)
     }))
@@ -218,6 +223,7 @@ export function RoomViewer(props: RoomViewerProps) {
           let ctrlLevel = 0
           let ctrlProgress: number | null = null
           let owner: { userId: string; username: string } | null = null
+          let reservation: { user: string; endTime: number } | null = null
 
           for (const id in state.objects) {
             objectCount++
@@ -234,12 +240,18 @@ export function RoomViewer(props: RoomViewerProps) {
                 structCounts[objType] = (structCounts[objType] || 0) + 1
               }
             }
-            if (objType === 'controller' && typeof obj.user === 'string') {
-              const userId = obj.user
-              const username = cachedUsers?.[userId]?.username ?? userId
-              owner = { userId, username }
-              if (typeof obj.level === 'number') ctrlLevel = obj.level
-              if (typeof obj.progress === 'number') ctrlProgress = obj.progress
+            if (objType === 'controller') {
+              if (typeof obj.user === 'string') {
+                const userId = obj.user
+                const username = cachedUsers?.[userId]?.username ?? userId
+                owner = { userId, username }
+                if (typeof obj.level === 'number') ctrlLevel = obj.level
+                if (typeof obj.progress === 'number') ctrlProgress = obj.progress
+              }
+              const res = obj.reservation as { user: string; endTime: number } | undefined
+              if (res && typeof res.user === 'string' && typeof res.endTime === 'number') {
+                reservation = { user: res.user, endTime: res.endTime }
+              }
             }
           }
 
@@ -247,6 +259,7 @@ export function RoomViewer(props: RoomViewerProps) {
           setRoomOwner(owner)
           setControllerLevel(ctrlLevel || null)
           setControllerProgress(ctrlProgress)
+          setControllerReservation(reservation)
           setStructureCounts(structCounts)
         })
         .catch((err: Error) => {

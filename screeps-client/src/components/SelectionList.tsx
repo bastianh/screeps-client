@@ -12,6 +12,7 @@ import { createLogger } from '~/utils/log.js'
 import { CONTROLLER_DOWNGRADE, CONTROLLER_LEVEL_TOTAL } from '~/utils/gameConstants.js'
 import { ColorPicker } from '~/components/ColorPicker.js'
 import { verboseCreepDetails } from '~/stores/settingsStore.js'
+import { badgeToSvg } from 'screeps-connectivity'
 import type { SelectedObject } from '~/stores/selectionStore.js'
 
 const { log, error } = createLogger('SelectionList')
@@ -548,6 +549,16 @@ function ControllerDetails(props: { item: SelectedObject }) {
     return roomOwner()?.username ?? uid
   }
 
+  // Badge: owner badge for claimed rooms, reservation user badge for reserved rooms
+  const badgeSvgUrl = () => {
+    const uid = userId() ?? reservation()?.user
+    if (!uid) return null
+    const badge = roomUsers()?.[uid]?.badge
+    if (!badge) return null
+    const svg = badgeToSvg(badge)
+    return `data:image/svg+xml,${encodeURIComponent(svg)}`
+  }
+
   const ticksRemaining = () => {
     const dt = downgradeTime()
     const gt = gameTime()
@@ -591,9 +602,21 @@ function ControllerDetails(props: { item: SelectedObject }) {
 
   return (
     <div>
+      <Show when={badgeSvgUrl()}>
+        <div style={{ padding: '8px', background: '#0d1117', display: 'flex', 'align-items': 'center', gap: '8px' }}>
+          <img src={badgeSvgUrl()!} width="32" height="32" alt="badge" style={{ 'image-rendering': 'pixelated' }} />
+          <span style={{ 'font-size': '12px', color: '#c9d1d9', 'font-weight': 600 }}>
+            {ownerName() ?? roomUsers()?.[reservation()!.user]?.username ?? reservation()?.user}
+          </span>
+        </div>
+      </Show>
       <div style={kvGrid}>
-        <div style={kvCell(true)}>Owner</div>
-        <div style={kvCell()}>{ownerName() ?? 'None'}</div>
+        <Show when={!badgeSvgUrl()}>
+          <>
+            <div style={kvCell(true)}>Owner</div>
+            <div style={kvCell()}>{ownerName() ?? 'None'}</div>
+          </>
+        </Show>
 
         <Show when={reservation()}>
           <>
