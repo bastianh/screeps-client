@@ -1,5 +1,13 @@
 # screeps-client
 
+## 0.6.1
+
+### Patch Changes
+
+- 18c30de: Add animated fill-level rendering for containers. The container visual now shows a dark background with a filled rectangle that animates smoothly when store contents change.
+- 6dd8ad7: Fix sprite atlas URL not resolving under `/client/` base path when running via `screeps-mod-client`. The atlas URL now uses `basePath()` so it is prefixed correctly for each build target.
+- 36673a3: Add `Game.map.visual` rendering support. The map view now subscribes to the `mapVisual` WebSocket channel and renders player-drawn map visuals (lines, circles, rects, polys, text) on the world map canvas using PixiJS.
+
 ## 0.6.0
 
 ### Minor Changes
