@@ -696,7 +696,10 @@ function createObjectVisual(
       const progress     = typeof obj.progress      === 'number' ? obj.progress      : 0
       const progressTotal = typeof obj.progressTotal === 'number' ? obj.progressTotal : 0
 
-      const ctrlUserId = typeof obj.user === 'string' ? obj.user : undefined
+      const resObj = obj.reservation as { user?: string } | undefined
+      const ctrlUserId = typeof obj.user === 'string' ? obj.user
+        : typeof resObj?.user === 'string' ? resObj.user
+        : undefined
       const ctrlBadge = ctrlUserId ? users?.[ctrlUserId]?.badge : undefined
 
       const ctrlSpec: ControllerSpec | undefined = theme?.controller
@@ -1877,7 +1880,10 @@ export class ObjectLayer {
               const level         = typeof obj.level         === 'number' ? obj.level         : 0
               const progress      = typeof obj.progress      === 'number' ? obj.progress      : 0
               const progressTotal = typeof obj.progressTotal === 'number' ? obj.progressTotal : 0
-              const newUserId     = typeof obj.user          === 'string' ? obj.user          : undefined
+              const newResObj     = obj.reservation as { user?: string } | undefined
+              const newUserId     = typeof obj.user === 'string' ? obj.user
+                : typeof newResObj?.user === 'string' ? newResObj.user
+                : undefined
               if (existing.__ctrlUserId !== newUserId) {
                 this.container.removeChild(existing)
                 destroyVisual(existing)
@@ -2031,7 +2037,10 @@ export class ObjectLayer {
             const level         = typeof obj.level         === 'number' ? obj.level         : 0
             const progress      = typeof obj.progress      === 'number' ? obj.progress      : 0
             const progressTotal = typeof obj.progressTotal === 'number' ? obj.progressTotal : 0
-            const newUserId     = typeof obj.user          === 'string' ? obj.user          : undefined
+            const newResObj     = obj.reservation as { user?: string } | undefined
+            const newUserId     = typeof obj.user === 'string' ? obj.user
+              : typeof newResObj?.user === 'string' ? newResObj.user
+              : undefined
             if (existing.__ctrlUserId !== newUserId) {
               this.container.removeChild(existing)
               destroyVisual(existing)
