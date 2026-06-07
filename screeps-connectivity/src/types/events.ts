@@ -42,6 +42,7 @@ export interface UserStoreEvents {
     'user:code': { branch: string; modules: Record<string, string> }
     'user:stream': Record<string, unknown>
     'user:memory': { path: string; shard: string | null; value: unknown }
+    'user:mapVisual': { shard: string | null; data: string }
 }
 
 export interface ServerStoreEvents {

@@ -200,6 +200,41 @@ export class UserStore extends TypedStore<UserStoreEvents> {
     }
   }
 
+  subscribeMapVisual(shard: string | null): Subscription {
+    this.logger.log('subscribe mapVisual', shard)
+    let socketSub: Subscription | null = null
+    let listenerSub: Subscription | null = null
+    let disposed = false
+
+    const setup = async () => {
+      try {
+        const uid = this._userId ?? (await this.me())._id
+        if (disposed) return
+        // Official multi-shard servers use mapVisual:${uid}/${shard}; unofficial use mapVisual:${uid}.
+        const fullChannel = shard ? `mapVisual:${uid}/${shard}` : `mapVisual:${uid}`
+        socketSub = this.socket.subscribe(fullChannel)
+        listenerSub = this.socket.on(fullChannel, (data) => {
+          this.emit('user:mapVisual', { shard, data: typeof data === 'string' ? data : '' })
+        })
+      } catch (err) {
+        if (!disposed) {
+          this.dispatchEvent(new ErrorEvent('error', { error: err instanceof Error ? err : new Error(String(err)) }))
+        }
+      }
+    }
+
+    void setup()
+
+    return {
+      dispose: () => {
+        this.logger.log('unsubscribe mapVisual', shard)
+        disposed = true
+        socketSub?.dispose()
+        listenerSub?.dispose()
+      },
+    }
+  }
+
   /** Subscribe to the general user stream to receive global data like flags. */
   subscribeUserStream(): Subscription {
     this.logger.log('subscribe user stream')

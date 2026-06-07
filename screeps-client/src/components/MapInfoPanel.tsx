@@ -1,5 +1,5 @@
 import { For } from 'solid-js'
-import { showMapRoomNames, setShowMapRoomNames, showUnclaimableRooms, setShowUnclaimableRooms } from '~/stores/settingsStore.js'
+import { showMapRoomNames, setShowMapRoomNames, showUnclaimableRooms, setShowUnclaimableRooms, showMapVisuals, setShowMapVisuals } from '~/stores/settingsStore.js'
 import { mapOverlayMode, setMapOverlayMode, type MapOverlayMode } from '~/stores/mapOverlayStore.js'
 import { NAME_ZOOM_THRESHOLD } from '~/renderer/MapRenderer.js'
 
@@ -88,6 +88,24 @@ export function MapInfoPanel(props: MapInfoPanelProps) {
             type="checkbox"
             checked={showUnclaimableRooms()}
             onChange={(e) => setShowUnclaimableRooms(e.currentTarget.checked)}
+          />
+        </label>
+        <label
+          style={{
+            display: 'flex',
+            'align-items': 'center',
+            'justify-content': 'space-between',
+            'font-size': '11px',
+            color: '#c9d1d9',
+            cursor: 'pointer',
+            'margin-top': '4px',
+          }}
+        >
+          <span>Show map visuals</span>
+          <input
+            type="checkbox"
+            checked={showMapVisuals()}
+            onChange={(e) => setShowMapVisuals(e.currentTarget.checked)}
           />
         </label>
       </div>

@@ -1,6 +1,7 @@
 import { Application, Container, Graphics, RenderTexture, Sprite, Text, Texture } from 'pixi.js'
 import type { RoomMap2Data, Badge } from 'screeps-connectivity'
 import { BadgeTextureCache } from './BadgeTextureCache.js'
+import { MapVisualLayer } from './MapVisualLayer.js'
 import { parseRoomName, formatRoomName } from '~/utils/roomName.js'
 import { getTerrainCacheBlob, saveTerrainCacheBlob, blobToImageBitmap, imageBitmapToBlob } from './terrainCache.js'
 import TerrainWorker from './terrain.worker.ts?worker'
@@ -89,6 +90,7 @@ export class MapRenderer {
   private boundsGraphics: Graphics | null = null
   private selectionGraphics: Graphics | null = null
   private safeModeGraphics: Graphics | null = null
+  private mapVisualLayer: MapVisualLayer | null = null
   private readonly safeModeRooms = new Set<string>()
   private readonly activeRooms = new Map<string, RoomEntry>()
   private readonly roomPool: RoomEntry[] = []
@@ -176,6 +178,9 @@ export class MapRenderer {
 
     this.safeModeGraphics = new Graphics()
     this.world.addChild(this.safeModeGraphics)
+
+    this.mapVisualLayer = new MapVisualLayer()
+    this.world.addChild(this.mapVisualLayer.container)
 
     this.setupInteraction()
     this.app.ticker.add(() => {
@@ -657,6 +662,23 @@ export class MapRenderer {
     this.currentUserId = userId
   }
 
+  setMapVisual(raw: string): void {
+    this.mapVisualLayer?.update(raw)
+    // Keep mapVisualLayer on top of all other overlays
+    if (this.mapVisualLayer) {
+      this.world.removeChild(this.mapVisualLayer.container)
+      this.world.addChild(this.mapVisualLayer.container)
+    }
+  }
+
+  clearMapVisual(): void {
+    this.mapVisualLayer?.clear()
+  }
+
+  setMapVisualVisible(show: boolean): void {
+    if (this.mapVisualLayer) this.mapVisualLayer.container.visible = show
+  }
+
   setSelectedRoom(room: string | null): void {
     this.selectedRoom = room
     if (!this.selectionGraphics) return
@@ -818,6 +840,8 @@ export class MapRenderer {
     this.worker.terminate()
     this.pendingBakes.clear()
     this.badgeCache.destroy()
+    this.mapVisualLayer?.destroy()
+    this.mapVisualLayer = null
     try {
       this.app.destroy(false, { children: true, texture: true, context: true })
     } catch (e) {

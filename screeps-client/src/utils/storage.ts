@@ -20,6 +20,7 @@ export const LS = {
   showRoomVisuals: 'screeps:settings:showRoomVisuals',
   spriteTheme: 'screeps:settings:spriteTheme',
   verboseCreepDetails: 'screeps:settings:verboseCreepDetails',
+  showMapVisuals: 'screeps:settings:showMapVisuals',
 } as const
 
 export const SS = {

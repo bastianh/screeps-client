@@ -1,7 +1,7 @@
 import { createEffect, createSignal, onCleanup, onMount } from 'solid-js'
 import { MapRenderer } from '~/renderer/MapRenderer.js'
 import { client, userInfo, worldBounds, setWorldBounds } from '~/stores/clientStore.js'
-import { showMapRoomNames, showUnclaimableRooms } from '~/stores/settingsStore.js'
+import { showMapRoomNames, showUnclaimableRooms, showMapVisuals } from '~/stores/settingsStore.js'
 import { mapOverlayMode } from '~/stores/mapOverlayStore.js'
 import { parseRoomName, formatRoomName, isRoomInWorld, isBusRoom, isCenterRoom } from '~/utils/roomName.js'
 import { useRoomNavigationKeys } from '~/utils/useRoomNavigationKeys.js'
@@ -290,6 +290,11 @@ export function MapViewer(props: MapViewerProps) {
     renderer?.setUnclaimableOverlayVisible(showUnclaimableRooms())
   })
 
+  // Sync map visuals visibility when the setting changes
+  createEffect(() => {
+    renderer?.setMapVisualVisible(showMapVisuals())
+  })
+
   // Sync overlay mode (owner / mineral / none)
   createEffect(() => {
     renderer?.setOverlayMode(mapOverlayMode())
@@ -324,6 +329,26 @@ export function MapViewer(props: MapViewerProps) {
       renderer?.setBounds(bounds.minX, bounds.maxX, bounds.minY, bounds.maxY)
       log(`worldBounds applied — shard: ${props.shard ?? 'none'}  x: [${bounds.minX}, ${bounds.maxX}]  y: [${bounds.minY}, ${bounds.maxY}]  (fetched for shard: ${bounds.shard ?? 'none'})`)
     }
+  })
+
+  // Map visual subscription — wired once per client+shard combination
+  createEffect(() => {
+    const c = client()
+    if (!c) return
+
+    const sub = c.stores.user.subscribeMapVisual(props.shard)
+    // Long-lived listener: reads props.shard at invocation time.
+    // eslint-disable-next-line solid/reactivity
+    const listenerSub = c.stores.user.on('user:mapVisual', ({ shard, data }) => {
+      if (shard !== props.shard) return
+      if (data) renderer?.setMapVisual(data)
+      else renderer?.clearMapVisual()
+    })
+
+    onCleanup(() => {
+      sub.dispose()
+      listenerSub.dispose()
+    })
   })
 
   // Single map2 update listener — re-wired if client reconnects

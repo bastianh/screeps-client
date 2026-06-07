@@ -150,6 +150,10 @@ export interface VisualStyle {
     width?: number
     radius?: number
     font?: string | number
+    fontSize?: number
+    fontFamily?: string
+    fontStyle?: string
+    fontVariant?: string
 }
 
 export type RoomVisualEntry =
@@ -158,3 +162,10 @@ export type RoomVisualEntry =
     | { t: 'r'; x: number; y: number; w: number; h: number; s: VisualStyle }
     | { t: 'p'; points: [number, number][]; s: VisualStyle }
     | { t: 'l'; x1: number; y1: number; x2: number; y2: number; s: VisualStyle }
+
+export type MapVisualEntry =
+    | { t: 't'; n: string; x: number; y: number; text: string; s: VisualStyle }
+    | { t: 'c'; n: string; x: number; y: number; s: VisualStyle }
+    | { t: 'r'; n: string; x: number; y: number; w: number; h: number; s: VisualStyle }
+    | { t: 'p'; points: Array<{ n: string; x: number; y: number }>; s: VisualStyle }
+    | { t: 'l'; n1: string; x1: number; y1: number; n2: string; x2: number; y2: number; s: VisualStyle }

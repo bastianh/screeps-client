@@ -35,6 +35,7 @@ export type {
   Badge,
   VisualStyle,
   RoomVisualEntry,
+  MapVisualEntry,
 } from './types/game.js'
 
 export { fetchServerVersion, fetchAuthModInfo, checkUsername, checkEmail, registerUser, getServerFeature, getScreepsmodAuth } from './http/fetchServerVersion.js'
