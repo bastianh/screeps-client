@@ -823,25 +823,10 @@ function RuinDetails(props: { item: SelectedObject }) {
   const raw = () => props.item.raw as Record<string, unknown>
 
   const decayCountdown = () => {
-    // ticksToDecay: some servers send the countdown directly
-    const ttd = raw().ticksToDecay
-    if (typeof ttd === 'number') return ttd
-    // decay: some servers send the absolute future decay tick
-    const d = raw().decay
-    if (typeof d === 'number') {
-      const gt = gameTime()
-      return gt !== null ? Math.max(0, d - gt) : d
-    }
-    // destroyTime: most servers only store when the structure was destroyed;
-    // compute remaining ticks using Screeps constants (RUIN_DECAY = 500, powerBank = 10)
-    const dt = raw().destroyTime
-    if (typeof dt === 'number') {
-      const gt = gameTime()
-      const sType = (raw().structure as Record<string, unknown> | undefined)?.type
-      const decayDuration = sType === 'powerBank' ? 10 : 500
-      if (gt !== null) return Math.max(0, dt + decayDuration - gt)
-    }
-    return null
+    const dt = raw().decayTime
+    if (typeof dt !== 'number') return null
+    const gt = gameTime()
+    return gt !== null ? Math.max(0, dt - gt) : dt
   }
 
   const userId = () => typeof raw().user === 'string' ? (raw().user as string) : null
