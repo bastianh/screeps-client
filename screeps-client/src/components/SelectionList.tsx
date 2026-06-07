@@ -597,7 +597,13 @@ function ControllerDetails(props: { item: SelectedObject }) {
 
         <Show when={reservation()}>
           {(res) => {
-            const resName = () => roomUsers()?.[res().user]?.username ?? res().user
+            const resName = () => {
+              const uid = res().user
+              if (!uid) return null
+              return roomUsers()?.[uid]?.username
+                ?? (uid === userInfo()?._id ? userInfo()?.username : null)
+                ?? uid
+            }
             const resTicks = () => {
               const gt = gameTime()
               return gt !== null ? Math.max(0, res().endTime - gt) : res().endTime
