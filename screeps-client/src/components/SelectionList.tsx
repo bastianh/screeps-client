@@ -539,7 +539,7 @@ function ControllerDetails(props: { item: SelectedObject }) {
   const safeModeAvailable = () => typeof raw().safeModeAvailable === 'number' ? (raw().safeModeAvailable as number) : 0
   const safeMode = () => typeof raw().safeMode === 'number' ? (raw().safeMode as number) : null
   const isPowerEnabled = () => raw().isPowerEnabled === true
-  const reservation = () => raw().reservation as { username: string; ticksToEnd: number } | undefined
+  const reservation = () => raw().reservation as { user: string; endTime: number } | undefined
   const userId = () => typeof raw().user === 'string' ? (raw().user as string) : null
 
   const ownerName = () => {
@@ -596,12 +596,21 @@ function ControllerDetails(props: { item: SelectedObject }) {
         <div style={kvCell()}>{ownerName() ?? 'None'}</div>
 
         <Show when={reservation()}>
-          {(res) => (
-            <>
-              <div style={kvCell(true)}>Reserved</div>
-              <div style={kvCell()}>{res().username} ({res().ticksToEnd})</div>
-            </>
-          )}
+          {(res) => {
+            const resName = () => roomUsers()?.[res().user]?.username ?? res().user
+            const resTicks = () => {
+              const gt = gameTime()
+              return gt !== null ? Math.max(0, res().endTime - gt) : res().endTime
+            }
+            return (
+              <>
+                <div style={kvCell(true)}>Reserved by</div>
+                <div style={kvCell()}>{resName()}</div>
+                <div style={kvCell(true)}>Reservation</div>
+                <div style={{ ...kvCell(), 'font-variant-numeric': 'tabular-nums' }}>{resTicks()} ticks</div>
+              </>
+            )
+          }}
         </Show>
 
         <Show when={level() > 0}>
