@@ -3,6 +3,7 @@
   <component name="VcsDirectoryMappings">
     <mapping directory="" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/reference" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/reference/renderer" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/reference/screepsmod-admin-utils" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/reference/screepsmod-auth" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/reference/screepsmod-history" vcs="Git" />

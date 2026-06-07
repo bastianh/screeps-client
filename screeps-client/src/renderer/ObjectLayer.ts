@@ -287,6 +287,11 @@ const TOWER_BODY_Y = -TILE_SIZE * 0.3
 const TOWER_BODY_W = TILE_SIZE * 0.8
 const TOWER_BODY_H = TILE_SIZE * 0.6
 
+const CONT_W = TILE_SIZE * 0.45
+const CONT_H = TILE_SIZE * 0.6
+const CONT_X = TILE_SIZE * 0.275  // cx - TILE_SIZE * 0.225
+const CONT_Y = TILE_SIZE * 0.2    // cy - TILE_SIZE * 0.3
+
 function calcTowerFillHeight(energy: number, capacity: number): number {
   if (capacity <= 0 || energy <= 0) return 0
   return TOWER_BODY_H * Math.min(1, energy / capacity)
@@ -322,6 +327,22 @@ function getStoreFill(obj: RoomObject): { used: number; capacity: number } {
     }
   }
   return { used, capacity }
+}
+
+function calcContainerFillHeight(used: number, capacity: number): number {
+  if (capacity <= 0 || used <= 0) return 0
+  return CONT_H * Math.min(1, used / capacity)
+}
+
+function updateContainerFill(visual: ContainerWithTarget, height: number): void {
+  const fill = visual.__containerFillG
+  if (!fill) return
+  fill.clear()
+  if (height > 0) {
+    const margin = Math.max(0.5, TILE_SIZE * 0.02)
+    fill.rect(CONT_X + margin, CONT_Y + CONT_H - height + margin, CONT_W - margin * 2, height - margin * 2)
+    fill.fill(ST_ENERGY)
+  }
 }
 
 function calcStorageFillHeight(used: number, capacity: number): number {
@@ -972,10 +993,22 @@ function createObjectVisual(
       break
     }
     case 'container': {
-      g.rect(cx - TILE_SIZE * 0.225, cy - TILE_SIZE * 0.3, TILE_SIZE * 0.45, TILE_SIZE * 0.6)
-      g.fill(ST_ENERGY)
-      g.rect(cx - TILE_SIZE * 0.225, cy - TILE_SIZE * 0.3, TILE_SIZE * 0.45, TILE_SIZE * 0.6)
-      g.stroke({ width: TILE_SIZE * 0.1, color: ST_DARK })
+      const { used: contUsed, capacity: contCap } = getStoreFill(obj)
+      g.rect(CONT_X, CONT_Y, CONT_W, CONT_H)
+      g.fill(ST_DARK)
+      container.addChild(g)
+
+      const contFillG = new Graphics()
+      container.addChild(contFillG)
+      ;(container as ContainerWithTarget).__containerFillG = contFillG
+      ;(container as ContainerWithTarget).__containerUsed = contUsed
+      ;(container as ContainerWithTarget).__containerCapacity = contCap
+      updateContainerFill(container as ContainerWithTarget, calcContainerFillHeight(contUsed, contCap))
+
+      const contBorderG = new Graphics()
+      contBorderG.rect(CONT_X, CONT_Y, CONT_W, CONT_H)
+      contBorderG.stroke({ width: TILE_SIZE * 0.1, color: ST_DARK })
+      container.addChild(contBorderG)
       break
     }
     case 'observer': {
@@ -1235,7 +1268,7 @@ function createObjectVisual(
     }
   }
 
-  if (obj.type !== 'extension' && obj.type !== 'road' && obj.type !== 'creep' && obj.type !== 'tower' && obj.type !== 'controller' && obj.type !== 'flag' && obj.type !== 'source' && obj.type !== 'constructionSite' && obj.type !== 'mineral' && obj.type !== 'tombstone' && obj.type !== 'ruin' && obj.type !== 'storage' && obj.type !== 'constructedWall' && obj.type !== 'rampart') {
+  if (obj.type !== 'extension' && obj.type !== 'road' && obj.type !== 'creep' && obj.type !== 'tower' && obj.type !== 'controller' && obj.type !== 'flag' && obj.type !== 'source' && obj.type !== 'constructionSite' && obj.type !== 'mineral' && obj.type !== 'tombstone' && obj.type !== 'ruin' && obj.type !== 'storage' && obj.type !== 'constructedWall' && obj.type !== 'rampart' && obj.type !== 'container') {
     container.addChild(g)
   }
 
@@ -1304,6 +1337,9 @@ type ContainerWithTarget = Container & {
   __storageFillG?: Graphics
   __storageUsed?: number
   __storageCapacity?: number
+  __containerFillG?: Graphics
+  __containerUsed?: number
+  __containerCapacity?: number
   __barrelContainer?: Container
   __ctrlSegGraphics?: Graphics
   __ctrlSegSprites?: Sprite[]
@@ -1403,6 +1439,7 @@ export class ObjectLayer {
   private creepFillAnimations = new Map<string, ExtAnimation>()
   private towerFillAnimations = new Map<string, ExtAnimation>()
   private storageFillAnimations = new Map<string, ExtAnimation>()
+  private containerFillAnimations = new Map<string, ExtAnimation>()
   private sourceAnimations = new Map<string, ExtAnimation>()
   private buildGlowAnimations = new Map<string, { startTime: number; duration: number }>()
   private ctrlFlashAnimations = new Map<string, { segIndex: number; startTime: number; duration: number }>()
@@ -1539,6 +1576,13 @@ export class ObjectLayer {
       const ease = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2
       updateStorageFill(anim.visual, anim.fromRadius + (anim.toRadius - anim.fromRadius) * ease)
       if (t >= 1) this.storageFillAnimations.delete(id)
+    }
+    for (const [id, anim] of this.containerFillAnimations) {
+      const elapsed = now - anim.startTime
+      const t = Math.min(1, elapsed / this.EXT_ANIM_DURATION)
+      const ease = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2
+      updateContainerFill(anim.visual, anim.fromRadius + (anim.toRadius - anim.fromRadius) * ease)
+      if (t >= 1) this.containerFillAnimations.delete(id)
     }
     for (const [id, anim] of this.sourceAnimations) {
       const elapsed = now - anim.startTime
@@ -1714,6 +1758,24 @@ export class ObjectLayer {
     this.storageFillAnimations.set(id, { visual, fromRadius: fromH, toRadius: toH, startTime: performance.now() })
   }
 
+  private startContainerFillAnimation(
+    id: string,
+    visual: ContainerWithTarget,
+    fromUsed: number,
+    fromCapacity: number,
+    toUsed: number,
+    toCapacity: number,
+  ): void {
+    const toH = calcContainerFillHeight(toUsed, toCapacity)
+    if (this.instantMode) {
+      updateContainerFill(visual, toH)
+      return
+    }
+    const fromH = calcContainerFillHeight(fromUsed, fromCapacity)
+    if (fromH === toH) return
+    this.containerFillAnimations.set(id, { visual, fromRadius: fromH, toRadius: toH, startTime: performance.now() })
+  }
+
   private startSourceAnimation(
     id: string,
     visual: ContainerWithTarget,
@@ -1759,6 +1821,7 @@ export class ObjectLayer {
             this.creepFillAnimations.delete(id)
             this.towerFillAnimations.delete(id)
             this.storageFillAnimations.delete(id)
+            this.containerFillAnimations.delete(id)
             this.sourceAnimations.delete(id)
             this.buildGlowAnimations.delete(id)
             this.ctrlFlashAnimations.delete(id)
@@ -1871,6 +1934,14 @@ export class ObjectLayer {
                 this.startStorageFillAnimation(id, existing, existing.__storageUsed ?? 0, existing.__storageCapacity ?? capacity, used, capacity)
                 existing.__storageUsed = used
                 existing.__storageCapacity = capacity
+              }
+            }
+            if (obj.type === 'container') {
+              const { used, capacity } = getStoreFill(obj)
+              if (existing.__containerUsed !== used || existing.__containerCapacity !== capacity) {
+                this.startContainerFillAnimation(id, existing, existing.__containerUsed ?? 0, existing.__containerCapacity ?? capacity, used, capacity)
+                existing.__containerUsed = used
+                existing.__containerCapacity = capacity
               }
             }
             if (obj.type === 'controller') {
