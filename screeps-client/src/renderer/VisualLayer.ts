@@ -105,11 +105,25 @@ export class VisualLayer {
 
     const g = this.g
 
-    for (const line of raw.split('\n')) {
-      if (!line.trim()) continue
-      let entry: RoomVisualEntry
-      try { entry = JSON.parse(line) } catch { continue }
+    // Performance optimization: Bulk parse JSON array if possible.
+    // Calling JSON.parse once on a reconstructed array is significantly faster
+    // than calling it per-line inside a loop due to less JS/C++ boundary overhead.
+    let entries: RoomVisualEntry[] = []
+    const safeRaw = raw.trim()
+    if (safeRaw) {
+      try {
+        const jsonStr = '[' + safeRaw.split('\n').filter(l => l.trim()).join(',') + ']'
+        entries = JSON.parse(jsonStr)
+      } catch {
+        // Fallback: If there are invalid lines that break bulk parsing, fallback to slow line-by-line parsing
+        for (const line of raw.split('\n')) {
+          if (!line.trim()) continue
+          try { entries.push(JSON.parse(line)) } catch { continue }
+        }
+      }
+    }
 
+    for (const entry of entries) {
       const s = entry.s ?? {}
       const alpha = s.opacity ?? 1
 
