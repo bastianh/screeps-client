@@ -625,6 +625,8 @@ export class MapRenderer {
     const screenDiameter = (MINERAL_DENSITY_SIZES[entry.mineralDensity - 1] ?? 24) * scaleFactor
     const worldRadius = (screenDiameter / 2) / zoom
 
+    // Draw base shape on data change.
+    // Note: It is cleared and redrawn continuously in the zoom loop below to handle scaling stroke widths.
     entry.mineralCircle.clear()
     entry.mineralCircle.circle(0, 0, 1)
     entry.mineralCircle.fill(entry.mineralColor)
@@ -651,10 +653,70 @@ export class MapRenderer {
   // Combine zooming scaling operations over activeRooms to reduce overhead on every zoom frame
   // Avoid intermediate allocations by using for...of map.values()
   private updateAllRoomScales(zoom: number): void {
+    // ⚡ PERFORMANCE OPTIMIZATION:
+    // Precompute scale values to avoid repetitive math operations for thousands of rooms
+    // inside the tight loop below.
+
+    // 1. Precompute Badge Sizes
+    const badgeSizeMultiplier = Math.min(1, zoom) / zoom
+    const badgeScaledSizes = new Array(8)
+    for (let i = 0; i < 8; i++) {
+      badgeScaledSizes[i] = (BADGE_SIZES[i] ?? 24) * badgeSizeMultiplier
+    }
+    const fallbackBadgeSize = 24 * badgeSizeMultiplier
+
+    // 2. Precompute Name Label Scale
+    const MIN_PX = 12
+    const sqrtScale = 0.3 / Math.sqrt(zoom)       // → 10.8·√zoom px on screen
+    const minScale  = MIN_PX / (36 * zoom)         // → 12px on screen
+    const nameLabelScale = Math.max(sqrtScale, minScale)
+
+    // 3. Precompute Mineral Sizes
+    const mineralScaleFactor = Math.max(0.5, Math.min(1.5, zoom))
+    const mineralWorldRadii = new Array(4)
+    const mineralLabelScales = new Array(4)
+    const mineralStrokeWidths = new Array(4)
+
+    const borderScreenWidth = 2
+    const borderWorldWidth = borderScreenWidth / zoom
+
+    for (let i = 0; i < 4; i++) {
+      const screenDiameter = (MINERAL_DENSITY_SIZES[i] ?? 24) * mineralScaleFactor
+      const worldRadius = (screenDiameter / 2) / zoom
+      mineralWorldRadii[i] = worldRadius
+      mineralLabelScales[i] = (screenDiameter * 0.55 / 36) / zoom
+      mineralStrokeWidths[i] = borderWorldWidth / worldRadius
+    }
+    const fallbackMineralScaleFactor = mineralScaleFactor
+    const fallbackMineralRadius = (24 * fallbackMineralScaleFactor / 2) / zoom
+    const fallbackMineralLabelScale = (24 * fallbackMineralScaleFactor * 0.55 / 36) / zoom
+
     for (const entry of this.activeRooms.values()) {
-      this.applyBadgeSize(entry, zoom)
-      this.updateNameLabelScale(entry, zoom)
-      this.applyMineralSize(entry, zoom)
+      // Inline: applyBadgeSize
+      if (entry.badgeSprite && entry.badgeLevel !== undefined) {
+        const s = badgeScaledSizes[entry.badgeLevel - 1] ?? fallbackBadgeSize
+        entry.badgeSprite.width = s
+        entry.badgeSprite.height = s
+      }
+
+      // Inline: updateNameLabelScale
+      entry.nameLabel.scale.set(nameLabelScale)
+
+      // Inline: applyMineralSize
+      if (entry.mineralCircle && entry.mineralLabel && entry.mineralDensity !== undefined && entry.mineralColor !== undefined) {
+        const idx = entry.mineralDensity - 1
+        const r = mineralWorldRadii[idx] ?? fallbackMineralRadius
+        const l = mineralLabelScales[idx] ?? fallbackMineralLabelScale
+        const sw = mineralStrokeWidths[idx] ?? (borderWorldWidth / r)
+
+        // PIXI Graphics objects are command lists. We must clear and redraw to change stroke width.
+        entry.mineralCircle.clear()
+        entry.mineralCircle.circle(0, 0, 1)
+        entry.mineralCircle.fill(entry.mineralColor)
+        entry.mineralCircle.stroke({ color: 0x000000, width: sw })
+        entry.mineralCircle.scale.set(r)
+        entry.mineralLabel.scale.set(l)
+      }
     }
   }
 
