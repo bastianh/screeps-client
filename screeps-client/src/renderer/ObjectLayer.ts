@@ -1432,6 +1432,7 @@ export class ObjectLayer {
   readonly container: Container
   private objects = new Map<string, ContainerWithTarget>()
   private rawObjects = new Map<string, RoomObject>()
+  private foreignCreeps = new Set<string>()
   private roadGraphics: Graphics
   private rampartGraphics: Graphics
   private wallGraphics: Graphics
@@ -1820,6 +1821,7 @@ export class ObjectLayer {
             destroyVisual(visual)
             this.objects.delete(id)
             this.rawObjects.delete(id)
+            this.foreignCreeps.delete(id)
             this.extAnimations.delete(id)
             this.creepFillAnimations.delete(id)
             this.towerFillAnimations.delete(id)
@@ -1838,6 +1840,13 @@ export class ObjectLayer {
             const existing = this.rawObjects.get(id)
             if (!existing || existing.x !== obj.x || existing.y !== obj.y) {
               roadsChanged = true
+            }
+          }
+          if (obj.type === 'creep') {
+            if (isForeignCreep(obj, this.currentUserId)) {
+              this.foreignCreeps.add(id)
+            } else {
+              this.foreignCreeps.delete(id)
             }
           }
 
@@ -2014,6 +2023,13 @@ export class ObjectLayer {
         if (!obj) continue
 
         seen.add(id)
+        if (obj.type === 'creep') {
+          if (isForeignCreep(obj, this.currentUserId)) {
+            this.foreignCreeps.add(id)
+          } else {
+            this.foreignCreeps.delete(id)
+          }
+        }
         this.rawObjects.set(id, obj)
         const existing = this.objects.get(id)
         if (!existing) {
@@ -2169,6 +2185,7 @@ export class ObjectLayer {
           destroyVisual(visual)
           this.objects.delete(id)
           this.rawObjects.delete(id)
+          this.foreignCreeps.delete(id)
           this.extAnimations.delete(id)
           this.creepFillAnimations.delete(id)
           this.towerFillAnimations.delete(id)
@@ -2524,9 +2541,10 @@ export class ObjectLayer {
    */
   private refreshForeignCreepLabels(): void {
     if (!this.currentUserId) return
-    for (const [id, visual] of this.objects) {
+    for (const id of this.foreignCreeps) {
+      const visual = this.objects.get(id)
       const obj = this.rawObjects.get(id)
-      if (!obj || obj.type !== 'creep') continue
+      if (!visual || !obj || obj.type !== 'creep') continue
       if (!visual.__nameLabel) continue
       if (!isForeignCreep(obj, this.currentUserId)) continue
       const userId = typeof obj.user === 'string' ? obj.user : undefined
@@ -2544,9 +2562,10 @@ export class ObjectLayer {
    */
   private refreshForeignCreepBadges(): void {
     if (!this.currentUserId) return
-    for (const [id, visual] of this.objects) {
+    for (const id of this.foreignCreeps) {
+      const visual = this.objects.get(id)
       const obj = this.rawObjects.get(id)
-      if (!obj || obj.type !== 'creep') continue
+      if (!visual || !obj || obj.type !== 'creep') continue
       if (!isForeignCreep(obj, this.currentUserId)) continue
       if (visual.__creepBadgeSprite) continue  // badge already wired up
       const creepUserId = typeof obj.user === 'string' ? obj.user : undefined
