@@ -488,7 +488,7 @@ export function RoomViewer(props: RoomViewerProps) {
       animLayer.container.zIndex = Z.animations
       r.world.addChild(animLayer.container)
 
-      visualLayer = new VisualLayer()
+      visualLayer = new VisualLayer(r.app.renderer, r.world, r.app.ticker)
       visualLayer.container.zIndex = Z.visuals
       r.world.addChild(visualLayer.container)
 
