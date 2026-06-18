@@ -8,6 +8,7 @@ import { ConsolePanel } from '~/components/ConsolePanel.js'
 import { Sidebar } from '~/components/Sidebar/index.js'
 import { StatsBar } from '~/components/StatsBar.js'
 import { SettingsPanel } from '~/components/SettingsPanel.js'
+import { MotdOverlay } from '~/components/MotdOverlay.js'
 
 const CodePanel = lazy(() =>
   import('~/components/CodePanel.js').then((m) => ({ default: m.CodePanel })),
@@ -107,6 +108,12 @@ export function Dashboard() {
   const [room, setRoom] = createSignal(urlState.room ?? getStr(LS.room) ?? 'W1N1')
   const [shard, setShard] = createSignal<string | null>(urlState.shard ?? getStr(LS.shard))
   const [mapMode, setMapMode] = createSignal(parseMapUrl() !== null || !urlState.room)
+
+  // Server message-of-the-day, shown once over the map for guest sessions after
+  // connecting. Dismissed manually or by its own timer; never re-shown afterwards.
+  const motdText = () => serverVersion()?.serverData?.welcomeText ?? null
+  const [motdDismissed, setMotdDismissed] = createSignal(false)
+  const showMotd = () => isGuest() && mapMode() && !motdDismissed() && motdText() !== null
 
   const [showSettings, setShowSettings] = createSignal(!isGuest() && !userInfo()?.badge)
   const [showCode, setShowCode] = createSignal(false)
@@ -363,6 +370,9 @@ export function Dashboard() {
         }
       >
         <RoomViewer room={room()} shard={shard()} onNavigate={handleNavigate} />
+      </Show>
+      <Show when={showMotd()}>
+        <MotdOverlay text={motdText()!} onClose={() => setMotdDismissed(true)} />
       </Show>
     </div>
   )
