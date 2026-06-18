@@ -1,5 +1,18 @@
 # screeps-client
 
+## 0.7.1
+
+### Patch Changes
+
+- 36b7d97: Fix Safari/WebKit terrain tile caching (the real root cause this time). Reading a cached tile back via `Response.blob()` from the Cache API produced a blob whose `blob:` URL WebKit treats as cross-origin, so every decode — both `createImageBitmap(blob)` and the `HTMLImageElement` fallback — failed with `Cannot load blob:… due to access control checks`. On reload this surfaced as a flood of console errors and a stalling map. `getTerrainCacheBlob` now copies the cached bytes into a fresh, page-origin `Blob` (`arrayBuffer()` → `new Blob([...])`), which strips the taint so decoding works in every browser.
+- 9581eb2: Fix slow, stuttering map terrain loading when zooming far out.
+
+  - **No more main-thread freeze.** The cache-copy encode (`OffscreenCanvas` + `convertToBlob`) ran on the main thread once per baked tile; a batch of up to 200 rooms could lock up or completely hang the tab. The terrain worker now encodes the cache copy itself, off the main thread.
+  - **Visible tiles no longer wait for caching.** The worker posts the baked bitmap back immediately and encodes + sends the cache copy as a separate follow-up message, so rendering is never gated behind the encode.
+  - **No more duplicate fetches/bakes.** `hasRoom()` only turns true once a bake completes, so rooms already being fetched/baked were re-queued on every `visibleRooms` change, multiplying terrain requests and worker bakes. In-flight rooms are now tracked and excluded until their bake finishes.
+
+  The now-unused `imageBitmapToBlob` helper is removed.
+
 ## 0.7.0
 
 ### Minor Changes
