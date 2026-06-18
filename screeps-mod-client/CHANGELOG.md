@@ -1,5 +1,16 @@
 # screepsmod-client-new
 
+## 0.2.9
+
+### Patch Changes
+
+- 67dc748: patch bump for screeps-client dependency update
+- Updated dependencies [cb3a324]
+- Updated dependencies [9826156]
+- Updated dependencies [67dc748]
+- Updated dependencies [2685f44]
+  - screeps-client@0.7.0
+
 ## 0.2.8
 
 ### Patch Changes

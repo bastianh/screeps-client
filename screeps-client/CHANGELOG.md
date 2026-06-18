@@ -1,5 +1,20 @@
 # screeps-client
 
+## 0.7.0
+
+### Minor Changes
+
+- cb3a324: Start directly in guest mode without flashing the login screen. When the client knows at boot that it will auto-connect — embedded xxscreeps mode (guest), a `?guest=` param, or a returning user with a stored token — it now shows a lightweight connecting splash instead of the `LoginForm` until the connection settles. The login form is only shown once the auto-connect attempt fails or when there is nothing to auto-connect.
+- 9826156: Show the server message-of-the-day over the map in guest sessions. After connecting as a guest, the server's welcome text (the same HTML already shown on the login screen) appears centered over the map view, with a close button and a 15s auto-dismiss timer that pauses while the pointer is over it. It is shown once per session and never reappears after being dismissed.
+
+### Patch Changes
+
+- 67dc748: Fix blurry RoomVisuals text: replace PixiJS Text objects with a 2D canvas texture sized to `world.scale × devicePixelRatio × ROOM_SIZE`, giving a 1:1 physical pixel mapping at any zoom level. Eliminates GPU upsampling/downsampling that caused extreme text blur. Also fixes a crash (`source is null`) caused by `Texture.from` cache sharing; solved by always passing `skipCache: true` when recreating the texture on zoom changes.
+- 2685f44: Fix two Safari/Firefox map view rendering bugs:
+
+  - **Terrain tile caching never worked in Safari.** The Cache API write succeeded, but reading the cached WebP blob back via `createImageBitmap(blob)` failed in WebKit with an "access control checks" error (the internal `blob:` URL is treated as cross-origin). The error was swallowed and surfaced as a permanent cache miss, so every tile was re-baked. `blobToImageBitmap` now detects the gap once and falls back to decoding via an `HTMLImageElement` object URL, which works in every browser.
+  - **Map view crashed when zoomed far out after a view switch** (`TypeError: null is not an object (evaluating 'r.addressModeU')`). `MapRenderer.destroy()` passed `texture: true` to `app.destroy()`, which also destroyed the globally shared `Texture.EMPTY` referenced by every empty/unbaked terrain sprite. The next renderer instance then crashed on rendering those tiles. Terrain textures are already destroyed manually, so `texture: true` was removed.
+
 ## 0.6.1
 
 ### Patch Changes
