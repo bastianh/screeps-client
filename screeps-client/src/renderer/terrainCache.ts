@@ -11,7 +11,14 @@ export async function getTerrainCacheBlob(shard: string, roomName: string, lod: 
     const req = new Request(key)
     const res = await cache.match(req)
     if (res) {
-      return await res.blob()
+      // WebKit taints blobs handed out by Response.blob() from the Cache API: the
+      // blob: URL they generate is treated as cross-origin, so both
+      // createImageBitmap(blob) and <img>.src fail with an "access control
+      // checks" error. Copying the bytes into a fresh, page-origin Blob strips
+      // the taint, so decoding works in every browser.
+      const buf = await res.arrayBuffer()
+      const type = res.headers.get('Content-Type') ?? 'image/webp'
+      return new Blob([buf], { type })
     }
   } catch (err) {
     warn('get failed:', err)
@@ -39,12 +46,12 @@ export async function imageBitmapToBlob(bitmap: ImageBitmap): Promise<Blob> {
   return await canvas.convertToBlob({ type: 'image/webp' })
 }
 
-// Safari/WebKit rejects createImageBitmap(blob) for Cache-API blobs with an
-// "access control checks" error (it treats the internal blob: URL as
-// cross-origin). Decoding via an HTMLImageElement object URL is unaffected and
-// works in every browser, so we detect the gap once and then stay on the
-// fallback path. Both branches return an ImageBitmap so callers can still
-// .close() the result.
+// The WebKit "access control checks" failure for Cache-API blobs is fixed at
+// the source in getTerrainCacheBlob (bytes copied into a fresh page-origin
+// Blob). This fallback to HTMLImageElement decoding remains only as a safety
+// net for browsers that lack createImageBitmap(Blob) support entirely; we
+// detect the gap once and then stay on the fallback path. Both branches return
+// an ImageBitmap so callers can still .close() the result.
 let blobBitmapSupported: boolean | null = null
 
 export async function blobToImageBitmap(blob: Blob): Promise<ImageBitmap> {
