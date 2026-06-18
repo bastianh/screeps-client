@@ -299,10 +299,10 @@ export class MapRenderer {
 
     const lod = this.getLOD()
 
-    // Zoomed out - keep raw bytes for lazy hi-res bake if user zooms in later
-    if (lod === 0) {
-      this.terrainData.set(roomName, raw)
-    }
+    // Keep raw bytes so the *other* LOD can be baked lazily later, in either
+    // zoom direction — the zoom (and thus the target LOD) may even change while
+    // this bake is in flight.
+    this.terrainData.set(roomName, raw)
 
     const bitmap = await this.getTerrainBitmap(roomName, lod, raw)
     if (!bitmap) return
@@ -323,19 +323,22 @@ export class MapRenderer {
         entry.texLo.destroy(true)
       }
       entry.texLo = tex as unknown as RenderTexture
-      if (this.getLOD() === 0) entry.terrainSprite.texture = tex
     } else {
       if (entry.texHi && !entry.texHi.destroyed) {
         if ((entry.terrainSprite.texture as unknown) === entry.texHi) entry.terrainSprite.texture = Texture.EMPTY
         entry.texHi.destroy(true)
       }
       entry.texHi = tex as unknown as RenderTexture
-      if (this.getLOD() === 1) entry.terrainSprite.texture = tex
     }
 
     entry.terrainSprite.width  = MAP_ROOM_SIZE
     entry.terrainSprite.height = MAP_ROOM_SIZE
     this.terrainBaked.add(roomName)
+
+    // Apply the texture for whatever LOD is current *now*. If the zoom changed
+    // while baking, we just baked the other LOD's texture; ensureCurrentLod
+    // bakes the missing one from the kept raw bytes so the room is never blank.
+    void this.ensureCurrentLod(roomName, entry)
   }
 
 
@@ -344,36 +347,37 @@ export class MapRenderer {
   }
 
 
-  private async applyLOD(): Promise<void> {
+  // Make the room's sprite show the texture for the *current* LOD, baking it
+  // from the kept raw bytes if that LOD hasn't been baked yet. Used after a bake
+  // (the zoom may have changed mid-flight) and whenever the LOD changes. Returns
+  // a promise only when a bake was needed, so callers can await pending work.
+  private ensureCurrentLod(roomName: string, entry: RoomEntry): Promise<void> | void {
     const hi = this.getLOD() === 1
+    const have = hi ? entry.texHi : entry.texLo
+    if (have && !have.destroyed) {
+      entry.terrainSprite.texture = have as unknown as Texture
+      return
+    }
+    const raw = this.terrainData.get(roomName)
+    if (!raw) return
+    return this.getTerrainBitmap(roomName, hi ? 1 : 0, raw).then((bitmap) => {
+      if (!bitmap) return
+      if (!this.activeRooms.has(roomName)) { bitmap.close(); return }
+      const tex = Texture.from(bitmap)
+      if (hi) entry.texHi = tex as unknown as RenderTexture
+      else entry.texLo = tex as unknown as RenderTexture
+      // Re-check: another zoom may have happened while this bake was in flight.
+      if ((this.getLOD() === 1) === hi) entry.terrainSprite.texture = tex
+    })
+  }
 
-    const tasks = []
-
+  private async applyLOD(): Promise<void> {
+    const tasks: Promise<void>[] = []
     for (const [roomName, entry] of this.activeRooms) {
       if (!this.terrainBaked.has(roomName)) continue
-
-      if (hi && !entry.texHi) {
-        // First time at LOD 1 for this room
-        const raw = this.terrainData.get(roomName)
-        if (raw) {
-          this.terrainData.delete(roomName)
-          tasks.push(
-            this.getTerrainBitmap(roomName, 1, raw).then((bitmap) => {
-              if (bitmap && this.activeRooms.has(roomName)) {
-                entry.texHi = Texture.from(bitmap) as unknown as RenderTexture
-                if (this.getLOD() === 1) entry.terrainSprite.texture = entry.texHi
-              } else if (bitmap) {
-                bitmap.close()
-              }
-            })
-          )
-        }
-      } else {
-        const tex = hi ? entry.texHi : entry.texLo
-        if (tex && !tex.destroyed) entry.terrainSprite.texture = tex
-      }
+      const task = this.ensureCurrentLod(roomName, entry)
+      if (task) tasks.push(task)
     }
-
     await Promise.all(tasks)
   }
 
