@@ -3,7 +3,7 @@ import type { RoomMap2Data, Badge } from 'screeps-connectivity'
 import { BadgeTextureCache } from './BadgeTextureCache.js'
 import { MapVisualLayer } from './MapVisualLayer.js'
 import { parseRoomName, formatRoomName } from '~/utils/roomName.js'
-import { getTerrainCacheBlob, saveTerrainCacheBlob, blobToImageBitmap, imageBitmapToBlob } from './terrainCache.js'
+import { getTerrainCacheBlob, saveTerrainCacheBlob, blobToImageBitmap } from './terrainCache.js'
 import TerrainWorker from './terrain.worker.ts?worker'
 import {
   TERRAIN_WALL, TERRAIN_ROAD, TERRAIN_BORDER,
@@ -84,6 +84,14 @@ export interface MapRendererCallbacks {
   onZoomChanged?: (zoom: number) => void
 }
 
+// Result posted back by the terrain worker: the baked bitmap plus an
+// already-encoded cache copy (bytes), so the main thread never has to encode.
+interface BakeResult {
+  bitmap: ImageBitmap
+  cacheBytes?: ArrayBuffer
+  cacheType?: string
+}
+
 export class MapRenderer {
   readonly app: Application
   private world!: Container
@@ -97,7 +105,7 @@ export class MapRenderer {
   private readonly terrainBaked = new Set<string>()
   private readonly terrainData  = new Map<string, Uint8Array>()  // raw bytes kept until texHi is baked
   private worker: Worker
-  private pendingBakes = new Map<number, { roomName: string, lod: number, resolve: (bmp: ImageBitmap) => void, reject: (err: unknown) => void }>()
+  private pendingBakes = new Map<number, { roomName: string, lod: number, resolve: (r: BakeResult) => void, reject: (err: unknown) => void }>()
   private nextBakeId = 0
   public currentShard: string = 'shard0'
   private readonly callbacks: MapRendererCallbacks
@@ -135,11 +143,11 @@ export class MapRenderer {
     this.callbacks = callbacks
     this.worker = new TerrainWorker()
     this.worker.onmessage = (e) => {
-      const { id, bitmap } = e.data
+      const { id, bitmap, cacheBytes, cacheType } = e.data
       const pending = this.pendingBakes.get(id)
       if (pending) {
         this.pendingBakes.delete(id)
-        pending.resolve(bitmap)
+        pending.resolve({ bitmap, cacheBytes, cacheType })
       }
     }
   }
@@ -262,17 +270,18 @@ export class MapRenderer {
 
       // Cache miss -> use Web Worker
       const id = this.nextBakeId++
-      const promise = new Promise<ImageBitmap>((resolve, reject) => {
+      const promise = new Promise<BakeResult>((resolve, reject) => {
         this.pendingBakes.set(id, { roomName, lod, resolve, reject })
       })
       this.worker.postMessage({ id, roomName, lod, raw })
 
-      const bitmap = await promise
+      const { bitmap, cacheBytes, cacheType } = await promise
 
-      // Save to Cache API asynchronously (don't block)
-      imageBitmapToBlob(bitmap).then(blob => {
-        saveTerrainCacheBlob(shard, roomName, lod, blob)
-      }).catch(err => warn('failed to save to terrainCache:', err))
+      // The worker already encoded the cache copy off the main thread; just
+      // persist the bytes (cheap). Skipped if encoding was unsupported there.
+      if (cacheBytes) {
+        saveTerrainCacheBlob(shard, roomName, lod, new Blob([cacheBytes], { type: cacheType || 'image/webp' }))
+      }
 
       return bitmap
     } catch (e) {

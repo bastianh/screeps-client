@@ -108,7 +108,7 @@ function drawRoundedLayer(ctx: OffscreenCanvasRenderingContext2D, raw: Uint8Arra
   ctx.fill()
 }
 
-self.onmessage = (e: MessageEvent) => {
+self.onmessage = async (e: MessageEvent) => {
   const { id, roomName, lod, raw } = e.data as {
     id: number,
     roomName: string,
@@ -138,6 +138,22 @@ self.onmessage = (e: MessageEvent) => {
     drawFlatLayer(ctx, raw, TerrainType.Wall, T)
   }
 
+  // Encode the cache copy here, off the main thread. Baking many rooms at once
+  // (zooming far out) used to run convertToBlob per tile on the main thread,
+  // which froze the tab. Doing it in the worker keeps the UI responsive.
+  // convertToBlob must run before transferToImageBitmap, which detaches the
+  // canvas bitmap. If encoding is unsupported/fails we simply skip caching.
+  let cacheBytes: ArrayBuffer | undefined
+  let cacheType: string | undefined
+  try {
+    const blob = await canvas.convertToBlob({ type: 'image/webp' })
+    cacheBytes = await blob.arrayBuffer()
+    cacheType = blob.type
+  } catch {
+    cacheBytes = undefined
+  }
+
   const bitmap = canvas.transferToImageBitmap()
-  self.postMessage({ id, roomName, lod, bitmap }, { transfer: [bitmap] })
+  const transfer: Transferable[] = cacheBytes ? [bitmap, cacheBytes] : [bitmap]
+  self.postMessage({ id, roomName, lod, bitmap, cacheBytes, cacheType }, { transfer })
 }

@@ -38,14 +38,6 @@ export async function saveTerrainCacheBlob(shard: string, roomName: string, lod:
   }
 }
 
-export async function imageBitmapToBlob(bitmap: ImageBitmap): Promise<Blob> {
-  const canvas = new OffscreenCanvas(bitmap.width, bitmap.height)
-  const ctx = canvas.getContext('2d')
-  if (!ctx) throw new Error('OffscreenCanvas 2D context not available')
-  ctx.drawImage(bitmap, 0, 0)
-  return await canvas.convertToBlob({ type: 'image/webp' })
-}
-
 // The WebKit "access control checks" failure for Cache-API blobs is fixed at
 // the source in getTerrainCacheBlob (bytes copied into a fresh page-origin
 // Blob). This fallback to HTMLImageElement decoding remains only as a safety
