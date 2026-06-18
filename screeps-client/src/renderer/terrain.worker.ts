@@ -109,11 +109,12 @@ function drawRoundedLayer(ctx: OffscreenCanvasRenderingContext2D, raw: Uint8Arra
 }
 
 self.onmessage = async (e: MessageEvent) => {
-  const { id, roomName, lod, raw } = e.data as {
+  const { id, roomName, lod, raw, shard } = e.data as {
     id: number,
     roomName: string,
     lod: number,
-    raw: Uint8Array
+    raw: Uint8Array,
+    shard: string
   }
 
   const size = LOD_SIZES[lod] || 128
@@ -138,22 +139,24 @@ self.onmessage = async (e: MessageEvent) => {
     drawFlatLayer(ctx, raw, TerrainType.Wall, T)
   }
 
-  // Encode the cache copy here, off the main thread. Baking many rooms at once
-  // (zooming far out) used to run convertToBlob per tile on the main thread,
-  // which froze the tab. Doing it in the worker keeps the UI responsive.
-  // convertToBlob must run before transferToImageBitmap, which detaches the
-  // canvas bitmap. If encoding is unsupported/fails we simply skip caching.
-  let cacheBytes: ArrayBuffer | undefined
-  let cacheType: string | undefined
+  // Deliver the baked tile immediately so it renders without waiting for the
+  // cache encode. createImageBitmap copies the canvas (unlike
+  // transferToImageBitmap, which would detach it and break the convertToBlob
+  // below).
+  const bitmap = await createImageBitmap(canvas)
+  self.postMessage({ kind: 'bitmap', id, roomName, lod, bitmap }, { transfer: [bitmap] })
+
+  // Encode the cache copy afterwards, still off the main thread (doing this per
+  // tile on the main thread used to freeze the tab when zooming far out). It no
+  // longer gates the visible tile. Encoding failures just skip caching.
   try {
     const blob = await canvas.convertToBlob({ type: 'image/webp' })
-    cacheBytes = await blob.arrayBuffer()
-    cacheType = blob.type
+    const cacheBytes = await blob.arrayBuffer()
+    self.postMessage(
+      { kind: 'cache', shard, roomName, lod, cacheBytes, cacheType: blob.type },
+      { transfer: [cacheBytes] },
+    )
   } catch {
-    cacheBytes = undefined
+    // encoding unsupported/failed — skip caching this tile
   }
-
-  const bitmap = canvas.transferToImageBitmap()
-  const transfer: Transferable[] = cacheBytes ? [bitmap, cacheBytes] : [bitmap]
-  self.postMessage({ id, roomName, lod, bitmap, cacheBytes, cacheType }, { transfer })
 }

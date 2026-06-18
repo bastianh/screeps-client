@@ -84,14 +84,6 @@ export interface MapRendererCallbacks {
   onZoomChanged?: (zoom: number) => void
 }
 
-// Result posted back by the terrain worker: the baked bitmap plus an
-// already-encoded cache copy (bytes), so the main thread never has to encode.
-interface BakeResult {
-  bitmap: ImageBitmap
-  cacheBytes?: ArrayBuffer
-  cacheType?: string
-}
-
 export class MapRenderer {
   readonly app: Application
   private world!: Container
@@ -105,7 +97,7 @@ export class MapRenderer {
   private readonly terrainBaked = new Set<string>()
   private readonly terrainData  = new Map<string, Uint8Array>()  // raw bytes kept until texHi is baked
   private worker: Worker
-  private pendingBakes = new Map<number, { roomName: string, lod: number, resolve: (r: BakeResult) => void, reject: (err: unknown) => void }>()
+  private pendingBakes = new Map<number, { roomName: string, lod: number, resolve: (bmp: ImageBitmap) => void, reject: (err: unknown) => void }>()
   private nextBakeId = 0
   public currentShard: string = 'shard0'
   private readonly callbacks: MapRendererCallbacks
@@ -143,11 +135,16 @@ export class MapRenderer {
     this.callbacks = callbacks
     this.worker = new TerrainWorker()
     this.worker.onmessage = (e) => {
-      const { id, bitmap, cacheBytes, cacheType } = e.data
-      const pending = this.pendingBakes.get(id)
+      const d = e.data
+      if (d.kind === 'cache') {
+        // Cache copy encoded by the worker; persist the bytes (cheap, async).
+        saveTerrainCacheBlob(d.shard, d.roomName, d.lod, new Blob([d.cacheBytes], { type: d.cacheType || 'image/webp' }))
+        return
+      }
+      const pending = this.pendingBakes.get(d.id)
       if (pending) {
-        this.pendingBakes.delete(id)
-        pending.resolve({ bitmap, cacheBytes, cacheType })
+        this.pendingBakes.delete(d.id)
+        pending.resolve(d.bitmap)
       }
     }
   }
@@ -268,22 +265,16 @@ export class MapRenderer {
         return await blobToImageBitmap(cachedBlob)
       }
 
-      // Cache miss -> use Web Worker
+      // Cache miss -> use Web Worker. The worker posts the baked bitmap back
+      // first (resolving this promise) and then encodes + posts the cache copy
+      // separately, so caching never delays the visible tile.
       const id = this.nextBakeId++
-      const promise = new Promise<BakeResult>((resolve, reject) => {
+      const promise = new Promise<ImageBitmap>((resolve, reject) => {
         this.pendingBakes.set(id, { roomName, lod, resolve, reject })
       })
-      this.worker.postMessage({ id, roomName, lod, raw })
+      this.worker.postMessage({ id, roomName, lod, raw, shard })
 
-      const { bitmap, cacheBytes, cacheType } = await promise
-
-      // The worker already encoded the cache copy off the main thread; just
-      // persist the bytes (cheap). Skipped if encoding was unsupported there.
-      if (cacheBytes) {
-        saveTerrainCacheBlob(shard, roomName, lod, new Blob([cacheBytes], { type: cacheType || 'image/webp' }))
-      }
-
-      return bitmap
+      return await promise
     } catch (e) {
       warn('error getting terrain bitmap:', e)
       return null

@@ -74,28 +74,41 @@ export function MapViewer(props: MapViewerProps) {
   const TERRAIN_BATCH_MS = 0
   let terrainQueue: string[] = []
   let terrainTimer: ReturnType<typeof setTimeout> | null = null
+  // Rooms whose terrain is fetched/baking but not yet rendered. hasRoom() only
+  // turns true once the bake completes, so without this the effect re-queues
+  // in-flight rooms on every visibleRooms change — duplicate fetches + bakes.
+  const requested = new Set<string>()
 
   const drainTerrain = () => {
     terrainTimer = null
     const c = client()
     if (!c || !renderer) return
     const vis = new Set(visibleRooms())
-    terrainQueue = terrainQueue.filter(r => vis.has(r) && !renderer!.hasRoom(r))
+    terrainQueue = terrainQueue.filter(r => vis.has(r) && !renderer!.hasRoom(r) && !requested.has(r))
     if (terrainQueue.length === 0) return
     const batch = terrainQueue.splice(0, TERRAIN_BATCH_SIZE)
+    for (const r of batch) requested.add(r)
     c.stores.room.terrainBulk(batch, props.shard)
-      .then(terrainMap => {
+      .then(async terrainMap => {
+        const bakes: Promise<void>[] = []
         for (const [room, terrain] of terrainMap) {
-          renderer?.setRoomTerrain(room, terrain)
+          const p = renderer?.setRoomTerrain(room, terrain)
+          if (p) bakes.push(p)
           const unclaimable = roomUnclaimable.get(room)
           if (unclaimable !== undefined) renderer?.setRoomOwned(room, unclaimable)
         }
         for (const room of batch) {
           if (!terrainMap.has(room)) renderer?.markRoomFetched(room)
         }
+        // Keep rooms marked in-flight until their bake finishes (hasRoom() turns
+        // true), otherwise they could be re-queued in the gap before that.
+        await Promise.all(bakes)
       })
       .catch(err => error('terrain fetch failed:', err))
-      .finally(() => { if (terrainQueue.length > 0) terrainTimer = setTimeout(drainTerrain, TERRAIN_BATCH_MS) })
+      .finally(() => {
+        for (const r of batch) requested.delete(r)
+        if (terrainQueue.length > 0) terrainTimer = setTimeout(drainTerrain, TERRAIN_BATCH_MS)
+      })
   }
 
   // Drop local room stats when connection or shard changes
@@ -184,6 +197,7 @@ export function MapViewer(props: MapViewerProps) {
   onCleanup(() => {
     if (terrainTimer !== null) { clearTimeout(terrainTimer); terrainTimer = null }
     terrainQueue = []
+    requested.clear()
     for (const sub of map2Subs.values()) sub.dispose()
     map2Subs.clear()
     renderer?.destroy()
@@ -230,7 +244,7 @@ export function MapViewer(props: MapViewerProps) {
     const visibleSet = new Set(rooms)
 
     // Queue new rooms for progressive terrain loading, sorted center-out
-    const newRooms = rooms.filter(r => !renderer?.hasRoom(r))
+    const newRooms = rooms.filter(r => !renderer?.hasRoom(r) && !requested.has(r))
     if (newRooms.length > 0) {
       const cx = rooms.reduce((s, r) => s + (parseRoomName(r)?.x ?? 0), 0) / rooms.length
       const cy = rooms.reduce((s, r) => s + (parseRoomName(r)?.y ?? 0), 0) / rooms.length
