@@ -1,6 +1,7 @@
-import { onMount } from 'solid-js'
+import { createSignal, onMount } from 'solid-js'
 import { client, status, tryAutoConnect, connect } from '~/stores/clientStore.js'
 import { LoginForm } from '~/components/LoginForm.js'
+import { ConnectingScreen } from '~/components/ConnectingScreen.js'
 import { Dashboard } from './Dashboard.js'
 import { isEmbedded, isXxscreepsMode, embeddedServerUrl } from '~/utils/embedded.js'
 import { createLogger } from '~/utils/log.js'
@@ -15,31 +16,54 @@ function guestAutoConnectUrl(): string | null {
   return getSession(SS.url) ?? 'https://screeps.com'
 }
 
+// Whether a connection will be attempted automatically on boot — known
+// synchronously at first render, so we can show the ConnectingScreen instead of
+// flashing the LoginForm. Mirrors the conditions handled in onMount and
+// tryAutoConnect.
+function willAutoConnect(): boolean {
+  if (isXxscreepsMode()) return true
+  if (guestAutoConnectUrl() !== null) return true
+  const url = isEmbedded() ? embeddedServerUrl() : getSession(SS.url)
+  const token = getSession(SS.token)
+  return Boolean(url && token)
+}
+
 export function App() {
   const isConnected = () => status() === 'connected' && client() !== null
+  // True until the initial auto-connect attempt settles, so the boot splash is
+  // only shown during startup and never re-appears (e.g. after a later logout).
+  const [booting, setBooting] = createSignal(willAutoConnect())
 
   onMount(async () => {
-    if (status() === 'idle') {
-      await tryAutoConnect().catch(() => {})
-      if (status() !== 'connected') {
-        if (isXxscreepsMode()) {
-          const url = embeddedServerUrl()
-          log(`xxscreeps mode — auto-connecting as guest to ${url}`)
-          connect({ url, auth: 'guest', storage: null }).catch(() => {})
-        } else if (!isEmbedded()) {
-          const guestUrl = guestAutoConnectUrl()
-          if (guestUrl) {
-            log(`?guest param — auto-connecting as guest to ${guestUrl}`)
-            connect({ url: guestUrl, auth: 'guest', storage: null }).catch(() => {})
+    try {
+      if (status() === 'idle') {
+        await tryAutoConnect().catch(() => {})
+        if (status() !== 'connected') {
+          if (isXxscreepsMode()) {
+            const url = embeddedServerUrl()
+            log(`xxscreeps mode — auto-connecting as guest to ${url}`)
+            await connect({ url, auth: 'guest', storage: null }).catch(() => {})
+          } else if (!isEmbedded()) {
+            const guestUrl = guestAutoConnectUrl()
+            if (guestUrl) {
+              log(`?guest param — auto-connecting as guest to ${guestUrl}`)
+              await connect({ url: guestUrl, auth: 'guest', storage: null }).catch(() => {})
+            }
           }
         }
       }
+    } finally {
+      setBooting(false)
     }
   })
 
   return (
     <div style={{ width: '100%', height: '100%' }}>
-      {isConnected() ? <Dashboard /> : <LoginForm />}
+      {isConnected()
+        ? <Dashboard />
+        : booting()
+          ? <ConnectingScreen />
+          : <LoginForm />}
     </div>
   )
 }
