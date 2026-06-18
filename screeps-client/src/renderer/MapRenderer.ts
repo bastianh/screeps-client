@@ -843,7 +843,12 @@ export class MapRenderer {
     this.mapVisualLayer?.destroy()
     this.mapVisualLayer = null
     try {
-      this.app.destroy(false, { children: true, texture: true, context: true })
+      // NOT texture:true — terrain textures are already destroyed manually above,
+      // and texture:true would also destroy the globally shared Texture.EMPTY that
+      // every empty/unbaked terrainSprite references. That corrupts EMPTY for the
+      // next MapRenderer instance and crashes on render (source.style === null →
+      // "addressModeU of null"), most visibly when zoomed far out (many EMPTY tiles).
+      this.app.destroy(false, { children: true, context: true })
     } catch (e) {
       warn('destroy error (ignored):', e)
     }

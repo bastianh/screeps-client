@@ -39,6 +39,35 @@ export async function imageBitmapToBlob(bitmap: ImageBitmap): Promise<Blob> {
   return await canvas.convertToBlob({ type: 'image/webp' })
 }
 
+// Safari/WebKit rejects createImageBitmap(blob) for Cache-API blobs with an
+// "access control checks" error (it treats the internal blob: URL as
+// cross-origin). Decoding via an HTMLImageElement object URL is unaffected and
+// works in every browser, so we detect the gap once and then stay on the
+// fallback path. Both branches return an ImageBitmap so callers can still
+// .close() the result.
+let blobBitmapSupported: boolean | null = null
+
 export async function blobToImageBitmap(blob: Blob): Promise<ImageBitmap> {
-  return await createImageBitmap(blob)
+  if (blobBitmapSupported !== false) {
+    try {
+      const bitmap = await createImageBitmap(blob)
+      blobBitmapSupported = true
+      return bitmap
+    } catch (err) {
+      // Once we know the direct path works, a later failure is a real decode
+      // error and must propagate rather than silently switching strategies.
+      if (blobBitmapSupported === true) throw err
+      blobBitmapSupported = false
+    }
+  }
+
+  const url = URL.createObjectURL(blob)
+  try {
+    const img = new Image()
+    img.src = url
+    await img.decode()
+    return await createImageBitmap(img)
+  } finally {
+    URL.revokeObjectURL(url)
+  }
 }
