@@ -699,22 +699,45 @@ function createObjectVisual(
     }
     case 'mineral': {
       const mtype = typeof obj.mineralType === 'string' ? obj.mineralType : '?'
-      const mcolor = MINERAL_COLORS[mtype] ?? OBJ_CYAN
-      const textColor = MINERAL_TEXT_COLORS[mtype] ?? 0xFFFFFF
-
-      const discG = new Graphics()
-      discG.circle(cx, cy, MINERAL_R)
-      discG.fill(mcolor)
-      container.addChild(discG)
-
-      const glyph = new Text({
-        text: mtype,
-        style: { fontSize: MINERAL_GLYPH_FONT, fill: textColor, fontWeight: 'bold' },
-      })
-      glyph.anchor.set(0.5, 0.5)
-      glyph.scale.set(MINERAL_GLYPH_SCALE)
-      glyph.position.set(cx, cy)
-      container.addChild(glyph)
+      const mineralSpec = theme?.mineral
+      if (mineralSpec && atlasCache) {
+        const frame = `mineral/${mtype}`
+        const targetSize = TILE_SIZE * mineralSpec.tileScale
+        const applyTexture = (sprite: Sprite, tex: Texture) => {
+          sprite.texture = tex
+          sprite.width = targetSize
+          sprite.height = targetSize
+        }
+        const sprite = new Sprite()
+        sprite.anchor.set(0.5, 0.5)
+        sprite.x = cx
+        sprite.y = cy
+        container.addChild(sprite)
+        const tex = atlasCache.getTexture(theme!.atlasUrl, frame)
+        if (tex) {
+          applyTexture(sprite, tex)
+        } else {
+          atlasCache.getOrLoad(theme!.atlasUrl).then(sheet => {
+            if (!sprite.destroyed) applyTexture(sprite, sheet.textures[frame] ?? Texture.EMPTY)
+          }).catch(() => {})
+        }
+      } else {
+        // Fallback: colored disc + letter glyph
+        const mcolor = MINERAL_COLORS[mtype] ?? OBJ_CYAN
+        const textColor = MINERAL_TEXT_COLORS[mtype] ?? 0xFFFFFF
+        const discG = new Graphics()
+        discG.circle(cx, cy, MINERAL_R)
+        discG.fill(mcolor)
+        container.addChild(discG)
+        const glyph = new Text({
+          text: mtype,
+          style: { fontSize: MINERAL_GLYPH_FONT, fill: textColor, fontWeight: 'bold' },
+        })
+        glyph.anchor.set(0.5, 0.5)
+        glyph.scale.set(MINERAL_GLYPH_SCALE)
+        glyph.position.set(cx, cy)
+        container.addChild(glyph)
+      }
       break
     }
     case 'deposit': {
@@ -1351,6 +1374,7 @@ function createObjectVisual(
   const specZ = obj.type === 'flag' ? (theme?.flag?.zIndex ?? 0)
     : obj.type === 'controller' ? (theme?.controller?.zIndex ?? 0)
     : obj.type === 'tombstone' ? (theme?.tombstone?.zIndex ?? 0)
+    : obj.type === 'mineral' ? (theme?.mineral?.zIndex ?? 0)
     : (theme?.sprites[obj.type]?.zIndex ?? 0)
   container.zIndex = baseZ + specZ
 

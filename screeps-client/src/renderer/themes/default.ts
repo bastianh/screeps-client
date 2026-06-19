@@ -42,4 +42,7 @@ export const defaultSpriteTheme: Theme = {
   deposit: {
     tileScale: 1.2,
   },
+  mineral: {
+    tileScale: 1.3,
+  },
 }

@@ -2,6 +2,8 @@ import { Application, Container, Graphics, RenderTexture, Sprite, Text, Texture 
 import type { RoomMap2Data, Badge } from 'screeps-connectivity'
 import { BadgeTextureCache } from './BadgeTextureCache.js'
 import { MapVisualLayer } from './MapVisualLayer.js'
+import { sharedAtlasCache } from './AtlasCache.js'
+import { defaultSpriteTheme } from './themes/default.js'
 import { parseRoomName, formatRoomName } from '~/utils/roomName.js'
 import { getTerrainCacheBlob, saveTerrainCacheBlob, blobToImageBitmap } from './terrainCache.js'
 import TerrainWorker from './terrain.worker.ts?worker'
@@ -48,16 +50,6 @@ const COLOR_WALLS_OWN       = 0x447744   // own room walls/ramparts
 const COLOR_WALLS_FOREIGN   = 0x882222   // foreign room walls/ramparts
 const MAP2_FIXED_KEYS  = new Set(['w', 'r', 'pb', 'p', 's', 'c', 'm', 'k', 'd'])
 
-const MINERAL_COLORS: Record<string, number> = {
-  H: 0xcccccc,
-  O: 0xcccccc,
-  U: 0x58a6ff,
-  L: 0x3fb950,
-  K: 0xa371f7,
-  Z: 0xd29922,
-  X: 0xf85149,
-}
-
 const MINERAL_DENSITY_SIZES = [16, 24, 32, 40] // screen pixels for density 1–4
 
 interface RoomEntry {
@@ -73,10 +65,9 @@ interface RoomEntry {
   badgeSprite?: Sprite
   badgeLevel?: number
   nameLabel: Text
-  mineralCircle?: Graphics
-  mineralLabel?: Text
+  mineralSprite?: Sprite
+  mineralType?: string
   mineralDensity?: number
-  mineralColor?: number
 }
 
 export interface MapRendererCallbacks {
@@ -575,45 +566,41 @@ export class MapRenderer {
     if (!entry) return
 
     if (!mineral || !density) {
-      if (entry.mineralCircle) {
-        entry.container.removeChild(entry.mineralCircle)
-        entry.mineralCircle.destroy()
-        entry.mineralCircle = undefined
+      if (entry.mineralSprite) {
+        entry.container.removeChild(entry.mineralSprite)
+        entry.mineralSprite.destroy()
+        entry.mineralSprite = undefined
       }
-      if (entry.mineralLabel) {
-        entry.container.removeChild(entry.mineralLabel)
-        entry.mineralLabel.destroy()
-        entry.mineralLabel = undefined
-      }
+      entry.mineralType = undefined
       entry.mineralDensity = undefined
       return
     }
 
-    const color = MINERAL_COLORS[mineral] ?? OBJ_CYAN
     entry.mineralDensity = density
-    entry.mineralColor = color
 
-    if (!entry.mineralCircle) {
-      const circle = new Graphics()
-      circle.x = MAP_ROOM_SIZE / 2
-      circle.y = MAP_ROOM_SIZE / 2
+    if (!entry.mineralSprite || entry.mineralType !== mineral) {
+      if (entry.mineralSprite) {
+        entry.container.removeChild(entry.mineralSprite)
+        entry.mineralSprite.destroy()
+      }
+      const frame = `mineral/${mineral}`
+      const sprite = new Sprite()
+      sprite.anchor.set(0.5)
+      sprite.x = MAP_ROOM_SIZE / 2
+      sprite.y = MAP_ROOM_SIZE / 2
       const nameIndex = entry.container.getChildIndex(entry.nameLabel)
-      entry.container.addChildAt(circle, nameIndex)
-      entry.mineralCircle = circle
-    }
+      entry.container.addChildAt(sprite, nameIndex)
+      entry.mineralSprite = sprite
+      entry.mineralType = mineral
 
-    if (!entry.mineralLabel) {
-      const label = new Text({
-        text: mineral,
-        style: { fontSize: 36, fill: 0xffffff, fontFamily: 'ui-monospace, monospace', fontWeight: 'bold' },
-      })
-      label.anchor.set(0.5)
-      label.x = MAP_ROOM_SIZE / 2
-      label.y = MAP_ROOM_SIZE / 2
-      entry.container.addChild(label)
-      entry.mineralLabel = label
-    } else {
-      entry.mineralLabel.text = mineral
+      const tex = sharedAtlasCache.getTexture(defaultSpriteTheme.atlasUrl, frame)
+      if (tex) {
+        sprite.texture = tex
+      } else {
+        sharedAtlasCache.getOrLoad(defaultSpriteTheme.atlasUrl).then(sheet => {
+          if (!sprite.destroyed) sprite.texture = sheet.textures[frame] ?? Texture.EMPTY
+        }).catch(() => {})
+      }
     }
 
     this.applyMineralSize(entry, this.zoom)
@@ -624,31 +611,18 @@ export class MapRenderer {
     if (entry.badgeSprite) {
       entry.badgeSprite.visible = this.overlayMode === 'owner'
     }
-    if (entry.mineralCircle) {
-      entry.mineralCircle.visible = this.overlayMode === 'mineral'
-    }
-    if (entry.mineralLabel) {
-      entry.mineralLabel.visible = this.overlayMode === 'mineral'
+    if (entry.mineralSprite) {
+      entry.mineralSprite.visible = this.overlayMode === 'mineral'
     }
   }
 
   private applyMineralSize(entry: RoomEntry, zoom: number): void {
-    if (!entry.mineralCircle || !entry.mineralLabel || entry.mineralDensity === undefined || entry.mineralColor === undefined) return
+    if (!entry.mineralSprite || entry.mineralDensity === undefined) return
     const scaleFactor = Math.max(0.5, Math.min(1.5, zoom))
-    const screenDiameter = (MINERAL_DENSITY_SIZES[entry.mineralDensity - 1] ?? 24) * scaleFactor
-    const worldRadius = (screenDiameter / 2) / zoom
-
-    entry.mineralCircle.clear()
-    entry.mineralCircle.circle(0, 0, 1)
-    entry.mineralCircle.fill(entry.mineralColor)
-    const borderScreenWidth = 2
-    const borderWorldWidth = borderScreenWidth / zoom
-    entry.mineralCircle.stroke({ color: 0x000000, width: borderWorldWidth / worldRadius })
-    entry.mineralCircle.scale.set(worldRadius)
-
-    const labelScreenHeight = screenDiameter * 0.55
-    const labelScale = (labelScreenHeight / 36) / zoom
-    entry.mineralLabel.scale.set(labelScale)
+    const screenSize = (MINERAL_DENSITY_SIZES[entry.mineralDensity - 1] ?? 24) * scaleFactor
+    const worldSize = screenSize / zoom
+    entry.mineralSprite.width = worldSize
+    entry.mineralSprite.height = worldSize
   }
 
   private updateNameLabelScale(entry: RoomEntry, zoom: number): void {
@@ -785,18 +759,13 @@ export class MapRenderer {
       entry.badgeSprite.destroy()
       entry.badgeSprite = undefined
     }
-    if (entry.mineralCircle) {
-      entry.container.removeChild(entry.mineralCircle)
-      entry.mineralCircle.destroy()
-      entry.mineralCircle = undefined
+    if (entry.mineralSprite) {
+      entry.container.removeChild(entry.mineralSprite)
+      entry.mineralSprite.destroy()
+      entry.mineralSprite = undefined
     }
-    if (entry.mineralLabel) {
-      entry.container.removeChild(entry.mineralLabel)
-      entry.mineralLabel.destroy()
-      entry.mineralLabel = undefined
-    }
+    entry.mineralType = undefined
     entry.mineralDensity = undefined
-    entry.mineralColor = undefined
     entry.container.visible = false
     this.safeModeRooms.delete(roomName)
 
@@ -919,19 +888,14 @@ export class MapRenderer {
       entry.badgeSprite = undefined
     }
 
-    // Reset pooled mineral graphics
-    if (entry.mineralCircle) {
-      entry.container.removeChild(entry.mineralCircle)
-      entry.mineralCircle.destroy()
-      entry.mineralCircle = undefined
+    // Reset pooled mineral sprite
+    if (entry.mineralSprite) {
+      entry.container.removeChild(entry.mineralSprite)
+      entry.mineralSprite.destroy()
+      entry.mineralSprite = undefined
     }
-    if (entry.mineralLabel) {
-      entry.container.removeChild(entry.mineralLabel)
-      entry.mineralLabel.destroy()
-      entry.mineralLabel = undefined
-    }
+    entry.mineralType = undefined
     entry.mineralDensity = undefined
-    entry.mineralColor = undefined
 
     // Keep overlays on top
     if (this.safeModeGraphics) {

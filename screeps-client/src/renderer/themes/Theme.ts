@@ -38,6 +38,13 @@ export interface DepositSpec {
   zIndex?: number
 }
 
+// Minerals render a single sprite per type, by convention: `mineral/<type>`
+// (type ∈ H | O | U | L | K | Z | X).
+export interface MineralSpec {
+  tileScale: number
+  zIndex?: number
+}
+
 export interface Theme {
   id: string
   name: string
@@ -47,4 +54,5 @@ export interface Theme {
   flag?: FlagSpec
   tombstone?: TombstoneSpec
   deposit?: DepositSpec
+  mineral?: MineralSpec
 }
