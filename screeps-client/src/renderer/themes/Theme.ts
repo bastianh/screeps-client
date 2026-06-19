@@ -30,6 +30,14 @@ export interface TombstoneSpec {
   zIndex?: number
 }
 
+// Deposits render two stacked layers per commodity type, by convention:
+// `deposit/<depositType>/shape` and `deposit/<depositType>/fill`
+// (depositType ∈ biomass | metal | mist | silicon).
+export interface DepositSpec {
+  tileScale: number
+  zIndex?: number
+}
+
 export interface Theme {
   id: string
   name: string
@@ -38,4 +46,5 @@ export interface Theme {
   controller?: ControllerSpec
   flag?: FlagSpec
   tombstone?: TombstoneSpec
+  deposit?: DepositSpec
 }

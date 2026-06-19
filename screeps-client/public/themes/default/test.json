@@ -45,7 +45,7 @@
 	"sourceSize": {"w":128,"h":128},
 	"anchor": {"x":0.5,"y":0.5}
 },
-"deposit/metal/metal":
+"deposit/metal/shape":
 {
 	"frame": {"x":303,"y":131,"w":128,"h":128},
 	"rotated": false,
@@ -147,10 +147,10 @@
 "meta": {
 	"app": "https://www.codeandweb.com/texturepacker",
 	"version": "1.1",
-	"image": "test.png?v=5ddc0307af3e",
+	"image": "test.png?v=cd1588b54550",
 	"format": "RGBA8888",
 	"size": {"w":658,"h":470},
 	"scale": "1",
-	"smartupdate": "$TexturePacker:SmartUpdate:1c9059d329726e55b12a2ea10e3dd0c9:4aa9c9364074cd1d708dcccced50ab92:02ab132358d6d8b512e80119463a8329$"
+	"smartupdate": "$TexturePacker:SmartUpdate:5ca3b888cb2bec40dde14ac167ebcbe8:4aa9c9364074cd1d708dcccced50ab92:02ab132358d6d8b512e80119463a8329$"
 }
 }

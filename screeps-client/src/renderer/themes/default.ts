@@ -31,4 +31,7 @@ export const defaultSpriteTheme: Theme = {
     tileScale: 1.0,
     zIndex: 4,
   },
+  deposit: {
+    tileScale: 1.2,
+  },
 }

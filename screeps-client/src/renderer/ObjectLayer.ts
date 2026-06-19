@@ -63,6 +63,15 @@ const MINERAL_TEXT_COLORS: Record<string, number> = {
   H: 0x222222,
   O: 0x222222,
 }
+// Deposit commodity colors — from the official client's market-resource SVGs.
+const DEPOSIT_COLORS: Record<string, number> = {
+  biomass: 0x84b012,  // green
+  metal:   0x956f5c,  // copper/brown
+  mist:    0xda6bf5,  // violet
+  silicon: 0x4ca7e5,  // blue
+}
+// Fill layer is kept mostly transparent so the rock shape reads through it.
+const DEPOSIT_FILL_ALPHA = 0.2
 const MINERAL_R = TILE_SIZE * 0.42
 const MINERAL_GLYPH_FONT = 32
 const MINERAL_GLYPH_SCALE = 9 / MINERAL_GLYPH_FONT  // glyph ~9px tall in tile space
@@ -708,8 +717,42 @@ function createObjectVisual(
       break
     }
     case 'deposit': {
+      const depType = typeof obj.depositType === 'string' ? obj.depositType : undefined
+      const depSpec = theme?.deposit
+      if (depType && depSpec && atlasCache) {
+        const targetSize = TILE_SIZE * depSpec.tileScale
+        const applyTexture = (sprite: Sprite, tex: Texture) => {
+          sprite.texture = tex
+          sprite.width = targetSize
+          sprite.height = targetSize
+        }
+        // Two stacked layers: the rock shape, then the commodity fill on top —
+        // both tinted by type; the fill is kept mostly transparent.
+        const tintColor = DEPOSIT_COLORS[depType]
+        for (const frame of [`deposit/${depType}/shape`, `deposit/${depType}/fill`]) {
+          const isFill = frame.endsWith('/fill')
+          const sprite = new Sprite()
+          sprite.anchor.set(0.5, 0.5)
+          sprite.x = cx
+          sprite.y = cy
+          if (tintColor !== undefined) sprite.tint = tintColor
+          if (isFill) sprite.alpha = DEPOSIT_FILL_ALPHA
+          container.addChild(sprite)
+          const tex = atlasCache.getTexture(theme!.atlasUrl, frame)
+          if (tex) {
+            applyTexture(sprite, tex)
+          } else {
+            atlasCache.getOrLoad(theme!.atlasUrl).then(sheet => {
+              if (!sprite.destroyed) applyTexture(sprite, sheet.textures[frame] ?? Texture.EMPTY)
+            }).catch(() => {})
+          }
+        }
+        break
+      }
+      // Fallback: colored rect (no theme/atlas or unknown deposit type)
       g.rect(2, 2, TILE_SIZE - 4, TILE_SIZE - 4)
       g.fill(color)
+      container.addChild(g)
       break
     }
     case 'controller': {
@@ -1271,7 +1314,7 @@ function createObjectVisual(
     }
   }
 
-  if (obj.type !== 'extension' && obj.type !== 'road' && obj.type !== 'creep' && obj.type !== 'tower' && obj.type !== 'controller' && obj.type !== 'flag' && obj.type !== 'source' && obj.type !== 'constructionSite' && obj.type !== 'mineral' && obj.type !== 'tombstone' && obj.type !== 'ruin' && obj.type !== 'storage' && obj.type !== 'constructedWall' && obj.type !== 'rampart' && obj.type !== 'container') {
+  if (obj.type !== 'extension' && obj.type !== 'road' && obj.type !== 'creep' && obj.type !== 'tower' && obj.type !== 'controller' && obj.type !== 'flag' && obj.type !== 'source' && obj.type !== 'constructionSite' && obj.type !== 'mineral' && obj.type !== 'tombstone' && obj.type !== 'ruin' && obj.type !== 'storage' && obj.type !== 'constructedWall' && obj.type !== 'rampart' && obj.type !== 'container' && obj.type !== 'deposit') {
     container.addChild(g)
   }
 
