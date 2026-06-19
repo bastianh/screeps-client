@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.2
+
+### Patch Changes
+
+- 9523f3c: Make highway resources easier to spot on the world map. Power banks are now
+  drawn as larger bright-red dots (radius 1.5 → 2.5) instead of small orange ones,
+  and deposits — previously rendered as tiny muted-red "foreign" dots because
+  their `d` map2 key fell through to the generic user-object path — now show as
+  prominent white dots. The deposit key is documented on `RoomMap2Data`.
+
 ## 0.5.1
 
 ### Patch Changes

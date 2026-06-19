@@ -1,5 +1,30 @@
 # screeps-client
 
+## 0.7.2
+
+### Patch Changes
+
+- b8cf7ec: Render deposits with proper artwork in the room view. The sprite atlas gains
+  shape + fill frames for all four commodity types (biomass, metal, mist,
+  silicon), and the renderer now draws a deposit as two stacked layers tinted by
+  type using the official commodity colors. The fill layer is kept mostly
+  transparent so the rock shape reads through. Falls back to the previous colored
+  rectangle when no theme/atlas or an unknown deposit type is present.
+- 3e90c89: Fix map rooms staying permanently black when zooming while terrain is still loading. `setRoomTerrain` captured the LOD at the start of the bake and only applied the texture if the LOD was still the same when the (async) bake finished — so zooming across the LOD threshold mid-bake left the sprite empty, yet the room was marked baked and never re-requested. Recovery was impossible because the raw terrain bytes were only kept at LOD 0, so `applyLOD` could never bake the missing LOD-0 texture for a room first baked at LOD 1.
+
+  Raw bytes are now kept for every baked room (freed in `clearRoom`), and a shared `ensureCurrentLod` helper applies — or lazily bakes from raw — the texture for whatever LOD is current, both right after a bake and on every LOD change, in either zoom direction.
+
+- 9523f3c: Make highway resources easier to spot on the world map. Power banks are now
+  drawn as larger bright-red dots (radius 1.5 → 2.5) instead of small orange ones,
+  and deposits — previously rendered as tiny muted-red "foreign" dots because
+  their `d` map2 key fell through to the generic user-object path — now show as
+  prominent white dots. The deposit key is documented on `RoomMap2Data`.
+- b48571a: Make the room dark-overlay light pools follow creeps smoothly during movement.
+  Lighting is now a GPU lightmap (a RenderTexture composited from a dark rect plus
+  `erase`-blend light sprites) instead of a canvas re-baked once per tick, so each
+  light tracks its creep's interpolated motion every frame instead of snapping at
+  tick end — with no per-frame canvas redraw or texture re-upload.
+
 ## 0.7.1
 
 ### Patch Changes
