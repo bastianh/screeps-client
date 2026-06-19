@@ -1,5 +1,7 @@
-import { Application, Container, Graphics, Sprite, Texture, Point, Rectangle } from 'pixi.js'
+import { Application, Container, Graphics, Sprite, Point, Rectangle } from 'pixi.js'
 import { HoverHighlightLayer } from './HoverHighlightLayer.js'
+import { LightingLayer } from './LightingLayer.js'
+import type { Light } from './LightingLayer.js'
 
 export const TILE_SIZE = 12
 export const ROOM_SIZE = 50 * TILE_SIZE
@@ -25,9 +27,7 @@ export class RoomRenderer {
   readonly hoverLayer: HoverHighlightLayer
   readonly darkOverlay: Sprite
   readonly lightLayer: Container
-  private readonly overlayCanvas: HTMLCanvasElement
-  private readonly overlayCtx: CanvasRenderingContext2D
-  private readonly overlayTexture: Texture
+  readonly lighting: LightingLayer
   private destroyed = false
   private canDrag = false
   private container: HTMLElement
@@ -48,14 +48,8 @@ export class RoomRenderer {
     this.world = new Container({ sortableChildren: true })
     this.app.stage.addChild(this.world)
 
-    this.overlayCanvas = document.createElement('canvas')
-    this.overlayCanvas.width = ROOM_SIZE
-    this.overlayCanvas.height = ROOM_SIZE
-    this.overlayCtx = this.overlayCanvas.getContext('2d')!
-    this.redrawOverlayCanvas([])
-    this.overlayTexture = Texture.from(this.overlayCanvas)
-
-    this.darkOverlay = new Sprite(this.overlayTexture)
+    this.lighting = new LightingLayer(this.app.renderer)
+    this.darkOverlay = this.lighting.displaySprite
     this.darkOverlay.label = 'darkOverlay'
     this.darkOverlay.zIndex = Z.darkOverlay
     this.world.addChild(this.darkOverlay)
@@ -615,43 +609,20 @@ export class RoomRenderer {
   }
 
   clearLighting(): void {
-    this.redrawOverlayCanvas([])
-    this.overlayTexture.source.update()
+    this.lighting.clear()
   }
 
   updateLighting(objects: Record<string, { type?: unknown; x?: unknown; y?: unknown }>): void {
-    const lights: Array<{ x: number; y: number }> = []
-    for (const obj of Object.values(objects)) {
+    const lights: Light[] = []
+    for (const id in objects) {
+      const obj = objects[id]
+      if (!obj) continue
       if (typeof obj.type === 'string' && LIGHT_EXCLUDED_TYPES.has(obj.type)) continue
       if (typeof obj.x !== 'number' || typeof obj.y !== 'number') continue
-      lights.push({ x: obj.x, y: obj.y })
+      lights.push({ id, cx: (obj.x + 0.5) * TILE_SIZE, cy: (obj.y + 0.5) * TILE_SIZE })
     }
-    this.redrawOverlayCanvas(lights)
-    this.overlayTexture.source.update()
-  }
-
-  private redrawOverlayCanvas(lights: Array<{ x: number; y: number }>): void {
-    const ctx = this.overlayCtx
-    ctx.clearRect(0, 0, ROOM_SIZE, ROOM_SIZE)
-    ctx.fillStyle = 'rgba(0,0,0,0.2)'
-    ctx.fillRect(0, 0, ROOM_SIZE, ROOM_SIZE)
-
-    if (lights.length > 0) {
-      ctx.globalCompositeOperation = 'destination-out'
-      for (const { x, y } of lights) {
-        const cx = (x + 0.5) * TILE_SIZE
-        const cy = (y + 0.5) * TILE_SIZE
-        const r = 3 * TILE_SIZE
-        const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r)
-        grad.addColorStop(0, 'rgba(0,0,0,1)')
-        grad.addColorStop(1, 'rgba(0,0,0,0)')
-        ctx.fillStyle = grad
-        ctx.beginPath()
-        ctx.arc(cx, cy, r, 0, Math.PI * 2)
-        ctx.fill()
-      }
-      ctx.globalCompositeOperation = 'source-over'
-    }
+    this.lighting.setLights(lights)
+    this.lighting.render()
   }
 
   destroy(): void {
@@ -662,7 +633,7 @@ export class RoomRenderer {
     this.resizeObserver?.disconnect()
     this.resizeObserver = null
     this.hoverLayer.destroy()
-    this.overlayTexture.destroy(true)
+    this.lighting.destroy()
     this.app.destroy(true, { children: true })
     if (import.meta.env.DEV) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -3,6 +3,7 @@ import type { RoomObject, RoomObjectMap, RoomObjectDiff, Badge } from 'screeps-c
 import { BadgeTextureCache } from './BadgeTextureCache.js'
 import type { Theme, ControllerSpec, FlagSpec, TombstoneSpec } from './themes/Theme.js'
 import type { AtlasCache } from './AtlasCache.js'
+import type { LightingLayer } from './LightingLayer.js'
 
 const sharedBadgeCache = new BadgeTextureCache()
 import { TILE_SIZE } from './RoomRenderer.js'
@@ -1460,6 +1461,7 @@ export class ObjectLayer {
   private activeTheme: Theme | null = null
   private atlasCache: AtlasCache | null = null
   private roadColor: number = OBJ_ROAD
+  private lighting: LightingLayer | null = null
 
   constructor(ticker?: Ticker, showLabels = true, currentUserId?: string, badge?: Badge, users?: Record<string, { _id: string; username: string; badge?: Badge }>) {
     this.showLabels = showLabels
@@ -1496,12 +1498,21 @@ export class ObjectLayer {
     this.redrawRoads()
   }
 
+  // The dark-overlay lightmap. ObjectLayer drives per-frame light positions so a
+  // creep's light pool follows its interpolated motion instead of snapping at
+  // tick end (the set of lights is reconciled per tick from RoomRenderer).
+  setLightingLayer(lighting: LightingLayer | null): void {
+    this.lighting = lighting
+  }
+
   private tick(): void {
     const tNow = performance.now()
 
     // Creep movement interpolation — linear over ~90% of the current tick duration
-    // (driven from RoomViewer via setMoveDuration()).
-    for (const visual of this.objects.values()) {
+    // (driven from RoomViewer via setMoveDuration()). The light pool is nudged to
+    // match each frame so it tracks the sprite instead of snapping at tick end.
+    const lighting = this.lighting
+    for (const [id, visual] of this.objects) {
       if (visual.__targetX === undefined || visual.__targetY === undefined) continue
       const dur = visual.__moveDur ?? 0
       const startT = visual.__moveStartT ?? tNow
@@ -1514,6 +1525,7 @@ export class ObjectLayer {
         visual.__moveStartY = undefined
         visual.__moveStartT = undefined
         visual.__moveDur = undefined
+        lighting?.setLightPosition(id, visual.x + TILE_SIZE / 2, visual.y + TILE_SIZE / 2)
         continue
       }
       const t = elapsed / dur
@@ -1521,6 +1533,7 @@ export class ObjectLayer {
       const sy = visual.__moveStartY ?? visual.y
       visual.x = sx + (visual.__targetX - sx) * t
       visual.y = sy + (visual.__targetY - sy) * t
+      lighting?.setLightPosition(id, visual.x + TILE_SIZE / 2, visual.y + TILE_SIZE / 2)
     }
 
     // Say bubbles intentionally have no timer-based expiry — their lifecycle is
@@ -1687,6 +1700,11 @@ export class ObjectLayer {
         if (seg && !seg.destroyed) seg.tint = tintColor
       }
     }
+
+    // Composite the lightmap once per frame (no-op unless a light moved this
+    // frame). Runs after interpolation so the texture is up to date before the
+    // main frame is presented.
+    this.lighting?.render()
   }
 
   private startExtAnimation(

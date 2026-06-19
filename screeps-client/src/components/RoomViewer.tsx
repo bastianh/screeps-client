@@ -479,6 +479,7 @@ export function RoomViewer(props: RoomViewerProps) {
       if (dec?.room === props.room && dec.decoration.roadColor != null) {
         objLayer.setRoadColor(dec.decoration.roadColor)
       }
+      objLayer.setLightingLayer(r.lighting)
       objLayer.container.label = 'objects'
       objLayer.container.zIndex = Z.objects
       r.world.addChild(objLayer.container)
