@@ -50,7 +50,7 @@ const COLOR_WALLS_OWN       = 0x447744   // own room walls/ramparts
 const COLOR_WALLS_FOREIGN   = 0x882222   // foreign room walls/ramparts
 const MAP2_FIXED_KEYS  = new Set(['w', 'r', 'pb', 'p', 's', 'c', 'm', 'k', 'd'])
 
-const MINERAL_WORLD_SIZES = [40, 52, 64, 80] // world-space px per density — scales naturally with zoom
+const MINERAL_WORLD_SIZES = [80, 104, 128, 160] // world-space px per density — scales naturally with zoom
 
 interface RoomEntry {
   container: Container
