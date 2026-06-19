@@ -7,6 +7,7 @@ export interface RoomMap2Data {
     c?: [number, number][] | null    // controllers
     m?: [number, number][] | null    // minerals
     k?: [number, number][] | null    // source keeper lairs
+    d?: [number, number][] | null    // deposits (highway commodity resource)
     [userId: string]: [number, number][] | null | undefined  // structures + creeps for that user
 }
 
