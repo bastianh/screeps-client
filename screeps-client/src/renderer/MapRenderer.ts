@@ -50,7 +50,7 @@ const COLOR_WALLS_OWN       = 0x447744   // own room walls/ramparts
 const COLOR_WALLS_FOREIGN   = 0x882222   // foreign room walls/ramparts
 const MAP2_FIXED_KEYS  = new Set(['w', 'r', 'pb', 'p', 's', 'c', 'm', 'k', 'd'])
 
-const MINERAL_DENSITY_SIZES = [40, 52, 64, 80] // screen pixels for density 1–4
+const MINERAL_WORLD_SIZES = [40, 52, 64, 80] // world-space px per density — scales naturally with zoom
 
 interface RoomEntry {
   container: Container
@@ -603,7 +603,7 @@ export class MapRenderer {
       }
     }
 
-    this.applyMineralSize(entry, this.zoom)
+    this.applyMineralSize(entry)
     this.applyOverlayMode(entry)
   }
 
@@ -616,10 +616,9 @@ export class MapRenderer {
     }
   }
 
-  private applyMineralSize(entry: RoomEntry, zoom: number): void {
+  private applyMineralSize(entry: RoomEntry): void {
     if (!entry.mineralSprite || entry.mineralDensity === undefined) return
-    const screenSize = MINERAL_DENSITY_SIZES[entry.mineralDensity - 1] ?? 52
-    const worldSize = screenSize / zoom
+    const worldSize = MINERAL_WORLD_SIZES[entry.mineralDensity - 1] ?? 52
     entry.mineralSprite.width = worldSize
     entry.mineralSprite.height = worldSize
   }
@@ -640,7 +639,6 @@ export class MapRenderer {
     for (const entry of this.activeRooms.values()) {
       this.applyBadgeSize(entry, zoom)
       this.updateNameLabelScale(entry, zoom)
-      this.applyMineralSize(entry, zoom)
     }
   }
 
