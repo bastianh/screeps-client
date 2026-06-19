@@ -603,7 +603,7 @@ export class MapRenderer {
       }
     }
 
-    this.applyMineralSize(entry)
+    this.applyMineralSize(entry, this.zoom)
     this.applyOverlayMode(entry)
   }
 
@@ -616,9 +616,11 @@ export class MapRenderer {
     }
   }
 
-  private applyMineralSize(entry: RoomEntry): void {
+  private applyMineralSize(entry: RoomEntry, zoom: number): void {
     if (!entry.mineralSprite || entry.mineralDensity === undefined) return
-    const worldSize = MINERAL_WORLD_SIZES[entry.mineralDensity - 1] ?? 52
+    const baseWorld = MINERAL_WORLD_SIZES[entry.mineralDensity - 1] ?? 52
+    const minWorld = 14 / zoom  // floor: sprite stays at least 14px on screen at any zoom
+    const worldSize = Math.max(baseWorld, minWorld)
     entry.mineralSprite.width = worldSize
     entry.mineralSprite.height = worldSize
   }
@@ -639,6 +641,7 @@ export class MapRenderer {
     for (const entry of this.activeRooms.values()) {
       this.applyBadgeSize(entry, zoom)
       this.updateNameLabelScale(entry, zoom)
+      this.applyMineralSize(entry, zoom)
     }
   }
 
