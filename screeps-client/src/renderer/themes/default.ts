@@ -43,6 +43,6 @@ export const defaultSpriteTheme: Theme = {
     tileScale: 1.2,
   },
   mineral: {
-    tileScale: 1.3,
+    tileScale: 2.6,
   },
 }

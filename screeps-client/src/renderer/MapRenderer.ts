@@ -50,7 +50,7 @@ const COLOR_WALLS_OWN       = 0x447744   // own room walls/ramparts
 const COLOR_WALLS_FOREIGN   = 0x882222   // foreign room walls/ramparts
 const MAP2_FIXED_KEYS  = new Set(['w', 'r', 'pb', 'p', 's', 'c', 'm', 'k', 'd'])
 
-const MINERAL_DENSITY_SIZES = [16, 24, 32, 40] // screen pixels for density 1–4
+const MINERAL_DENSITY_SIZES = [40, 52, 64, 80] // screen pixels for density 1–4
 
 interface RoomEntry {
   container: Container
@@ -618,8 +618,7 @@ export class MapRenderer {
 
   private applyMineralSize(entry: RoomEntry, zoom: number): void {
     if (!entry.mineralSprite || entry.mineralDensity === undefined) return
-    const scaleFactor = Math.max(0.5, Math.min(1.5, zoom))
-    const screenSize = (MINERAL_DENSITY_SIZES[entry.mineralDensity - 1] ?? 24) * scaleFactor
+    const screenSize = MINERAL_DENSITY_SIZES[entry.mineralDensity - 1] ?? 52
     const worldSize = screenSize / zoom
     entry.mineralSprite.width = worldSize
     entry.mineralSprite.height = worldSize
