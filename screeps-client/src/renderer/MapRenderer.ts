@@ -40,7 +40,8 @@ const COLOR_SOURCE          = ENERGY_FILL // sources
 const COLOR_CONTROLLER      = 0xffffff    // controllers
 const COLOR_MINERAL         = OBJ_CYAN    // minerals
 const COLOR_KEEPER          = OBJ_ORANGE  // source keeper lairs
-const COLOR_POWERBANK       = 0xffffff    // power banks (power resource — kept prominent & white)
+const COLOR_POWERBANK       = 0xff2222    // power banks (power resource — bright red so it stands out)
+const COLOR_DEPOSIT         = 0xffffff    // deposits (highway commodity resource — white)
 const COLOR_USER_OWN        = OBJ_GREEN   // own creeps/structures
 const COLOR_USER_FOREIGN    = OBJ_FOREIGN // foreign creeps/structures
 const COLOR_WALLS_OWN       = 0x447744   // own room walls/ramparts
@@ -435,7 +436,7 @@ export class MapRenderer {
     }
     if (keepers.length) g.fill(COLOR_KEEPER)
 
-    // Power banks — white dot (power resource — kept prominent so it stands out)
+    // Power banks — bright red dot (power resource — kept prominent so it stands out)
     const powerBanks = data.pb ?? []
     for (const [x, y] of powerBanks) {
       g.circle((x + 0.5) * MT, (y + 0.5) * MT, 2.5)
@@ -447,7 +448,7 @@ export class MapRenderer {
     for (const [x, y] of deposits) {
       g.circle((x + 0.5) * MT, (y + 0.5) * MT, 2.5)
     }
-    if (deposits.length) g.fill(COLOR_POWERBANK)
+    if (deposits.length) g.fill(COLOR_DEPOSIT)
 
     // User objects — green for current user, muted red for others
     const dataRec = data as Record<string, [number, number][]>
