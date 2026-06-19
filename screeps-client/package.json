@@ -1,6 +1,6 @@
 {
   "name": "screeps-client",
-  "version": "0.7.2",
+  "version": "0.7.3",
   "license": "ISC",
   "type": "module",
   "repository": {

@@ -1,5 +1,22 @@
 # screeps-client
 
+## 0.7.3
+
+### Patch Changes
+
+- 6262ce2: Cache-bust the sprite atlas JSON by client version. `public/` assets aren't
+  content-hashed by Vite, so `themes/default/test.json` keeps a stable URL across
+  releases and the embedded mod serves it without `Cache-Control` — browsers then
+  cache it heuristically and keep stale frames after a spritesheet update (only
+  the image inside the JSON carried a `?v=` hash). This left newly added sprites
+  (e.g. deposits) blank on deployed servers while everything worked locally.
+  Appending `?v=<clientVersion>` to the atlas URL forces a fresh fetch on each
+  release; Pixi propagates the query to the atlas image, so resolution is
+  unaffected.
+- c7cf4bf: Use spritesheet sprites for minerals in both the room view and the map overlay.
+  In the room view each mineral displays its type-specific sprite at 1.3× tile size.
+  In the map overlay the sprite scales with density (density 1 is small, density 4 fills the room tile), replacing the previous coloured circle + letter glyph.
+
 ## 0.7.2
 
 ### Patch Changes
