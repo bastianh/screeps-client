@@ -19,6 +19,22 @@ function readString(envName, modValue, fallback) {
   return process.env[envName] ?? modValue ?? fallback
 }
 
+// Vite content-hashes everything under the assets dir (_client/), so those URLs
+// change whenever their content does and can be cached forever. Everything else
+// (index.html, themes/, other public/ assets) keeps a stable URL across releases
+// and must be revalidated so updated files (e.g. the sprite atlas) aren't served
+// stale from the browser cache.
+const IMMUTABLE_CACHE = 'public, max-age=31536000, immutable'
+const REVALIDATE_CACHE = 'no-cache'
+
+function isHashedAsset(filePath) {
+  return filePath.includes(`${path.sep}_client${path.sep}`)
+}
+
+function setStaticCacheHeaders(res, filePath) {
+  res.setHeader('Cache-Control', isHashedAsset(filePath) ? IMMUTABLE_CACHE : REVALIDATE_CACHE)
+}
+
 function renderInjectedIndex(indexFile) {
   const metadata = JSON.stringify({
     kind: 'screeps-mod',
@@ -46,6 +62,7 @@ module.exports = function (config) {
   const indexFile = path.join(distDir, 'index.html')
 
   function sendInjectedIndex(res) {
+    res.setHeader('Cache-Control', REVALIDATE_CACHE)
     res.type('html').send(renderInjectedIndex(indexFile))
   }
 
@@ -56,7 +73,7 @@ module.exports = function (config) {
       sendInjectedIndex(res)
     })
 
-    app.use(mountPath, express.static(distDir, { fallthrough: true, index: false }))
+    app.use(mountPath, express.static(distDir, { fallthrough: true, index: false, setHeaders: setStaticCacheHeaders }))
 
     if (rootRedirect && mountPath !== '/') {
       const alreadyRegistered = app._router?.stack?.some(

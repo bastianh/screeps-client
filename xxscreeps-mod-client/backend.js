@@ -28,6 +28,18 @@ const CONTENT_TYPES = {
   '.txt': 'text/plain',
 }
 
+// Vite content-hashes everything under the assets dir (_client/), so those URLs
+// change whenever their content does and can be cached forever. Everything else
+// (index.html, themes/, other public/ assets) keeps a stable URL across releases
+// and must be revalidated so updated files (e.g. the sprite atlas) aren't served
+// stale from the browser cache.
+const IMMUTABLE_CACHE = 'public, max-age=31536000, immutable'
+const REVALIDATE_CACHE = 'no-cache'
+
+function cacheControlFor(filePath) {
+  return filePath.includes(`${path.sep}_client${path.sep}`) ? IMMUTABLE_CACHE : REVALIDATE_CACHE
+}
+
 function readBool(envName, fallback) {
   const env = process.env[envName]
   if (env === undefined) return fallback
@@ -68,6 +80,7 @@ function sendFile(ctx, filePath, stat) {
   const ext = path.extname(filePath).toLowerCase()
   ctx.type = CONTENT_TYPES[ext] ?? 'application/octet-stream'
   ctx.lastModified = stat.mtime
+  ctx.set('Cache-Control', cacheControlFor(filePath))
   ctx.set('Content-Length', String(stat.size))
   ctx.body = createReadStream(filePath)
 }
@@ -90,6 +103,7 @@ function renderInjectedIndex(filePath) {
 
 function sendInjectedIndex(ctx) {
   ctx.type = 'text/html'
+  ctx.set('Cache-Control', REVALIDATE_CACHE)
   ctx.body = renderInjectedIndex(indexFile)
 }
 
