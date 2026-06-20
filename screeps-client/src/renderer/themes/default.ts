@@ -12,7 +12,7 @@ const atlasQuery = atlasVersion ? `?v=${encodeURIComponent(atlasVersion)}` : ''
 export const defaultSpriteTheme: Theme = {
   id: 'default',
   name: 'Default',
-  atlasUrl: `${basePath()}/themes/default/test.json${atlasQuery}`,
+  atlasUrl: `${basePath()}/themes/default/sprite-0.json${atlasQuery}`,
   sprites: {
     storage: {
       layers: [
