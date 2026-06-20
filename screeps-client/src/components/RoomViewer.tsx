@@ -24,6 +24,25 @@ import { createLogger } from '~/utils/log.js'
 
 const { log, error } = createLogger('room')
 
+// After creating a flag the server needs a moment to register it, so an
+// immediate gen-unique-flag-name can still return the name we just used.
+// Retry with a short backoff until we get a different name (or give up).
+function regenerateUniqueFlagName(
+  c: NonNullable<ReturnType<typeof client>>,
+  usedName: string,
+  retries = 4,
+): void {
+  c.http.game.genUniqueFlagName()
+    .then((res) => {
+      if (res.name === usedName && retries > 0) {
+        setTimeout(() => regenerateUniqueFlagName(c, usedName, retries - 1), 200)
+        return
+      }
+      setFlagDraft((prev) => ({ ...prev, name: res.name }))
+    })
+    .catch((err) => error('gen unique flag name failed:', err))
+}
+
 interface RoomViewerProps {
   room: string
   shard: string | null
@@ -556,9 +575,7 @@ export function RoomViewer(props: RoomViewerProps) {
                     addToast(`Flag "${name}" created`, 'success')
                     clearPendingTile()
                     r.hoverLayer.clearPendingTile()
-                    c.http.game.genUniqueFlagName()
-                        .then((res) => setFlagDraft(prev => ({ ...prev, name: res.name })))
-                        .catch((err) => error('gen unique flag name failed:', err))
+                    regenerateUniqueFlagName(c, name)
                   })
                   .catch((err) => error('create flag failed:', err))
               return

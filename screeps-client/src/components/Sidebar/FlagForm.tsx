@@ -1,4 +1,4 @@
-import { For, Show, createEffect, createSignal } from 'solid-js'
+import { For, Show, createEffect, createSignal, untrack } from 'solid-js'
 import { flagDraft, roomViewMode, setFlagDraft, pendingTile, FLAG_COLOR_MAP } from '~/stores/roomViewStore.js'
 import { client, userFlags } from '~/stores/clientStore.js'
 import { FLAG_COLORS as FLAG_COLOR_HEXES } from '~/renderer/colors.js'
@@ -22,14 +22,7 @@ export function FlagForm() {
   const [isChecking, setIsChecking] = createSignal(false)
   let checkTimeout: ReturnType<typeof setTimeout> | null = null
 
-  // Auto-generate a unique flag name when entering flag mode with an empty name
-  createEffect(() => {
-    if (roomViewMode() !== 'flag') return
-    if (flagDraft().name.trim() !== '') return
-
-    const c = client()
-    if (!c) return
-
+  const generateName = (c: NonNullable<ReturnType<typeof client>>) => {
     c.http.game.genUniqueFlagName()
       .then((res) => {
         updateDraft({ name: res.name })
@@ -37,6 +30,33 @@ export function FlagForm() {
       })
       .catch((err) => {
         error('gen unique name failed:', err)
+      })
+  }
+
+  // When entering flag mode, ensure the draft holds a free flag name:
+  // generate one if empty, otherwise verify the existing name is still
+  // available via the API and regenerate it if it has been taken. Reading
+  // the name is untracked so typing in the field doesn't re-trigger this
+  // (that path is handled by the debounced handleNameInput check).
+  createEffect(() => {
+    if (roomViewMode() !== 'flag') return
+
+    const c = client()
+    if (!c) return
+
+    const currentName = untrack(() => flagDraft().name.trim())
+    if (!currentName) {
+      generateName(c)
+      return
+    }
+
+    c.http.game.checkUniqueFlagName(currentName)
+      .then(() => {
+        setNameError(null)
+      })
+      .catch(() => {
+        // Name is no longer free — pick a fresh one.
+        generateName(c)
       })
   })
 
