@@ -107,6 +107,9 @@ export const ANIM_HARVEST  = ENERGY_FILL
 export const ANIM_UPGRADE  = OBJ_CYAN
 export const ANIM_BUILD    = ENERGY_FILL
 export const ANIM_TRANSFER = ENERGY_FILL
+export const ANIM_TOWER_ATTACK = OBJ_RED
+export const ANIM_TOWER_HEAL   = OBJ_GREEN
+export const ANIM_TOWER_REPAIR = OBJ_CYAN
 
 // ── Construction sites ────────────────────────────────────────────────────
 // Base (used for the static pie fill); the ring pulses between *_DARK and *_LIGHT.

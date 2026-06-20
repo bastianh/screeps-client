@@ -1,6 +1,6 @@
 import { Container, Graphics, Ticker } from 'pixi.js'
 import { TILE_SIZE } from './RoomRenderer.js'
-import { ANIM_HARVEST, ANIM_UPGRADE, ANIM_BUILD, ANIM_TRANSFER } from './colors.js'
+import { ANIM_HARVEST, ANIM_UPGRADE, ANIM_BUILD, ANIM_TRANSFER, ANIM_TOWER_ATTACK, ANIM_TOWER_HEAL, ANIM_TOWER_REPAIR } from './colors.js'
 
 interface BeamAnimation {
   fromX: number
@@ -14,6 +14,7 @@ interface BeamAnimation {
 }
 
 const BEAM_WIDTH = 2
+const TOWER_BEAM_WIDTH = 3  // tower beams read as a heavier shot than creep action beams
 
 function tileCenter(x: number, y: number): { cx: number; cy: number } {
   return {
@@ -99,6 +100,33 @@ export class ActionAnimationLayer {
       color: ANIM_BUILD,
       width: BEAM_WIDTH,
     })
+  }
+
+  private addTowerBeam(fromX: number, fromY: number, toX: number, toY: number, durationMs: number, color: number): void {
+    const from = tileCenter(fromX, fromY)
+    const to = tileCenter(toX, toY)
+    this.animations.push({
+      fromX: from.cx,
+      fromY: from.cy,
+      toX: to.cx,
+      toY: to.cy,
+      startTime: performance.now(),
+      duration: durationMs,
+      color,
+      width: TOWER_BEAM_WIDTH,
+    })
+  }
+
+  addTowerAttack(fromX: number, fromY: number, toX: number, toY: number, durationMs: number): void {
+    this.addTowerBeam(fromX, fromY, toX, toY, durationMs, ANIM_TOWER_ATTACK)
+  }
+
+  addTowerHeal(fromX: number, fromY: number, toX: number, toY: number, durationMs: number): void {
+    this.addTowerBeam(fromX, fromY, toX, toY, durationMs, ANIM_TOWER_HEAL)
+  }
+
+  addTowerRepair(fromX: number, fromY: number, toX: number, toY: number, durationMs: number): void {
+    this.addTowerBeam(fromX, fromY, toX, toY, durationMs, ANIM_TOWER_REPAIR)
   }
 
   private animate(): void {

@@ -297,25 +297,53 @@ const TOWER_BODY_Y = -TILE_SIZE * 0.3
 const TOWER_BODY_W = TILE_SIZE * 0.8
 const TOWER_BODY_H = TILE_SIZE * 0.6
 
+const TOWER_IDLE_SPEED = 0.4   // rad/s idle barrel sweep
+const TOWER_AIM_LERP   = 0.3   // per-frame fraction of remaining angle when turning to a target
+// Barrel art points "up" (−y) at rotation 0, so a target at screen angle θ needs
+// rotation θ + π/2. Flip the sign / drop the offset if the body sprite faces elsewhere.
+const TOWER_BARREL_FORWARD = Math.PI / 2
+
+// Rotate `current` toward `target` by fraction `t`, taking the shortest path.
+function approachAngle(current: number, target: number, t: number): number {
+  let delta = (target - current) % (Math.PI * 2)
+  if (delta > Math.PI) delta -= Math.PI * 2
+  else if (delta < -Math.PI) delta += Math.PI * 2
+  return current + delta * t
+}
+
 const CONT_W = TILE_SIZE * 0.45
 const CONT_H = TILE_SIZE * 0.6
 const CONT_X = TILE_SIZE * 0.275  // cx - TILE_SIZE * 0.225
 const CONT_Y = TILE_SIZE * 0.2    // cy - TILE_SIZE * 0.3
 
+// Returns the fill level as a fraction [0,1] so the same value drives both the
+// procedural-fallback rect and the atlas rounded-rect geometry.
 function calcTowerFillHeight(energy: number, capacity: number): number {
   if (capacity <= 0 || energy <= 0) return 0
-  return TOWER_BODY_H * Math.min(1, energy / capacity)
+  return Math.min(1, energy / capacity)
 }
 
-function updateTowerFill(visual: ContainerWithTarget, height: number): void {
+function updateTowerFill(visual: ContainerWithTarget, level: number): void {
   const fill = visual.__towerFillGraphics
   if (!fill) return
   fill.clear()
-  if (height > 0) {
-    const margin = Math.max(0.5, TILE_SIZE * 0.02)
-    fill.rect(TOWER_BODY_X + margin, TOWER_BODY_Y + TOWER_BODY_H - height + margin, TOWER_BODY_W - margin * 2, height - margin * 2)
+  if (level <= 0) return
+  // Atlas tower: rounded-rect fill rising from the bottom of the body, in the
+  // body's render-scaled coordinate space (geometry precomputed at load time).
+  const geom = visual.__towerFillRect
+  if (geom) {
+    const h = geom.heightMax * level
+    const y = geom.yMin + geom.heightMax - h
+    const r = Math.min(geom.rx, geom.width / 2, h / 2)
+    fill.roundRect(geom.x, y, geom.width, h, r)
     fill.fill(ST_ENERGY)
+    return
   }
+  // Procedural-fallback tower: plain rect inside the drawn body.
+  const margin = Math.max(0.5, TILE_SIZE * 0.02)
+  const h = TOWER_BODY_H * level
+  fill.rect(TOWER_BODY_X + margin, TOWER_BODY_Y + TOWER_BODY_H - h + margin, TOWER_BODY_W - margin * 2, h - margin * 2)
+  fill.fill(ST_ENERGY)
 }
 
 // ── Storage helpers ────────────────────────────────────────────────────────
@@ -916,6 +944,71 @@ function createObjectVisual(
     case 'tower': {
       const { energy: towerEnergy, capacity: towerCap } = getExtensionEnergy(obj)
 
+      const towerSpec = theme?.tower
+      if (towerSpec && atlasCache) {
+        const targetSize = TILE_SIZE * towerSpec.tileScale
+
+        // Static ring (footprint, tinted by ownership)
+        const ring = new Sprite()
+        ring.anchor.set(0.5, 0.5)
+        ring.position.set(cx, cy)
+        ring.tint = outlineColor
+        container.addChild(ring)
+
+        // Rotating turret: body cannon + energy fill, pivot at tile center
+        const turret = new Container()
+        turret.position.set(cx, cy)
+        container.addChild(turret)
+
+        const body = new Sprite()
+        body.anchor.set(0.5, 0.5)
+        turret.addChild(body)
+
+        const towerFill = new Graphics()
+        turret.addChild(towerFill)
+
+        ;(container as ContainerWithTarget).__barrelContainer = turret
+        ;(container as ContainerWithTarget).__towerFillGraphics = towerFill
+        ;(container as ContainerWithTarget).__towerEnergy = towerEnergy
+        ;(container as ContainerWithTarget).__towerCapacity = towerCap
+
+        // Scale both layers by the body's authored size so they stay aligned, and
+        // map the fill geometry (atlas px) into the same render-scaled space.
+        const applyScale = (tex: Texture) => {
+          const ref = tex.orig?.width || tex.width
+          const s = ref > 0 ? targetSize / ref : 1
+          ring.scale.set(s)
+          body.scale.set(s)
+          ;(container as ContainerWithTarget).__towerFillRect = {
+            x: towerSpec.fill.x * s,
+            yMin: towerSpec.fill.yMin * s,
+            width: towerSpec.fill.width * s,
+            heightMax: towerSpec.fill.heightMax * s,
+            rx: towerSpec.fill.rx * s,
+            ry: towerSpec.fill.ry * s,
+          }
+          updateTowerFill(container as ContainerWithTarget, calcTowerFillHeight(towerEnergy, towerCap))
+        }
+
+        const ringTex = atlasCache.getTexture(theme!.atlasUrl, towerSpec.ringFrame)
+        const bodyTex = atlasCache.getTexture(theme!.atlasUrl, towerSpec.bodyFrame)
+        if (ringTex && bodyTex) {
+          ring.texture = ringTex
+          body.texture = bodyTex
+          applyScale(bodyTex)
+        } else {
+          atlasCache.getOrLoad(theme!.atlasUrl).then(sheet => {
+            if (!ring.destroyed) ring.texture = sheet.textures[towerSpec.ringFrame] ?? Texture.EMPTY
+            if (!body.destroyed) {
+              const t = sheet.textures[towerSpec.bodyFrame] ?? Texture.EMPTY
+              body.texture = t
+              if (!container.destroyed) applyScale(t)
+            }
+          }).catch(() => {})
+        }
+        break
+      }
+
       // Static outer circle
       const towerBase = new Graphics()
       towerBase.circle(cx, cy, TILE_SIZE * 0.6)
@@ -1405,6 +1498,7 @@ type ContainerWithTarget = Container & {
   __towerFillGraphics?: Graphics
   __towerEnergy?: number
   __towerCapacity?: number
+  __towerFillRect?: { x: number; yMin: number; width: number; heightMax: number; rx: number; ry: number }
   __storageFillG?: Graphics
   __storageUsed?: number
   __storageCapacity?: number
@@ -1412,6 +1506,9 @@ type ContainerWithTarget = Container & {
   __containerUsed?: number
   __containerCapacity?: number
   __barrelContainer?: Container
+  __towerAimAngle?: number   // target rotation while an action is active
+  __towerAimUntil?: number   // performance.now() timestamp when the aim hold ends
+  __towerIdlePhase?: number  // phase offset so idle sweep resumes seamlessly after aiming
   __ctrlSegGraphics?: Graphics
   __ctrlSegSprites?: Sprite[]
   __ctrlLevel?: number
@@ -1624,7 +1721,20 @@ export class ObjectLayer {
     const pulse = 0.5 + 0.5 * Math.sin(now * 2 * Math.PI / CS_PULSE_MS)
     for (const visual of this.objects.values()) {
       if (visual.__barrelContainer) {
-        visual.__barrelContainer.rotation = t_sec * 0.4  // ~23°/s idle sweep
+        const turret = visual.__barrelContainer
+        if (visual.__towerAimUntil !== undefined && now < visual.__towerAimUntil && visual.__towerAimAngle !== undefined) {
+          // Firing / repairing: turn quickly toward the target and hold there.
+          turret.rotation = approachAngle(turret.rotation, visual.__towerAimAngle, TOWER_AIM_LERP)
+        } else {
+          if (visual.__towerAimUntil !== undefined) {
+            // Action finished — rebase the idle phase so the sweep resumes from
+            // the current angle instead of snapping back to the global sweep.
+            visual.__towerIdlePhase = turret.rotation - t_sec * TOWER_IDLE_SPEED
+            visual.__towerAimUntil = undefined
+            visual.__towerAimAngle = undefined
+          }
+          turret.rotation = t_sec * TOWER_IDLE_SPEED + (visual.__towerIdlePhase ?? 0)
+        }
       }
       if (visual.__csRingGraphics && visual.__csColorDark !== undefined && visual.__csColorLight !== undefined) {
         drawCSRing(visual.__csRingGraphics, lerpColor(visual.__csColorDark, visual.__csColorLight, pulse))
@@ -2678,6 +2788,24 @@ export class ObjectLayer {
       this.buildGlowAnimations.set(id, { startTime: performance.now(), duration: durationMs })
       return
     }
+  }
+
+  /**
+   * Aim a tower's barrel at a target tile and hold there for `durationMs` (the
+   * action beam duration). When the hold expires the idle sweep resumes from the
+   * current angle. No-op in instant/history mode.
+   */
+  triggerTowerAim(id: string, tx: number, ty: number, durationMs: number): void {
+    if (this.instantMode) return
+    const visual = this.objects.get(id)
+    if (!visual || !visual.__barrelContainer) return
+    const obj = this.rawObjects.get(id)
+    if (!obj) return
+    const dx = tx - obj.x
+    const dy = ty - obj.y
+    if (dx === 0 && dy === 0) return
+    visual.__towerAimAngle = Math.atan2(dy, dx) + TOWER_BARREL_FORWARD
+    visual.__towerAimUntil = performance.now() + durationMs
   }
 
   /**

@@ -45,4 +45,10 @@ export const defaultSpriteTheme: Theme = {
   mineral: {
     tileScale: 2.6,
   },
+  tower: {
+    ringFrame: 'tower/ring',
+    bodyFrame: 'tower/body',
+    tileScale: 2.5,
+    fill: { x: -39, yMin: -25, width: 78, heightMax: 58, rx: 12, ry: 12 },
+  },
 }

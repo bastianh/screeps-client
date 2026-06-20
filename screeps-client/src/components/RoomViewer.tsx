@@ -700,9 +700,24 @@ export function RoomViewer(props: RoomViewerProps) {
       // Use for...in over Object.entries to avoid allocating a new array of arrays every tick
       for (const id in objs) {
         const obj = objs[id]
-        if (!obj || obj.type !== 'creep') continue
+        if (!obj) continue
         const actionLog = obj.actionLog as Record<string, unknown> | null | undefined
         if (!actionLog) continue
+
+        if (obj.type === 'tower') {
+          const attack = actionLog.attack as { x: number; y: number } | null | undefined
+          const heal = actionLog.heal as { x: number; y: number } | null | undefined
+          const repair = actionLog.repair as { x: number; y: number } | null | undefined
+          if (attack) animLayer.addTowerAttack(obj.x, obj.y, attack.x, attack.y, beamDuration)
+          if (heal) animLayer.addTowerHeal(obj.x, obj.y, heal.x, heal.y, beamDuration)
+          if (repair) animLayer.addTowerRepair(obj.x, obj.y, repair.x, repair.y, beamDuration)
+          // Aim the barrel at whichever action fired this tick (one action per tick).
+          const aim = attack ?? heal ?? repair
+          if (aim) objLayer?.triggerTowerAim(id, aim.x, aim.y, beamDuration)
+          continue
+        }
+
+        if (obj.type !== 'creep') continue
 
         const harvest = actionLog.harvest as { x: number; y: number } | null | undefined
         if (harvest) {
