@@ -1,10 +1,33 @@
+import { TERRAIN_CACHE_VERSION } from 'screeps-connectivity'
 import { createLogger } from '~/utils/log.js'
 
 const { warn } = createLogger('terrainCache')
 
-const CACHE_NAME = 'screeps-terrain-v1'
+// Baked map tiles, versioned in lockstep with the raw-terrain IndexedDB cache so
+// bumping TERRAIN_CACHE_VERSION (in screeps-connectivity) invalidates both after
+// a server map regeneration.
+const CACHE_NAME = `screeps-terrain-v${TERRAIN_CACHE_VERSION}`
+
+// Best-effort, run once: drop tile caches left by older TERRAIN_CACHE_VERSION
+// values so a bump doesn't accumulate stale baked tiles on disk.
+let pruned = false
+async function pruneStaleTerrainCaches(): Promise<void> {
+  if (pruned) return
+  pruned = true
+  try {
+    const keys = await caches.keys()
+    await Promise.all(
+      keys
+        .filter((k) => k.startsWith('screeps-terrain-v') && k !== CACHE_NAME)
+        .map((k) => caches.delete(k)),
+    )
+  } catch (err) {
+    warn('prune failed:', err)
+  }
+}
 
 export async function getTerrainCacheBlob(shard: string, roomName: string, lod: number): Promise<Blob | null> {
+  void pruneStaleTerrainCaches()
   try {
     const cache = await caches.open(CACHE_NAME)
     const key = `/terrain/${shard}_${roomName}_z${lod}.webp`
@@ -27,6 +50,7 @@ export async function getTerrainCacheBlob(shard: string, roomName: string, lod: 
 }
 
 export async function saveTerrainCacheBlob(shard: string, roomName: string, lod: number, blob: Blob): Promise<void> {
+  void pruneStaleTerrainCaches()
   try {
     const cache = await caches.open(CACHE_NAME)
     const key = `/terrain/${shard}_${roomName}_z${lod}.webp`

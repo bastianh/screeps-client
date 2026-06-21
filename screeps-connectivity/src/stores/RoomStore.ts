@@ -1,4 +1,5 @@
 import { TypedStore } from './TypedStore.js'
+import { TERRAIN_CACHE_VERSION } from './terrainCacheVersion.js'
 import { RoomTerrain } from '../types/game.js'
 import type { Logger } from '../logger.js'
 import type { RoomStoreEvents } from '../types/events.js'
@@ -51,8 +52,19 @@ export class RoomStore extends TypedStore<RoomStoreEvents> {
     this.cache = cache
   }
 
+  /**
+   * Persistent cache key for a room's terrain. Folds in TERRAIN_CACHE_VERSION so
+   * bumping that constant invalidates every previously cached room (e.g. after a
+   * server map regeneration). Note: old-version keys are orphaned rather than
+   * deleted — IndexedDBStorage has no key enumeration — but each is only ~2.5KB
+   * and a full "Clear caches" reclaims them.
+   */
+  private terrainKey(room: string, shard: string | null): string {
+    return `terrain/v${TERRAIN_CACHE_VERSION}/${shard}/${room}`
+  }
+
   async terrain(room: string, shard: string | null): Promise<RoomTerrain> {
-    const key = `terrain/${shard}/${room}`
+    const key = this.terrainKey(room, shard)
 
     const cached = this.cache.get<RoomTerrain>(key)
     if (cached) {
@@ -86,7 +98,7 @@ export class RoomStore extends TypedStore<RoomStoreEvents> {
     const needPersistentCheck: string[] = []
 
     for (const room of rooms) {
-      const cached = this.cache.get<RoomTerrain>(`terrain/${shard}/${room}`)
+      const cached = this.cache.get<RoomTerrain>(this.terrainKey(room, shard))
       if (cached) {
         result.set(room, cached)
       } else {
@@ -98,7 +110,7 @@ export class RoomStore extends TypedStore<RoomStoreEvents> {
 
     const needFetch: string[] = []
     await Promise.all(needPersistentCheck.map(async (room) => {
-      const key = `terrain/${shard}/${room}`
+      const key = this.terrainKey(room, shard)
       const persisted = await this.cache.getPersistent(key)
       if (persisted) {
         const terrain = new RoomTerrain(persisted)
@@ -116,7 +128,7 @@ export class RoomStore extends TypedStore<RoomStoreEvents> {
 
     await Promise.all(res.rooms.map(async (entry) => {
       const terrain = RoomTerrain.fromEncodedString(entry.terrain)
-      const key = `terrain/${shard}/${entry.room}`
+      const key = this.terrainKey(entry.room, shard)
       this.cache.set(key, terrain)
       await this.cache.setPersistent(key, terrain.raw)
       this.emit('room:terrainavailable', { room: entry.room, shard, terrain })
