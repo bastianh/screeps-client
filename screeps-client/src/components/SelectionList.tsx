@@ -911,6 +911,7 @@ const CUSTOM_DETAILS: Record<string, (props: { item: SelectedObject }) => JSX.El
   creep: CreepDetails,
   flag: FlagDetails,
   controller: ControllerDetails,
+  spawn: ExtensionDetails,
   extension: ExtensionDetails,
   tower: ExtensionDetails,
   storage: StoreStructureDetails,
