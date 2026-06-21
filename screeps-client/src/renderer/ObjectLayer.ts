@@ -77,41 +77,63 @@ const MINERAL_R = TILE_SIZE * 0.42
 const MINERAL_GLYPH_FONT = 32
 const MINERAL_GLYPH_SCALE = 9 / MINERAL_GLYPH_FONT  // glyph ~9px tall in tile space
 
-// Source: shrinks with energy level, but stays visible as a small spot when empty
+// Source: a fixed dark base ("rock") with a golden energy core that shrinks as the
+// source is mined, revealing a dark ring. When exhausted the gold is gone (black
+// center) and only the outer ring breathes to signal regeneration.
 const SRC_MAX_SIZE = TILE_SIZE - 4
-const SRC_MIN_SIZE = TILE_SIZE * 0.28
-// Color pulse: ST_ENERGY → near-white at peak, sine over SRC_PULSE_MS
+// Golden core pulse: ST_ENERGY → near-white at peak, sine over SRC_PULSE_MS
 const SRC_PULSE_MS = 1600
 const SRC_PULSE_PEAK = 0xFFFCEC
+// Exhausted outer ring breathes ST_DARK → SRC_DARK_PEAK (subtle dark-gray)
+const SRC_DARK_PEAK = 0x444444
+const SRC_RING_W = Math.max(1, TILE_SIZE * 0.15)
 
+// Golden core size: 0 when empty (black center) up to the full base size at capacity.
 function calcSourceSize(energy: number, capacity: number): number {
   if (capacity <= 0) return SRC_MAX_SIZE
   const ratio = Math.max(0, Math.min(1, energy / capacity))
-  return SRC_MIN_SIZE + (SRC_MAX_SIZE - SRC_MIN_SIZE) * ratio
+  return SRC_MAX_SIZE * ratio
 }
 
-function drawSourceVisual(g: Graphics, size: number, color: number = ST_ENERGY): void {
-  const half = size / 2
+// 0..1..0 triangle via cosine; shared by the golden core and the exhausted base pulse.
+function sourcePulseT(now: number): number {
+  const phase = (now % SRC_PULSE_MS) / SRC_PULSE_MS
+  return 0.5 - 0.5 * Math.cos(phase * Math.PI * 2)
+}
+
+function currentSourceColor(now: number): number {
+  return lerpColor(ST_ENERGY, SRC_PULSE_PEAK, sourcePulseT(now))
+}
+
+function drawSourceVisual(g: Graphics, goldenSize: number, now: number): void {
   const cx = TILE_SIZE / 2
   const cy = TILE_SIZE / 2
-  const radius = size * 0.25
   g.clear()
-  g.roundRect(cx - half, cy - half, size, size, radius)
-  g.fill(color)
+
+  const exhausted = goldenSize <= 0
+  // Fixed dark base — static black center, even when exhausted.
+  const baseHalf = SRC_MAX_SIZE / 2
+  const baseRadius = SRC_MAX_SIZE * 0.25
+  g.roundRect(cx - baseHalf, cy - baseHalf, SRC_MAX_SIZE, SRC_MAX_SIZE, baseRadius)
+  g.fill(ST_DARK)
+
+  if (exhausted) {
+    // Exhausted: only the outer ring breathes (regenerating); center stays black.
+    g.roundRect(cx - baseHalf, cy - baseHalf, SRC_MAX_SIZE, SRC_MAX_SIZE, baseRadius)
+    g.stroke({ width: SRC_RING_W, color: lerpColor(ST_DARK, SRC_DARK_PEAK, sourcePulseT(now)) })
+  } else {
+    // Golden core — shrinks toward center as mined; absent (black center) when empty.
+    const half = goldenSize / 2
+    g.roundRect(cx - half, cy - half, goldenSize, goldenSize, goldenSize * 0.25)
+    g.fill(currentSourceColor(now))
+  }
 }
 
 function updateSourceVisual(visual: ContainerWithTarget, size: number): void {
   const g = visual.__sourceGraphics
   if (!g) return
   visual.__sourceSize = size
-  drawSourceVisual(g, size, currentSourceColor(performance.now()))
-}
-
-function currentSourceColor(now: number): number {
-  // 0..1..0 triangle via cosine; t=0 → ST_ENERGY, t=1 → SRC_PULSE_PEAK
-  const phase = (now % SRC_PULSE_MS) / SRC_PULSE_MS
-  const t = 0.5 - 0.5 * Math.cos(phase * Math.PI * 2)
-  return lerpColor(ST_ENERGY, SRC_PULSE_PEAK, t)
+  drawSourceVisual(g, size, performance.now())
 }
 
 function getSourceEnergy(obj: RoomObject): { energy: number; capacity: number } {
@@ -705,7 +727,7 @@ function createObjectVisual(
       const { energy, capacity } = getSourceEnergy(obj)
       const size = calcSourceSize(energy, capacity)
       const srcG = new Graphics()
-      drawSourceVisual(srcG, size, currentSourceColor(performance.now()))
+      drawSourceVisual(srcG, size, performance.now())
       container.addChild(srcG)
       ;(container as ContainerWithTarget).__sourceGraphics = srcG
       ;(container as ContainerWithTarget).__sourceEnergy = energy
@@ -1830,13 +1852,12 @@ export class ObjectLayer {
       if (t >= 1) this.sourceAnimations.delete(id)
     }
 
-    // Source color pulse: every tick, repaint each source with the current pulse color.
-    // Size animation (above) already wrote into __sourceSize when active; we re-use it here.
-    const pulseColor = currentSourceColor(now)
+    // Source pulse: every tick repaint each source so the golden core (or the dark
+    // ring, when exhausted) breathes. Size animation wrote __sourceSize when active.
     for (const visual of this.objects.values()) {
       const g = visual.__sourceGraphics
       if (!g) continue
-      drawSourceVisual(g, visual.__sourceSize ?? SRC_MAX_SIZE, pulseColor)
+      drawSourceVisual(g, visual.__sourceSize ?? SRC_MAX_SIZE, now)
     }
 
     // Construction-site build glow: fade in during beam build phase, hold, fade out
