@@ -1,5 +1,11 @@
 # screeps-client
 
+## 0.8.0
+
+### Minor Changes
+
+- a40445a: Add structure energy visuals (spawn/link/source) plus link-transfer and creep-repair beams with impact glow.
+
 ## 0.7.4
 
 ### Patch Changes
