@@ -16,6 +16,7 @@ import {
   ENERGY_FILL,
   CREEP_RING_DARK, CREEP_NOTCH,
   ST_DARK, ST_GRAY, ST_LIGHT, ST_OUTLINE, ST_ENERGY, ST_POWER, ST_RAMPART,
+  ST_RAMPART_STROKE, ST_RAMPART_ENEMY, ST_RAMPART_ENEMY_STROKE,
   TERRAIN_WALL_BORDER,
   FLAG_COLORS,
   CS_OWN, CS_FOREIGN, CS_OWN_DARK, CS_OWN_LIGHT, CS_FOREIGN_DARK, CS_FOREIGN_LIGHT,
@@ -186,6 +187,55 @@ function drawCSProgress(
   g.arc(cx, cy, r, start, end)
   g.closePath()
   g.fill({ color, alpha: 0.55 })
+}
+
+// ── Spawn progress ring ─────────────────────────────────────────────────────
+// Ring in the dark moat between the energy core (R≈0.4) and the outer gray ring
+// (inner edge≈0.6); fills clockwise from the top as a creep spawns. Driven by
+// obj.spawning (needTime + remainingTime, falling back to spawnTime vs. game time).
+const SPAWN_RING_R = TILE_SIZE * 0.5
+const SPAWN_RING_W = Math.max(1, TILE_SIZE * 0.1)
+
+// Resolve a spawn's progress to an absolute completion tick + duration, so the
+// ring can be driven by the local game clock between server updates (the server
+// does NOT reliably re-send remainingTime every tick — relying on it freezes).
+function spawnTiming(obj: RoomObject, gameTime: number): { needTime: number; endTime: number } | null {
+  const s = obj.spawning as { needTime?: unknown; remainingTime?: unknown; spawnTime?: unknown } | null | undefined
+  if (!s || typeof s !== 'object') return null
+  const needTime = typeof s.needTime === 'number' && s.needTime > 0 ? s.needTime : null
+  if (needTime === null) return null
+  if (typeof s.remainingTime === 'number') return { needTime, endTime: gameTime + s.remainingTime }
+  // spawnTime in the future is the completion tick; in the past it's the start tick.
+  if (typeof s.spawnTime === 'number') return { needTime, endTime: s.spawnTime > gameTime ? s.spawnTime : s.spawnTime + needTime }
+  return { needTime, endTime: gameTime + needTime }  // active but no timing — assume just started
+}
+
+// Signature of the spawning payload — when it changes we re-sync endTime; otherwise
+// the ring advances purely from the local clock so it never stalls.
+function spawnSig(obj: RoomObject): string | null {
+  const s = obj.spawning as { name?: unknown; needTime?: unknown; remainingTime?: unknown; spawnTime?: unknown } | null | undefined
+  if (!s || typeof s !== 'object') return null
+  return `${String(s.name)}:${String(s.needTime)}:${String(s.remainingTime)}:${String(s.spawnTime)}`
+}
+
+function spawnRatio(needTime: number, endTime: number, gameTime: number): number {
+  return Math.max(0, Math.min(1, 1 - (endTime - gameTime) / needTime))
+}
+
+function drawSpawnRing(g: Graphics, ratio: number | null): void {
+  g.clear()
+  if (ratio === null) return
+  const cx = TILE_SIZE / 2
+  const cy = TILE_SIZE / 2
+  // Faint full-circle track so an active spawn reads even at 0% progress
+  g.circle(cx, cy, SPAWN_RING_R)
+  g.stroke({ width: SPAWN_RING_W, color: 0xffffff, alpha: 0.12 })
+  if (ratio <= 0) return
+  const start = -Math.PI / 2  // top
+  const end = start + Math.min(1, ratio) * Math.PI * 2
+  g.moveTo(cx + SPAWN_RING_R * Math.cos(start), cy + SPAWN_RING_R * Math.sin(start))
+  g.arc(cx, cy, SPAWN_RING_R, start, end)
+  g.stroke({ width: SPAWN_RING_W, color: ST_ENERGY, alpha: 0.95, cap: 'round' })
 }
 
 // Converts screeps tile-relative coords (tile center = origin, 1 unit = TILE_SIZE px) to flat pixel array
@@ -712,6 +762,21 @@ function createObjectVisual(
       g.stroke({ width: TILE_SIZE * 0.1, color: 0xcccccc })
       g.circle(cx, cy, TILE_SIZE * 0.4)
       g.fill(ST_ENERGY)
+      // Ring sits in the dark moat and must render above the body `g` (whose
+      // dark disc is added after the switch) — sort children by zIndex so it does.
+      // Initial draw is best-effort; ObjectLayer.update() drives it per-tick.
+      container.sortableChildren = true
+      const spawnRing = new Graphics()
+      spawnRing.zIndex = 1
+      const t = spawnTiming(obj, 0)
+      const ratio = t ? spawnRatio(t.needTime, t.endTime, 0) : null
+      drawSpawnRing(spawnRing, ratio)
+      container.addChild(spawnRing)
+      const cwt = container as ContainerWithTarget
+      cwt.__spawnRing = spawnRing
+      cwt.__spawnRatio = ratio
+      if (t) { cwt.__spawnNeedTime = t.needTime; cwt.__spawnEndTime = t.endTime }
+      cwt.__spawnSig = spawnSig(obj)
       break
     }
     case 'powerSpawn': {
@@ -1590,6 +1655,11 @@ type ContainerWithTarget = Container & {
   __csColor?: number
   __csColorDark?: number
   __csColorLight?: number
+  __spawnRing?: Graphics
+  __spawnRatio?: number | null
+  __spawnNeedTime?: number
+  __spawnEndTime?: number
+  __spawnSig?: string | null
 }
 
 function destroyVisual(visual: ContainerWithTarget): void {
@@ -2486,6 +2556,30 @@ export class ObjectLayer {
     if (roadsChanged) {
       this.redrawRoads()
     }
+
+    // Drive every spawn's progress ring from the local game clock. Re-sync the
+    // completion tick only when the spawning payload changes (the server doesn't
+    // reliably re-send remainingTime each tick), then advance locally so the ring
+    // keeps progressing every tick instead of freezing between server updates.
+    for (const [id, visual] of this.objects) {
+      if (!visual.__spawnRing) continue
+      const obj = this.rawObjects.get(id)
+      const sig = obj ? spawnSig(obj) : null
+      if (sig !== visual.__spawnSig) {
+        visual.__spawnSig = sig
+        const t = obj && sig ? spawnTiming(obj, this.currentGameTime) : null
+        visual.__spawnNeedTime = t?.needTime
+        visual.__spawnEndTime = t?.endTime
+      }
+      const ratio = visual.__spawnNeedTime !== undefined && visual.__spawnEndTime !== undefined
+        ? spawnRatio(visual.__spawnNeedTime, visual.__spawnEndTime, this.currentGameTime)
+        : null
+      if (ratio !== visual.__spawnRatio) {
+        drawSpawnRing(visual.__spawnRing, ratio)
+        visual.__spawnRatio = ratio
+      }
+    }
+
     this.refreshForeignCreepLabels()
     this.refreshForeignCreepBadges()
   }
@@ -2665,7 +2759,76 @@ export class ObjectLayer {
       if (!user || !this.currentUserId) return { color: ST_RAMPART, alpha: 0.7 }
       return user === this.currentUserId
         ? { color: ST_RAMPART, alpha: 0.7 }
-        : { color: 0x772222, alpha: 0.5 }
+        : { color: ST_RAMPART_ENEMY, alpha: 0.5 }
+    }
+
+    // Brighter perimeter border (a few px wide) hugging the outside of each
+    // rampart blob, grouped by owner category so own/neutral get a green rim and
+    // foreign ramparts a red one. Mirrors the wall border: stroke the quad
+    // geometry with outside alignment FIRST, then the fills below draw on top and
+    // cover every interior stroke segment, leaving only the outer rim visible.
+    const greenGrid = Array.from({ length: 50 }, () => new Array<boolean>(50).fill(false))
+    const redGrid = Array.from({ length: 50 }, () => new Array<boolean>(50).fill(false))
+    for (let y = 0; y < 50; y++) {
+      for (let x = 0; x < 50; x++) {
+        const u = grid[x][y]
+        if (u === undefined) continue
+        if (!this.currentUserId || u === this.currentUserId) greenGrid[x][y] = true
+        else redGrid[x][y] = true
+      }
+    }
+
+    const strokeBorder = (bgrid: boolean[][], color: number) => {
+      const g = this.rampartGraphics
+      let drawn = false
+      const seg = (x0: number, y0: number, x1: number, y1: number) => {
+        g.moveTo(x0, y0); g.lineTo(x1, y1); drawn = true
+      }
+      const arc = (sx: number, sy: number, a0: number, a1: number, ccw: boolean, cxc: number, cyc: number) => {
+        g.moveTo(sx, sy); g.arc(cxc, cyc, R, a0, a1, ccw); drawn = true
+      }
+      // Trace ONLY the outer perimeter of each blob — rounded convex corners,
+      // rounded concave notches, and exposed straight tile edges. Interior
+      // quadrant boundaries are skipped so the translucent fill stays clean
+      // (a full-geometry stroke would bleed a grid through the 0.7-alpha fill).
+      for (let y = 0; y < 50; y++) {
+        for (let x = 0; x < 50; x++) {
+          const top    = y > 0  && bgrid[x][y - 1]
+          const bottom = y < 49 && bgrid[x][y + 1]
+          const left   = x > 0  && bgrid[x - 1][y]
+          const right  = x < 49 && bgrid[x + 1][y]
+          const dTL = x > 0  && y > 0  && bgrid[x - 1][y - 1]
+          const dTR = x < 49 && y > 0  && bgrid[x + 1][y - 1]
+          const dBL = x > 0  && y < 49 && bgrid[x - 1][y + 1]
+          const dBR = x < 49 && y < 49 && bgrid[x + 1][y + 1]
+          const cx = x * T + R
+          const cy = y * T + R
+          if (bgrid[x][y]) {
+            // Convex corners round; straight half-edges otherwise. A half-edge that
+            // runs into a concave corner (rounded by a diagonal empty tile's arc) is
+            // suppressed so it stops at the arc instead of overshooting to a sharp point.
+            // Top-Left
+            if (!top && !left && y > 0 && x > 0) arc(cx, y * T, -Math.PI / 2, Math.PI, true, cx, cy)
+            else { if (!top && !(left && dTL)) seg(x * T, y * T, cx, y * T); if (!left && !(top && dTL)) seg(x * T, y * T, x * T, cy) }
+            // Top-Right
+            if (!top && !right && y > 0 && x < 49) arc(cx, y * T, -Math.PI / 2, 0, false, cx, cy)
+            else { if (!top && !(right && dTR)) seg(cx, y * T, x * T + T, y * T); if (!right && !(top && dTR)) seg(x * T + T, y * T, x * T + T, cy) }
+            // Bottom-Left
+            if (!bottom && !left && y < 49 && x > 0) arc(x * T, cy, Math.PI, Math.PI / 2, true, cx, cy)
+            else { if (!bottom && !(left && dBL)) seg(x * T, y * T + T, cx, y * T + T); if (!left && !(bottom && dBL)) seg(x * T, cy, x * T, y * T + T) }
+            // Bottom-Right
+            if (!bottom && !right && y < 49 && x < 49) arc(cx, y * T + T, Math.PI / 2, 0, true, cx, cy)
+            else { if (!bottom && !(right && dBR)) seg(cx, y * T + T, x * T + T, y * T + T); if (!right && !(bottom && dBR)) seg(x * T + T, cy, x * T + T, y * T + T) }
+          } else {
+            // Rounded concave notches around an empty tile cornered by ramparts
+            if (top && left && dTL) arc(x * T, cy, Math.PI, -Math.PI / 2, false, cx, cy)
+            if (top && right && dTR) arc(x * T + T, cy, 0, -Math.PI / 2, true, cx, cy)
+            if (bottom && left && dBL) arc(cx, y * T + T, Math.PI / 2, Math.PI, false, cx, cy)
+            if (bottom && right && dBR) arc(x * T + T, cy, 0, Math.PI / 2, false, cx, cy)
+          }
+        }
+      }
+      if (drawn) g.stroke({ color, width: T * 0.08, alpha: 0.9, alignment: 0.5, cap: 'round' })
     }
 
     for (let y = 0; y < 50; y++) {
@@ -2773,6 +2936,10 @@ export class ObjectLayer {
         }
       }
     }
+
+    // Brighter perimeter rim drawn on top of the fills
+    strokeBorder(greenGrid, ST_RAMPART_STROKE)
+    strokeBorder(redGrid, ST_RAMPART_ENEMY_STROKE)
   }
 
   /**

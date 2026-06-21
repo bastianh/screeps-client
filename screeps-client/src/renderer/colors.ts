@@ -135,3 +135,5 @@ export const ST_ENERGY         = 0xFFE87B  // energy (structure displays)
 export const ST_POWER          = 0xF53547  // power red
 export const ST_RAMPART        = 0x434C43  // rampart fill
 export const ST_RAMPART_STROKE = 0x5D735F  // rampart border
+export const ST_RAMPART_ENEMY        = 0x772222  // foreign rampart fill
+export const ST_RAMPART_ENEMY_STROKE = 0x9E3A3A  // foreign rampart border
