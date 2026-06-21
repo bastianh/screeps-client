@@ -717,6 +717,14 @@ export function RoomViewer(props: RoomViewerProps) {
           continue
         }
 
+        if (obj.type === 'link') {
+          // Source link records the destination position in actionLog.transferEnergy; the
+          // receiving link gets no entry, so this fires exactly once per transfer.
+          const linkTransfer = actionLog.transferEnergy as { x: number; y: number } | null | undefined
+          if (linkTransfer) animLayer.addLinkTransfer(obj.x, obj.y, linkTransfer.x, linkTransfer.y, beamDuration)
+          continue
+        }
+
         if (obj.type !== 'creep') continue
 
         const harvest = actionLog.harvest as { x: number; y: number } | null | undefined
@@ -731,6 +739,10 @@ export function RoomViewer(props: RoomViewerProps) {
         if (build) {
           animLayer.addBuild(obj.x, obj.y, build.x, build.y, beamDuration)
           objLayer?.triggerBuildAt(build.x, build.y, beamDuration)
+        }
+        const repair = actionLog.repair as { x: number; y: number } | null | undefined
+        if (repair) {
+          animLayer.addRepair(obj.x, obj.y, repair.x, repair.y, beamDuration)
         }
         const transfer = actionLog.transfer as { x: number; y: number } | null | undefined
         if (transfer) {
