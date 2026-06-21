@@ -257,6 +257,28 @@ function calcExtensionFillRadius(energy: number, capacity: number): number {
   return EXT_INNER_R * extScale(capacity) * Math.min(1, energy / capacity)
 }
 
+// Links show their energy as a diamond core that scales with stored energy,
+// matching the link's diamond outline. The fraction is the linear scale of the
+// inner diamond (half-extents below mirror the linkInner geometry in the draw).
+const LINK_FILL_DX = TILE_SIZE * 0.25
+const LINK_FILL_DY = TILE_SIZE * 0.30
+function calcLinkFillFraction(energy: number, capacity: number): number {
+  if (capacity <= 0 || energy <= 0) return 0
+  return Math.min(1, energy / capacity)
+}
+function updateLinkFill(visual: ContainerWithTarget, fraction: number): void {
+  const fill = visual.__linkFillGraphics
+  if (!fill) return
+  fill.clear()
+  if (fraction <= 0) return
+  const cx = TILE_SIZE / 2
+  const cy = TILE_SIZE / 2
+  const dx = LINK_FILL_DX * fraction
+  const dy = LINK_FILL_DY * fraction
+  fill.poly([cx, cy - dy, cx + dx, cy, cx, cy + dy, cx - dx, cy])
+  fill.fill(ST_ENERGY)
+}
+
 function drawExtensionVisual(container: Container, energy: number, capacity: number, outlineColor: number): void {
   const cx = TILE_SIZE / 2
   const cy = TILE_SIZE / 2
@@ -1139,6 +1161,18 @@ function createObjectVisual(
       g.stroke({ width: TILE_SIZE * 0.05, color: outlineColor })
       g.poly(linkInner)
       g.fill(ST_GRAY)
+      container.addChild(g)
+
+      // Energy core: a diamond that scales with stored energy, animated each tick
+      // via the linkFillAnimations loop (see startLinkAnimation / updateLinkFill).
+      const { energy: linkEnergy, capacity: linkCapacity } = getExtensionEnergy(obj)
+      const linkFill = new Graphics()
+      container.addChild(linkFill)
+      const linkVisual = container as ContainerWithTarget
+      linkVisual.__linkFillGraphics = linkFill
+      linkVisual.__linkEnergy = linkEnergy
+      linkVisual.__linkCapacity = linkCapacity
+      updateLinkFill(linkVisual, calcLinkFillFraction(linkEnergy, linkCapacity))
       break
     }
     case 'lab': {
@@ -1431,7 +1465,7 @@ function createObjectVisual(
     }
   }
 
-  if (obj.type !== 'extension' && obj.type !== 'road' && obj.type !== 'creep' && obj.type !== 'tower' && obj.type !== 'controller' && obj.type !== 'flag' && obj.type !== 'source' && obj.type !== 'constructionSite' && obj.type !== 'mineral' && obj.type !== 'tombstone' && obj.type !== 'ruin' && obj.type !== 'storage' && obj.type !== 'constructedWall' && obj.type !== 'rampart' && obj.type !== 'container' && obj.type !== 'deposit') {
+  if (obj.type !== 'extension' && obj.type !== 'road' && obj.type !== 'creep' && obj.type !== 'tower' && obj.type !== 'controller' && obj.type !== 'flag' && obj.type !== 'source' && obj.type !== 'constructionSite' && obj.type !== 'mineral' && obj.type !== 'tombstone' && obj.type !== 'ruin' && obj.type !== 'storage' && obj.type !== 'constructedWall' && obj.type !== 'rampart' && obj.type !== 'container' && obj.type !== 'deposit' && obj.type !== 'link') {
     container.addChild(g)
   }
 
@@ -1499,6 +1533,9 @@ type ContainerWithTarget = Container & {
   __towerEnergy?: number
   __towerCapacity?: number
   __towerFillRect?: { x: number; yMin: number; width: number; heightMax: number; rx: number; ry: number }
+  __linkFillGraphics?: Graphics
+  __linkEnergy?: number
+  __linkCapacity?: number
   __storageFillG?: Graphics
   __storageUsed?: number
   __storageCapacity?: number
@@ -1608,6 +1645,7 @@ export class ObjectLayer {
   private towerFillAnimations = new Map<string, ExtAnimation>()
   private storageFillAnimations = new Map<string, ExtAnimation>()
   private containerFillAnimations = new Map<string, ExtAnimation>()
+  private linkFillAnimations = new Map<string, ExtAnimation>()
   private sourceAnimations = new Map<string, ExtAnimation>()
   private buildGlowAnimations = new Map<string, { startTime: number; duration: number }>()
   private ctrlFlashAnimations = new Map<string, { segIndex: number; startTime: number; duration: number }>()
@@ -1777,6 +1815,13 @@ export class ObjectLayer {
       updateContainerFill(anim.visual, anim.fromRadius + (anim.toRadius - anim.fromRadius) * ease)
       if (t >= 1) this.containerFillAnimations.delete(id)
     }
+    for (const [id, anim] of this.linkFillAnimations) {
+      const elapsed = now - anim.startTime
+      const t = Math.min(1, elapsed / this.EXT_ANIM_DURATION)
+      const ease = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2
+      updateLinkFill(anim.visual, anim.fromRadius + (anim.toRadius - anim.fromRadius) * ease)
+      if (t >= 1) this.linkFillAnimations.delete(id)
+    }
     for (const [id, anim] of this.sourceAnimations) {
       const elapsed = now - anim.startTime
       const t = Math.min(1, elapsed / this.EXT_ANIM_DURATION)
@@ -1902,6 +1947,26 @@ export class ObjectLayer {
     this.extAnimations.set(id, { visual, fromRadius, toRadius, startTime: performance.now() })
   }
 
+  // Links animate a diamond fill; fromRadius/toRadius hold the 0..1 fill fraction
+  // (the ExtAnimation shape is reused across fill families, cf. tower levels).
+  private startLinkAnimation(
+    id: string,
+    visual: ContainerWithTarget,
+    fromEnergy: number,
+    fromCapacity: number,
+    toEnergy: number,
+    toCapacity: number,
+  ): void {
+    const toRadius = calcLinkFillFraction(toEnergy, toCapacity)
+    if (this.instantMode) {
+      updateLinkFill(visual, toRadius)
+      return
+    }
+    const fromRadius = calcLinkFillFraction(fromEnergy, fromCapacity)
+    if (fromRadius === toRadius) return
+    this.linkFillAnimations.set(id, { visual, fromRadius, toRadius, startTime: performance.now() })
+  }
+
   private startCreepFillAnimation(
     id: string,
     visual: ContainerWithTarget,
@@ -2020,6 +2085,7 @@ export class ObjectLayer {
             this.towerFillAnimations.delete(id)
             this.storageFillAnimations.delete(id)
             this.containerFillAnimations.delete(id)
+            this.linkFillAnimations.delete(id)
             this.sourceAnimations.delete(id)
             this.buildGlowAnimations.delete(id)
             this.ctrlFlashAnimations.delete(id)
@@ -2116,6 +2182,14 @@ export class ObjectLayer {
                 )
                 ext.__extEnergy = energy
                 ext.__extCapacity = capacity
+              }
+            }
+            if (obj.type === 'link') {
+              const { energy, capacity } = getExtensionEnergy(obj)
+              if (existing.__linkEnergy !== energy || existing.__linkCapacity !== capacity) {
+                this.startLinkAnimation(id, existing, existing.__linkEnergy ?? 0, existing.__linkCapacity ?? capacity, energy, capacity)
+                existing.__linkEnergy = energy
+                existing.__linkCapacity = capacity
               }
             }
             if (obj.type === 'tower') {
@@ -2291,6 +2365,14 @@ export class ObjectLayer {
               ext.__extCapacity = capacity
             }
           }
+          if (obj.type === 'link') {
+            const { energy, capacity } = getExtensionEnergy(obj)
+            if (existing.__linkEnergy !== energy || existing.__linkCapacity !== capacity) {
+              this.startLinkAnimation(id, existing, existing.__linkEnergy ?? 0, existing.__linkCapacity ?? capacity, energy, capacity)
+              existing.__linkEnergy = energy
+              existing.__linkCapacity = capacity
+            }
+          }
           if (obj.type === 'tower') {
             const { energy, capacity } = getExtensionEnergy(obj)
             if (existing.__towerEnergy !== energy || existing.__towerCapacity !== capacity) {
@@ -2367,6 +2449,7 @@ export class ObjectLayer {
           this.extAnimations.delete(id)
           this.creepFillAnimations.delete(id)
           this.towerFillAnimations.delete(id)
+          this.linkFillAnimations.delete(id)
           this.sourceAnimations.delete(id)
           this.buildGlowAnimations.delete(id)
           this.ctrlFlashAnimations.delete(id)
@@ -2891,6 +2974,8 @@ export class ObjectLayer {
     this.towerFillAnimations.clear()
     for (const anim of this.sourceAnimations.values()) updateSourceVisual(anim.visual, anim.toRadius)
     this.sourceAnimations.clear()
+    for (const anim of this.linkFillAnimations.values()) updateLinkFill(anim.visual, anim.toRadius)
+    this.linkFillAnimations.clear()
     this.buildGlowAnimations.clear()
     this.ctrlFlashAnimations.clear()
   }
@@ -2917,6 +3002,7 @@ export class ObjectLayer {
     this.creepFillAnimations.clear()
     this.towerFillAnimations.clear()
     this.sourceAnimations.clear()
+    this.linkFillAnimations.clear()
     this.buildGlowAnimations.clear()
     this.ctrlFlashAnimations.clear()
     this.sayBubbles.clear()

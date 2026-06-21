@@ -707,6 +707,8 @@ function ExtensionDetails(props: { item: SelectedObject }) {
   }
   const hits = () => typeof raw().hits === 'number' ? (raw().hits as number) : null
   const hitsMax = () => typeof raw().hitsMax === 'number' ? (raw().hitsMax as number) : null
+  // Links carry a cooldown; extensions/towers don't, so the row only shows when present.
+  const cooldown = () => typeof raw().cooldown === 'number' ? (raw().cooldown as number) : null
   const notifyWhenAttacked = () => raw().notifyWhenAttacked === true
   const userId = () => typeof raw().user === 'string' ? (raw().user as string) : null
   const isMyStructure = () => userId() !== null && userId() === userInfo()?._id
@@ -729,6 +731,13 @@ function ExtensionDetails(props: { item: SelectedObject }) {
         <>
           <div style={kvCell(true)}>Hits</div>
           <div style={{ ...kvCell(), 'font-variant-numeric': 'tabular-nums' }}>{hits()} / {hitsMax()}</div>
+        </>
+      </Show>
+
+      <Show when={cooldown() !== null}>
+        <>
+          <div style={kvCell(true)}>Cooldown</div>
+          <div style={{ ...kvCell(), 'font-variant-numeric': 'tabular-nums' }}>{cooldown()}</div>
         </>
       </Show>
 
@@ -914,6 +923,7 @@ const CUSTOM_DETAILS: Record<string, (props: { item: SelectedObject }) => JSX.El
   spawn: ExtensionDetails,
   extension: ExtensionDetails,
   tower: ExtensionDetails,
+  link: ExtensionDetails,
   storage: StoreStructureDetails,
   terminal: StoreStructureDetails,
   container: StoreStructureDetails,
