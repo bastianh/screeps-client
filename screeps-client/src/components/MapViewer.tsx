@@ -6,15 +6,24 @@ import { mapOverlayMode } from '~/stores/mapOverlayStore.js'
 import { parseRoomName, formatRoomName, isRoomInWorld, isBusRoom, isCenterRoom } from '~/utils/roomName.js'
 import { useRoomNavigationKeys } from '~/utils/useRoomNavigationKeys.js'
 import { createLogger } from '~/utils/log.js'
-import type { Map2Subscription } from 'screeps-connectivity'
+import type { Map2Subscription, Badge } from 'screeps-connectivity'
 
 const { log, error } = createLogger('map')
 
 export interface RoomInfo {
   room: string
+  /** Owner username (controller level ≥ 1); null when the room is unowned. */
   owner: string | null
+  /** Reserver username (controller level 0); null when the room is not reserved. */
+  reservation: string | null
+  /** Controller level (RCL); null when unowned. */
+  level: number | null
   mineral: string | null
   density: number | null
+  /** Badge of the owner or reserver, for display next to their name. */
+  badge: Badge | null
+  /** Controller sign, with the signer's name/badge resolved. */
+  sign: { text: string; datetime: number; username: string | null; badge: Badge | null } | null
 }
 
 interface MapViewerProps {
@@ -43,7 +52,7 @@ export function MapViewer(props: MapViewerProps) {
   const map2Subs = new Map<string, Map2Subscription>()
 
   // Per-room stats received from the library's mapStats store via events
-  const roomStats = new Map<string, { own?: { user: string; level: number }; mineral?: string; density?: number; username?: string; safeMode?: boolean; badge?: import('screeps-connectivity').Badge }>()
+  const roomStats = new Map<string, { own?: { user: string; level: number }; mineral?: string; density?: number; username?: string; safeMode?: boolean; badge?: import('screeps-connectivity').Badge; sign?: { user: string; text: string; datetime: number; username?: string; badge?: import('screeps-connectivity').Badge } }>()
 
   // Precomputed unclaimable state per room — survives the stats-before-terrain race.
   const roomUnclaimable = new Map<string, 'none' | 'own' | 'other'>()
@@ -61,11 +70,29 @@ export function MapViewer(props: MapViewerProps) {
 
   const buildRoomInfo = (room: string): RoomInfo => {
     const stat = roomStats.get(room)
+    const own = stat?.own
+    // Map-stats encodes a reservation as own with level 0; ownership is level ≥ 1.
+    const name = stat?.username ?? (own?.user ? `user:${own.user}` : null)
+    const owned = !!own && own.level >= 1
+    const reserved = !!own && own.level === 0
+    const sign = stat?.sign
     return {
       room,
-      owner: stat?.username ?? (stat?.own?.user ? `user:${stat.own.user}` : null),
+      owner: owned ? name : null,
+      reservation: reserved ? name : null,
+      level: owned ? own!.level : null,
       mineral: stat?.mineral ?? null,
       density: stat?.density ?? null,
+      badge: stat?.badge ?? null,
+      sign: sign
+        ? {
+            text: sign.text,
+            datetime: sign.datetime,
+            // Fall back to user:<id> when the signer isn't in the user map, matching the owner path.
+            username: sign.username ?? (sign.user ? `user:${sign.user}` : null),
+            badge: sign.badge ?? null,
+          }
+        : null,
     }
   }
 

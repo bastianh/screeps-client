@@ -150,5 +150,7 @@ export const RESOURCE_COLORS: Record<string, number> = {
   X: 0xB084FB,  // catalyst — lavender
   G: 0xFFFFFF,  // ghodium — white
 }
-export const ST_RAMPART        = 0x434C43  // rampart fill
-export const ST_RAMPART_STROKE = 0x5D735F  // rampart border
+export const ST_RAMPART        = 0x55B84F  // rampart fill (vanilla green; drawn translucent over structures/terrain)
+export const ST_RAMPART_STROKE = 0x8AD97A  // rampart border (brighter rim leading the fill)
+export const ST_RAMPART_ENEMY        = 0xB23A3A  // foreign rampart fill
+export const ST_RAMPART_ENEMY_STROKE = 0xD66060  // foreign rampart border

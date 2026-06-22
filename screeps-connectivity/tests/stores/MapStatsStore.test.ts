@@ -231,4 +231,100 @@ describe('MapStatsStore', () => {
     const stat = events[0].stat as { safeMode?: boolean }
     expect(stat.safeMode).toBeUndefined()
   })
+
+  it('passes reservations through as own with level 0', async () => {
+    fetchMock.mockResolvedValue(mockResponse({
+      ok: 1,
+      stats: {
+        W1N1: { own: { user: 'u1', level: 0 } },
+      },
+      users: { u1: { _id: 'u1', username: 'Alice' } },
+    }))
+
+    const events: Array<{ room: string; stat: unknown }> = []
+    store.on('mapStats:room', (e) => events.push(e))
+
+    store.request(['W1N1'], 'owner0')
+
+    await new Promise(r => setTimeout(r, 50))
+    expect(events).toHaveLength(1)
+    const stat = events[0].stat as { own: { user: string; level: number }; username: string }
+    expect(stat.own).toEqual({ user: 'u1', level: 0 })
+    expect(stat.username).toBe('Alice')
+  })
+
+  it('resolves the controller sign with the signer username and badge', async () => {
+    fetchMock.mockResolvedValue(mockResponse({
+      ok: 1,
+      stats: {
+        W1N1: {
+          own: { user: 'u1', level: 5 },
+          sign: { user: 'u1', text: 'Territory of Alice', time: 100, datetime: 1700000000000 },
+        },
+      },
+      users: {
+        u1: { _id: 'u1', username: 'Alice', badge: { type: 7, color1: '#fff', color2: '#000', color3: '#f00', flip: false } },
+      },
+    }))
+
+    const events: Array<{ room: string; stat: unknown }> = []
+    store.on('mapStats:room', (e) => events.push(e))
+
+    store.request(['W1N1'], 'owner0')
+
+    await new Promise(r => setTimeout(r, 50))
+    expect(events).toHaveLength(1)
+    const stat = events[0].stat as { sign: { user: string; text: string; datetime: number; username: string; badge: { type: number } } }
+    expect(stat.sign.user).toBe('u1')
+    expect(stat.sign.text).toBe('Territory of Alice')
+    expect(stat.sign.datetime).toBe(1700000000000)
+    expect(stat.sign.username).toBe('Alice')
+    expect(stat.sign.badge.type).toBe(7)
+  })
+
+  it('keeps the raw signer id but omits username/badge when the signer is not in the user map', async () => {
+    fetchMock.mockResolvedValue(mockResponse({
+      ok: 1,
+      stats: {
+        W1N1: {
+          own: { user: 'u1', level: 4 },
+          sign: { user: 'ghost', text: 'Was here', time: 5, datetime: 1700000000000 },
+        },
+      },
+      users: { u1: { _id: 'u1', username: 'Alice' } },
+    }))
+
+    const events: Array<{ room: string; stat: unknown }> = []
+    store.on('mapStats:room', (e) => events.push(e))
+
+    store.request(['W1N1'], 'owner0')
+
+    await new Promise(r => setTimeout(r, 50))
+    expect(events).toHaveLength(1)
+    const stat = events[0].stat as { sign: { user: string; text: string; username?: string; badge?: unknown } }
+    expect(stat.sign.user).toBe('ghost')
+    expect(stat.sign.text).toBe('Was here')
+    expect(stat.sign.username).toBeUndefined()
+    expect(stat.sign.badge).toBeUndefined()
+  })
+
+  it('omits sign when not present in response', async () => {
+    fetchMock.mockResolvedValue(mockResponse({
+      ok: 1,
+      stats: {
+        W1N1: { own: { user: 'u1', level: 1 } },
+      },
+      users: {},
+    }))
+
+    const events: Array<{ room: string; stat: unknown }> = []
+    store.on('mapStats:room', (e) => events.push(e))
+
+    store.request(['W1N1'], 'owner0')
+
+    await new Promise(r => setTimeout(r, 50))
+    expect(events).toHaveLength(1)
+    const stat = events[0].stat as { sign?: unknown }
+    expect(stat.sign).toBeUndefined()
+  })
 })

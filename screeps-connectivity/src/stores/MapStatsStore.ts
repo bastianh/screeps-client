@@ -11,6 +11,11 @@ export interface MapStatsRoomData {
   safeMode?: boolean
   badge?: ApiMapStatsBadge
   status?: string
+  /**
+   * Controller sign. `user` is the raw signer id; `username`/`badge` are resolved from the
+   * response's user map and may be absent if the signer isn't included there.
+   */
+  sign?: { user: string; text: string; datetime: number; username?: string; badge?: ApiMapStatsBadge }
 }
 
 export interface MapStatsStoreEvents {
@@ -104,6 +109,7 @@ export class MapStatsStore extends TypedStore<MapStatsStoreEvents> {
       }
     }
     const ownerId = stat.own?.user
+    const signUserId = stat.sign?.user
     return {
       own: stat.own,
       mineral,
@@ -112,6 +118,15 @@ export class MapStatsStore extends TypedStore<MapStatsStoreEvents> {
       safeMode: stat.safeMode,
       badge: ownerId ? userMap[ownerId]?.badge : undefined,
       status: stat.status,
+      sign: stat.sign
+        ? {
+            user: stat.sign.user,
+            text: stat.sign.text,
+            datetime: stat.sign.datetime,
+            username: signUserId ? userMap[signUserId]?.username : undefined,
+            badge: signUserId ? userMap[signUserId]?.badge : undefined,
+          }
+        : undefined,
     }
   }
 }

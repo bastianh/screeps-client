@@ -489,6 +489,16 @@ export function RoomViewer(props: RoomViewerProps) {
 
     const { objects: objs, diff, users } = state
 
+    // A freshly-created ObjectLayer must reconcile against the FULL object map, not the
+    // latest tick's diff. The room subscription starts before the renderer exists (see
+    // the subscribe effect above), so on a fresh mount — e.g. opening a room from the
+    // world map — room:update messages land in objectState() before objLayer is created.
+    // objectState() keeps only the latest message, so the initial full snapshot can be
+    // overwritten by a later small diff. data.objects is always the complete map, so
+    // treat the first update as a full reconcile (diff=undefined) to rebuild the scene.
+    const isFirstUpdate = !objLayer
+    const effectiveDiff = isFirstUpdate ? undefined : diff
+
     if (!objLayer) {
       log(`object layer created — ${props.room}`)
       objLayer = new ObjectLayer(r.app.ticker, showCreepLabels(), userInfo()?._id, userInfo()?.badge, users)
@@ -676,8 +686,8 @@ export function RoomViewer(props: RoomViewerProps) {
       )
     }
 
-    if (diff) {
-      updateSelectionWithDiff(diff, objs)
+    if (effectiveDiff) {
+      updateSelectionWithDiff(effectiveDiff, objs)
     } else {
       updateSelectionFromObjects(objs)
     }
@@ -691,7 +701,7 @@ export function RoomViewer(props: RoomViewerProps) {
 
     objLayer.setMoveDuration(moveDuration)
     lastRawState = { objects: objs, users }
-    objLayer.update(objs, diff, users, gameTime() ?? undefined)
+    objLayer.update(objs, effectiveDiff, users, gameTime() ?? undefined)
     objLayer.setShowLabels(untrack(showCreepLabels))
 
     const sayingIds = new Set<string>()
