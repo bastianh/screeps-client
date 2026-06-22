@@ -91,6 +91,78 @@ describe('RoomStore', () => {
     expect(store.objects('W7N7', 'shard0')?.['id1']).toMatchObject({ x: 11, y: 11, type: 'creep' })
   })
 
+  it('deep-merges nested store diffs instead of clobbering the whole store', async () => {
+    const { store, socket } = makeStore()
+    let messageHandler: (data: unknown) => void = () => {}
+    ;(socket.on as ReturnType<typeof vi.fn>).mockImplementation((_ch: string, cb: (data: unknown) => void) => {
+      messageHandler = cb
+      return { dispose: vi.fn() }
+    })
+
+    store.subscribe('W7N7', 'shard0')
+
+    // Full state: a storage holding several resources.
+    messageHandler({
+      objects: { s1: { _id: 's1', type: 'storage', room: 'W7N7', x: 28, y: 26, store: { energy: 239076, power: 2000, H: 5000, L: 5000 } } },
+      gameTime: 1000,
+    })
+
+    // Diff tick: only energy changed within the store.
+    messageHandler({ objects: { s1: { store: { energy: 223706 } } }, gameTime: 1001 })
+
+    // Other resources must survive — a shallow merge would have dropped them.
+    expect((store.objects('W7N7', 'shard0')?.['s1'] as { store: Record<string, number> }).store)
+      .toEqual({ energy: 223706, power: 2000, H: 5000, L: 5000 })
+  })
+
+  it('removes a store resource when the diff sends a null leaf', async () => {
+    const { store, socket } = makeStore()
+    let messageHandler: (data: unknown) => void = () => {}
+    ;(socket.on as ReturnType<typeof vi.fn>).mockImplementation((_ch: string, cb: (data: unknown) => void) => {
+      messageHandler = cb
+      return { dispose: vi.fn() }
+    })
+
+    store.subscribe('W7N7', 'shard0')
+    messageHandler({ objects: { s1: { _id: 's1', type: 'storage', room: 'W7N7', store: { energy: 100, H: 5000 } } }, gameTime: 1000 })
+    messageHandler({ objects: { s1: { store: { H: null } } }, gameTime: 1001 })
+
+    expect((store.objects('W7N7', 'shard0')?.['s1'] as { store: Record<string, number> }).store).toEqual({ energy: 100 })
+  })
+
+  it('replaces array fields wholesale rather than merging them', async () => {
+    const { store, socket } = makeStore()
+    let messageHandler: (data: unknown) => void = () => {}
+    ;(socket.on as ReturnType<typeof vi.fn>).mockImplementation((_ch: string, cb: (data: unknown) => void) => {
+      messageHandler = cb
+      return { dispose: vi.fn() }
+    })
+
+    store.subscribe('W7N7', 'shard0')
+    messageHandler({ objects: { c1: { _id: 'c1', type: 'creep', room: 'W7N7', body: [{ type: 'work' }, { type: 'move' }] } }, gameTime: 1000 })
+    messageHandler({ objects: { c1: { body: [{ type: 'carry' }] } }, gameTime: 1001 })
+
+    expect((store.objects('W7N7', 'shard0')?.['c1'] as { body: unknown[] }).body).toEqual([{ type: 'carry' }])
+  })
+
+  it('does not mutate a previously returned snapshot when applying a diff', async () => {
+    const { store, socket } = makeStore()
+    let messageHandler: (data: unknown) => void = () => {}
+    ;(socket.on as ReturnType<typeof vi.fn>).mockImplementation((_ch: string, cb: (data: unknown) => void) => {
+      messageHandler = cb
+      return { dispose: vi.fn() }
+    })
+
+    store.subscribe('W7N7', 'shard0')
+    messageHandler({ objects: { s1: { _id: 's1', type: 'storage', room: 'W7N7', store: { energy: 100, H: 5000 } } }, gameTime: 1000 })
+    const before = store.objects('W7N7', 'shard0')?.['s1'] as { store: Record<string, number> }
+
+    messageHandler({ objects: { s1: { store: { energy: 200 } } }, gameTime: 1001 })
+
+    // The snapshot captured before the diff must be unchanged.
+    expect(before.store).toEqual({ energy: 100, H: 5000 })
+  })
+
   it('emits room:update event on WS message', async () => {
     const { store, socket } = makeStore()
     let messageHandler: (data: unknown) => void = () => {}

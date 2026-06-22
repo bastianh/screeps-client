@@ -8,6 +8,33 @@ import type { SocketClient } from '../socket/SocketClient.js'
 import type { Cache } from '../cache/Cache.js'
 import type { Subscription } from '../subscription/index.js'
 
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v)
+}
+
+// Apply a room-object diff onto the previous value following Screeps protocol semantics:
+// the first message for an object carries full state, later ticks send only the fields that
+// changed. Nested objects (`store`, `storeCapacityResource`, `effects`, …) are diffed
+// recursively rather than replaced wholesale — a plain shallow spread would clobber the whole
+// `store` with that tick's single changed resource (e.g. `{ energy }`), silently dropping every
+// other resource until it next changes. A `null` leaf means the field was removed; arrays and
+// primitives replace as-is. Returns fresh objects so previously returned snapshots are never
+// mutated.
+function mergeObjectDiff(prev: Record<string, unknown>, diff: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...prev }
+  for (const key in diff) {
+    const next = diff[key]
+    if (next === null) {
+      delete out[key]
+    } else if (isPlainObject(next) && isPlainObject(out[key])) {
+      out[key] = mergeObjectDiff(out[key] as Record<string, unknown>, next)
+    } else {
+      out[key] = next
+    }
+  }
+  return out
+}
+
 export class RoomStore extends TypedStore<RoomStoreEvents> {
   private readonly http: HttpClient
   private readonly socket: SocketClient
@@ -190,7 +217,7 @@ export class RoomStore extends TypedStore<RoomStoreEvents> {
           if (obj === null) {
             delete current[id]
           } else if (current[id]) {
-            current[id] = { ...current[id], ...obj } as RoomObject
+            current[id] = mergeObjectDiff(current[id] as Record<string, unknown>, obj as Record<string, unknown>) as RoomObject
           } else {
             current[id] = obj as RoomObject
           }
