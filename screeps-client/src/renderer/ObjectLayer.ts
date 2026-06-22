@@ -2168,6 +2168,8 @@ export class ObjectLayer {
       this.currentGameTime = gameTime
     }
     let roadsChanged = false
+    let wallsChanged = false
+    let rampartsChanged = false
 
     if (diff) {
       // Use for...in over Object.entries to avoid array allocation per tick
@@ -2176,6 +2178,8 @@ export class ObjectLayer {
         if (changes === null) {
           const oldObj = this.rawObjects.get(id)
           if (oldObj && oldObj.type === 'road') roadsChanged = true
+          if (oldObj && oldObj.type === 'constructedWall') wallsChanged = true
+          if (oldObj && oldObj.type === 'rampart') rampartsChanged = true
 
           const visual = this.objects.get(id)
           if (visual) {
@@ -2202,6 +2206,16 @@ export class ObjectLayer {
             const existing = this.rawObjects.get(id)
             if (!existing || existing.x !== obj.x || existing.y !== obj.y) {
               roadsChanged = true
+            }
+          } else if (obj.type === 'constructedWall') {
+            const existing = this.rawObjects.get(id)
+            if (!existing || existing.x !== obj.x || existing.y !== obj.y) {
+              wallsChanged = true
+            }
+          } else if (obj.type === 'rampart') {
+            const existing = this.rawObjects.get(id)
+            if (!existing || existing.x !== obj.x || existing.y !== obj.y || existing.user !== obj.user) {
+              rampartsChanged = true
             }
           }
 
@@ -2561,10 +2575,16 @@ export class ObjectLayer {
       }
 
       roadsChanged = true
+      wallsChanged = true
+      rampartsChanged = true
     }
 
-    this.redrawWalls()
-    this.redrawRamparts()
+    if (wallsChanged) {
+      this.redrawWalls()
+    }
+    if (rampartsChanged) {
+      this.redrawRamparts()
+    }
     if (roadsChanged) {
       this.redrawRoads()
     }
