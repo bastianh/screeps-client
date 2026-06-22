@@ -460,6 +460,16 @@ function drawStoreBands(
   }
 }
 
+// Bands differ if their colours/amounts differ — used to refresh a fill whose total is
+// unchanged but whose composition (and so its colours) changed this tick.
+function bandsEqual(a: StoreBand[] | undefined, b: StoreBand[]): boolean {
+  if (!a || a.length !== b.length) return false
+  for (let i = 0; i < b.length; i++) {
+    if (a[i]!.color !== b[i]!.color || a[i]!.amount !== b[i]!.amount) return false
+  }
+  return true
+}
+
 function calcContainerFillHeight(used: number, capacity: number): number {
   if (capacity <= 0 || used <= 0) return 0
   return CONT_H * Math.min(1, used / capacity)
@@ -2721,6 +2731,9 @@ export class ObjectLayer {
                 existing.__storageUsed = used
                 existing.__storageCapacity = capacity
                 this.startStorageFillAnimation(id, existing, fromUsed, fromCap, used, capacity)
+              } else if (!bandsEqual(existing.__storageBands, bands)) {
+                existing.__storageBands = bands
+                updateStorageFill(existing, calcStorageFillHeight(used, capacity))
               }
             }
             if (obj.type === 'container') {
@@ -2732,6 +2745,9 @@ export class ObjectLayer {
                 existing.__containerUsed = used
                 existing.__containerCapacity = capacity
                 this.startContainerFillAnimation(id, existing, fromUsed, fromCap, used, capacity)
+              } else if (!bandsEqual(existing.__containerBands, bands)) {
+                existing.__containerBands = bands
+                updateContainerFill(existing, calcContainerFillHeight(used, capacity))
               }
             }
             if (obj.type === 'terminal') {
@@ -2806,6 +2822,9 @@ export class ObjectLayer {
                 existing.__factoryUsed = used
                 existing.__factoryCapacity = capacity
                 this.startFactoryFillAnimation(id, existing, fromUsed, fromCap, used, capacity)
+              } else if (!bandsEqual(existing.__factoryBands, bands)) {
+                existing.__factoryBands = bands
+                updateFactoryFill(existing, calcFactoryFillHeight(used, capacity))
               }
             }
             if (obj.type === 'controller') {
