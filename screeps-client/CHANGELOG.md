@@ -1,5 +1,23 @@
 # screeps-client
 
+## 0.9.0
+
+### Minor Changes
+
+- e020835: Render mineral extractors as a continuously rotating ring (one full turn every 12s) drawn above the mineral: three gapped arc segments drawn procedurally with Graphics — no atlas frame, so it stays crisp at every zoom level. The ring is tinted by room ownership — owner green when the room is yours, hostile red when owned by someone else, and neutral grey when the room is unowned.
+- 71ce50f: Show reservation vs. owner, RCL, and the controller sign in the world-map tooltip.
+- 70c7dfb: Draw ramparts as a translucent overlay above structures and creeps with a glowing rim, plus a spawn progress ring.
+- 0e72b67: Fill terminals, labs, nukers, and factories by stored resource, with storage/container resource bands sharing the mineral colour palette.
+- f525f2b: Replace the top-right logout button with a username chip (badge + name) that opens an account dropdown. The dropdown holds Settings, Respawn (with a destructive confirmation dialog), Change/Set password, and Logout. Password management works for email/password and Steam sessions — Steam-only accounts without a password get a "Set password" flow — while pasted API-token and guest sessions hide it. Settings now opens from the dropdown (guests keep the header gear); the panel's existing close button is the only toggle. Trimmed the Settings panel of options already available directly in the room/map views (creep labels, map view options) and removed the "Verbose creep details" toggle — the body-part breakdown is now always shown.
+
+  `screeps-connectivity`: `UserInfo` gains an optional `password?: boolean` field, surfaced from `/api/auth/me`, indicating whether the account has a password set.
+
+### Patch Changes
+
+- 8e12def: Only redraw walls and ramparts when they change, not every tick.
+- dcc67d2: Fix room only partially loading when opened from the world map.
+- d4dbba3: Poll world status frequently while waiting on a respawn or first-spawn placement so the client reacts almost immediately. When status is `lost` or `empty` the client now refreshes once a second instead of relying on the slow idle path, and triggering a respawn opens a short force-poll window that catches the state change even while the server still reports the old status.
+
 ## 0.8.0
 
 ### Minor Changes
