@@ -179,6 +179,11 @@ export async function connect(opts: {
     const resolvedAuthMethod = opts.authMethod ?? opts.auth
     setAuthMethod(resolvedAuthMethod)
     setSession(SS.authMethod, resolvedAuthMethod)
+    // Auth token and the private-server gate password are persisted to sessionStorage so
+    // tryAutoConnect() can reconnect after a page reload without re-prompting. sessionStorage is
+    // origin-scoped and cleared when the tab closes. This is an accepted tradeoff: any value here
+    // is readable by page JS under XSS, but the same applies to the session token stored alongside
+    // it, and keeping these only in memory would force a re-login on every reload.
     if (screepsClient.http.token) {
       setSession(SS.token, screepsClient.http.token)
     }
