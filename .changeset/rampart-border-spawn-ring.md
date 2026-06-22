@@ -2,4 +2,4 @@
 "screeps-client": minor
 ---
 
-Highlight ramparts with a brighter rim and show spawn progress as a ring.
+Draw ramparts as a translucent overlay above structures and creeps with a glowing rim, plus a spawn progress ring.

@@ -1,4 +1,4 @@
-import { Container, Graphics, Text, Ticker, Sprite, Texture } from 'pixi.js'
+import { Container, Graphics, Text, Ticker, Sprite, Texture, BlurFilter } from 'pixi.js'
 import type { RoomObject, RoomObjectMap, RoomObjectDiff, Badge } from 'screeps-connectivity'
 import { BadgeTextureCache } from './BadgeTextureCache.js'
 import type { Theme, ControllerSpec, FlagSpec, TombstoneSpec } from './themes/Theme.js'
@@ -1728,6 +1728,7 @@ export class ObjectLayer {
   private rawObjects = new Map<string, RoomObject>()
   private roadGraphics: Graphics
   private rampartGraphics: Graphics
+  private rampartGlowGraphics: Graphics
   private wallGraphics: Graphics
   private wallMarkGraphics: Graphics
   private ticker: Ticker | null = null
@@ -1771,8 +1772,19 @@ export class ObjectLayer {
     this.wallMarkGraphics.zIndex = -2
     this.container.addChild(this.wallMarkGraphics)
     this.rampartGraphics = new Graphics()
-    this.rampartGraphics.zIndex = -1
+    // Ramparts overlay everything in the tile as a translucent green wash (vanilla):
+    // above structures (zIndex 0) AND creeps (100) — a creep standing on a rampart
+    // shows under the green — but below flags (200).
+    this.rampartGraphics.zIndex = 150
     this.container.addChild(this.rampartGraphics)
+    // Soft rim glow, blurred via the same BlurFilter pattern the swamp glow uses
+    // (TerrainLayer.createSwampGlow). Sits just below the fill layer so its halo
+    // reads past the blob edge and tints up through the translucent fill, while the
+    // crisp rim draws on top.
+    this.rampartGlowGraphics = new Graphics()
+    this.rampartGlowGraphics.zIndex = 149
+    this.rampartGlowGraphics.filters = [new BlurFilter({ strength: 3, quality: 3 })]
+    this.container.addChild(this.rampartGlowGraphics)
     this.roadGraphics = new Graphics()
     this.container.addChild(this.roadGraphics)
     if (ticker) {
@@ -2745,6 +2757,7 @@ export class ObjectLayer {
 
   private redrawRamparts(): void {
     this.rampartGraphics.clear()
+    this.rampartGlowGraphics.clear()
     const T = TILE_SIZE
     const R = T / 2
 
@@ -2755,18 +2768,20 @@ export class ObjectLayer {
       }
     }
 
+    // Drawn on top of structures as a uniform translucent green wash (vanilla overlay):
+    // one alpha for every tile, so a ramparted structure simply reads through as a green
+    // tint. Varying alpha per tile (faint over structures, bright over terrain) drew a
+    // visible darker square around each structure where the two alphas met.
     const rampartColor = (user: string | undefined): { color: number; alpha: number } => {
-      if (!user || !this.currentUserId) return { color: ST_RAMPART, alpha: 0.7 }
+      if (!user || !this.currentUserId) return { color: ST_RAMPART, alpha: 0.4 }
       return user === this.currentUserId
-        ? { color: ST_RAMPART, alpha: 0.7 }
-        : { color: ST_RAMPART_ENEMY, alpha: 0.5 }
+        ? { color: ST_RAMPART, alpha: 0.4 }
+        : { color: ST_RAMPART_ENEMY, alpha: 0.36 }
     }
 
-    // Brighter perimeter border (a few px wide) hugging the outside of each
-    // rampart blob, grouped by owner category so own/neutral get a green rim and
-    // foreign ramparts a red one. Mirrors the wall border: stroke the quad
-    // geometry with outside alignment FIRST, then the fills below draw on top and
-    // cover every interior stroke segment, leaving only the outer rim visible.
+    // Glowing perimeter rim hugging each rampart blob, grouped by owner category so
+    // own/neutral get a green rim and foreign ramparts a red one. Drawn on top of the
+    // fills (below) as a multi-pass soft glow — see strokeBorder.
     const greenGrid = Array.from({ length: 50 }, () => new Array<boolean>(50).fill(false))
     const redGrid = Array.from({ length: 50 }, () => new Array<boolean>(50).fill(false))
     for (let y = 0; y < 50; y++) {
@@ -2779,56 +2794,66 @@ export class ObjectLayer {
     }
 
     const strokeBorder = (bgrid: boolean[][], color: number) => {
-      const g = this.rampartGraphics
-      let drawn = false
-      const seg = (x0: number, y0: number, x1: number, y1: number) => {
-        g.moveTo(x0, y0); g.lineTo(x1, y1); drawn = true
-      }
-      const arc = (sx: number, sy: number, a0: number, a1: number, ccw: boolean, cxc: number, cyc: number) => {
-        g.moveTo(sx, sy); g.arc(cxc, cyc, R, a0, a1, ccw); drawn = true
-      }
-      // Trace ONLY the outer perimeter of each blob — rounded convex corners,
-      // rounded concave notches, and exposed straight tile edges. Interior
-      // quadrant boundaries are skipped so the translucent fill stays clean
-      // (a full-geometry stroke would bleed a grid through the 0.7-alpha fill).
-      for (let y = 0; y < 50; y++) {
-        for (let x = 0; x < 50; x++) {
-          const top    = y > 0  && bgrid[x][y - 1]
-          const bottom = y < 49 && bgrid[x][y + 1]
-          const left   = x > 0  && bgrid[x - 1][y]
-          const right  = x < 49 && bgrid[x + 1][y]
-          const dTL = x > 0  && y > 0  && bgrid[x - 1][y - 1]
-          const dTR = x < 49 && y > 0  && bgrid[x + 1][y - 1]
-          const dBL = x > 0  && y < 49 && bgrid[x - 1][y + 1]
-          const dBR = x < 49 && y < 49 && bgrid[x + 1][y + 1]
-          const cx = x * T + R
-          const cy = y * T + R
-          if (bgrid[x][y]) {
-            // Convex corners round; straight half-edges otherwise. A half-edge that
-            // runs into a concave corner (rounded by a diagonal empty tile's arc) is
-            // suppressed so it stops at the arc instead of overshooting to a sharp point.
-            // Top-Left
-            if (!top && !left && y > 0 && x > 0) arc(cx, y * T, -Math.PI / 2, Math.PI, true, cx, cy)
-            else { if (!top && !(left && dTL)) seg(x * T, y * T, cx, y * T); if (!left && !(top && dTL)) seg(x * T, y * T, x * T, cy) }
-            // Top-Right
-            if (!top && !right && y > 0 && x < 49) arc(cx, y * T, -Math.PI / 2, 0, false, cx, cy)
-            else { if (!top && !(right && dTR)) seg(cx, y * T, x * T + T, y * T); if (!right && !(top && dTR)) seg(x * T + T, y * T, x * T + T, cy) }
-            // Bottom-Left
-            if (!bottom && !left && y < 49 && x > 0) arc(x * T, cy, Math.PI, Math.PI / 2, true, cx, cy)
-            else { if (!bottom && !(left && dBL)) seg(x * T, y * T + T, cx, y * T + T); if (!left && !(bottom && dBL)) seg(x * T, cy, x * T, y * T + T) }
-            // Bottom-Right
-            if (!bottom && !right && y < 49 && x < 49) arc(cx, y * T + T, Math.PI / 2, 0, true, cx, cy)
-            else { if (!bottom && !(right && dBR)) seg(cx, y * T + T, x * T + T, y * T + T); if (!right && !(bottom && dBR)) seg(x * T + T, cy, x * T + T, y * T + T) }
-          } else {
-            // Rounded concave notches around an empty tile cornered by ramparts
-            if (top && left && dTL) arc(x * T, cy, Math.PI, -Math.PI / 2, false, cx, cy)
-            if (top && right && dTR) arc(x * T + T, cy, 0, -Math.PI / 2, true, cx, cy)
-            if (bottom && left && dBL) arc(cx, y * T + T, Math.PI / 2, Math.PI, false, cx, cy)
-            if (bottom && right && dBR) arc(x * T + T, cy, 0, Math.PI / 2, false, cx, cy)
+      // Trace the outer perimeter path of every blob onto `g` — rounded convex
+      // corners, rounded concave notches, and exposed straight tile edges. Interior
+      // quadrant boundaries are skipped so the translucent fill stays clean. Returns
+      // false if nothing was emitted. PixiJS consumes the path on stroke(), so each
+      // target re-traces it.
+      const trace = (g: Graphics): boolean => {
+        let drawn = false
+        const seg = (x0: number, y0: number, x1: number, y1: number) => {
+          g.moveTo(x0, y0); g.lineTo(x1, y1); drawn = true
+        }
+        const arc = (sx: number, sy: number, a0: number, a1: number, ccw: boolean, cxc: number, cyc: number) => {
+          g.moveTo(sx, sy); g.arc(cxc, cyc, R, a0, a1, ccw); drawn = true
+        }
+        for (let y = 0; y < 50; y++) {
+          for (let x = 0; x < 50; x++) {
+            const top    = y > 0  && bgrid[x][y - 1]
+            const bottom = y < 49 && bgrid[x][y + 1]
+            const left   = x > 0  && bgrid[x - 1][y]
+            const right  = x < 49 && bgrid[x + 1][y]
+            const dTL = x > 0  && y > 0  && bgrid[x - 1][y - 1]
+            const dTR = x < 49 && y > 0  && bgrid[x + 1][y - 1]
+            const dBL = x > 0  && y < 49 && bgrid[x - 1][y + 1]
+            const dBR = x < 49 && y < 49 && bgrid[x + 1][y + 1]
+            const cx = x * T + R
+            const cy = y * T + R
+            if (bgrid[x][y]) {
+              // Convex corners round; straight half-edges otherwise. A half-edge that
+              // runs into a concave corner (rounded by a diagonal empty tile's arc) is
+              // suppressed so it stops at the arc instead of overshooting to a sharp point.
+              // Top-Left
+              if (!top && !left && y > 0 && x > 0) arc(cx, y * T, -Math.PI / 2, Math.PI, true, cx, cy)
+              else { if (!top && !(left && dTL)) seg(x * T, y * T, cx, y * T); if (!left && !(top && dTL)) seg(x * T, y * T, x * T, cy) }
+              // Top-Right
+              if (!top && !right && y > 0 && x < 49) arc(cx, y * T, -Math.PI / 2, 0, false, cx, cy)
+              else { if (!top && !(right && dTR)) seg(cx, y * T, x * T + T, y * T); if (!right && !(top && dTR)) seg(x * T + T, y * T, x * T + T, cy) }
+              // Bottom-Left
+              if (!bottom && !left && y < 49 && x > 0) arc(x * T, cy, Math.PI, Math.PI / 2, true, cx, cy)
+              else { if (!bottom && !(left && dBL)) seg(x * T, y * T + T, cx, y * T + T); if (!left && !(bottom && dBL)) seg(x * T, cy, x * T, y * T + T) }
+              // Bottom-Right
+              if (!bottom && !right && y < 49 && x < 49) arc(cx, y * T + T, Math.PI / 2, 0, true, cx, cy)
+              else { if (!bottom && !(right && dBR)) seg(cx, y * T + T, x * T + T, y * T + T); if (!right && !(bottom && dBR)) seg(x * T + T, cy, x * T + T, y * T + T) }
+            } else {
+              // Rounded concave notches around an empty tile cornered by ramparts
+              if (top && left && dTL) arc(x * T, cy, Math.PI, -Math.PI / 2, false, cx, cy)
+              if (top && right && dTR) arc(x * T + T, cy, 0, -Math.PI / 2, true, cx, cy)
+              if (bottom && left && dBL) arc(cx, y * T + T, Math.PI / 2, Math.PI, false, cx, cy)
+              if (bottom && right && dBR) arc(x * T + T, cy, 0, Math.PI / 2, false, cx, cy)
+            }
           }
         }
+        return drawn
       }
-      if (drawn) g.stroke({ color, width: T * 0.08, alpha: 0.9, alignment: 0.5, cap: 'round' })
+      // butt caps (not round): the perimeter is emitted as disjoint per-tile segments,
+      // so round caps would stack a half-circle at every shared endpoint and bead the
+      // line. Adjacent segments are collinear/tangent, so butt caps meet flush.
+      // Wide bright stroke on the blurred glow layer (below the fills) → a soft glow
+      // that haloes past the blob edge and tints up through the translucent fill.
+      if (trace(this.rampartGlowGraphics)) this.rampartGlowGraphics.stroke({ color, width: T * 0.3, alpha: 0.55, alignment: 0.5, cap: 'butt', join: 'round' })
+      // Crisp core rim on top of the fills.
+      if (trace(this.rampartGraphics)) this.rampartGraphics.stroke({ color, width: T * 0.08, alpha: 0.9, alignment: 0.5, cap: 'butt', join: 'round' })
     }
 
     for (let y = 0; y < 50; y++) {
@@ -3196,9 +3221,11 @@ export class ObjectLayer {
     this.sayBubbles.clear()
     this.roadGraphics.clear()
     this.rampartGraphics.clear()
+    this.rampartGlowGraphics.clear()
     this.container.removeChildren()
     // Re-attach persistent graphics layers removed by removeChildren()
     this.container.addChild(this.rampartGraphics)
+    this.container.addChild(this.rampartGlowGraphics)
     this.container.addChild(this.roadGraphics)
   }
 
