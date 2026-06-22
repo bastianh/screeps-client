@@ -12,7 +12,7 @@ import {
   BODY_PART_COLORS,
   OBJECT_COLORS,
   BG_DEEP, BG_DARK,
-  OBJ_DEFAULT, OBJ_ROAD, OBJ_FOREIGN, OBJ_CYAN,
+  OBJ_DEFAULT, OBJ_ROAD, OBJ_FOREIGN, OBJ_CYAN, OBJ_GREY,
   ENERGY_FILL,
   CREEP_RING_DARK, CREEP_NOTCH,
   ST_DARK, ST_GRAY, ST_LIGHT, ST_OUTLINE, ST_ENERGY, ST_POWER, ST_RAMPART,
@@ -158,6 +158,24 @@ function drawCSRing(g: Graphics, color: number): void {
   g.clear()
   g.circle(TILE_SIZE / 2, TILE_SIZE / 2, CS_RADIUS)
   g.stroke({ width: CS_STROKE, color, alpha: 0.95 })
+}
+
+// Mineral-extractor ring: three stroked arc segments with gaps, centered at (0,0)
+// so the Graphics rotates about its own center (spun by the ticker). Radius/width
+// match the previous ~2.6-tile atlas footprint.
+const EXTRACTOR_RING_R = TILE_SIZE * 0.975  // 0.75 × the original ~2.6-tile footprint
+const EXTRACTOR_RING_W = Math.max(1, TILE_SIZE * 0.18)
+const EXTRACTOR_GAP    = Math.PI / 3  // rad gap; equals the segment arc (3 segments + 3 gaps = 2π)
+const EXTRACTOR_Z_INDEX = 1    // ring spins above the mineral
+
+function drawExtractorRing(g: Graphics, color: number): void {
+  g.clear()
+  for (let i = 0; i < 3; i++) {
+    const a0 = i * (2 * Math.PI / 3) + EXTRACTOR_GAP / 2
+    const a1 = a0 + (2 * Math.PI / 3) - EXTRACTOR_GAP
+    g.arc(0, 0, EXTRACTOR_RING_R, a0, a1)
+    g.stroke({ width: EXTRACTOR_RING_W, color, cap: 'round' })
+  }
 }
 
 function drawCSProgress(
@@ -386,6 +404,7 @@ const TOWER_BODY_H = TILE_SIZE * 0.6
 
 const TOWER_IDLE_SPEED = 0.4   // rad/s idle barrel sweep
 const TOWER_AIM_LERP   = 0.3   // per-frame fraction of remaining angle when turning to a target
+const EXTRACTOR_RING_SPEED = Math.PI / 6  // rad/s — one full turn every 12s
 // Barrel art points "up" (−y) at rotation 0, so a target at screen angle θ needs
 // rotation θ + π/2. Flip the sign / drop the offset if the body sprite faces elsewhere.
 const TOWER_BARREL_FORWARD = Math.PI / 2
@@ -1680,7 +1699,18 @@ function createObjectVisual(
       updateFactoryFill(factVisual, calcFactoryFillHeight(factUsed, factCap))
       break
     }
-    case 'extractor':
+    case 'extractor': {
+      // Continuously rotating ring (rendered above the mineral) — three gapped arc
+      // segments drawn procedurally (one extractor per room, so no atlas needed).
+      // Tinted tri-state by room ownership: owner green when ours, hostile red when
+      // foreign-owned, neutral grey when the room is unowned (extractor has no owner).
+      const ring = new Graphics()
+      ring.position.set(cx, cy)
+      drawExtractorRing(ring, ownedByUser === undefined ? OBJ_GREY : outlineColor)
+      container.addChild(ring)
+      ;(container as ContainerWithTarget).__extractorRing = ring
+      break
+    }
     case 'invaderCore': {
       g.circle(cx, cy, TILE_SIZE * 0.45)
       g.fill(ST_DARK)
@@ -1947,6 +1977,7 @@ function createObjectVisual(
     : obj.type === 'controller' ? (theme?.controller?.zIndex ?? 0)
     : obj.type === 'tombstone' ? (theme?.tombstone?.zIndex ?? 0)
     : obj.type === 'mineral' ? (theme?.mineral?.zIndex ?? 0)
+    : obj.type === 'extractor' ? EXTRACTOR_Z_INDEX
     : (theme?.sprites[obj.type]?.zIndex ?? 0)
   container.zIndex = baseZ + specZ
 
@@ -2021,6 +2052,7 @@ type ContainerWithTarget = Container & {
   __towerAimAngle?: number   // target rotation while an action is active
   __towerAimUntil?: number   // performance.now() timestamp when the aim hold ends
   __towerIdlePhase?: number  // phase offset so idle sweep resumes seamlessly after aiming
+  __extractorRing?: Container  // continuously rotating mineral-extractor ring
   __ctrlSegGraphics?: Graphics
   __ctrlSegSprites?: Sprite[]
   __ctrlLevel?: number
@@ -2267,6 +2299,9 @@ export class ObjectLayer {
           }
           turret.rotation = t_sec * TOWER_IDLE_SPEED + (visual.__towerIdlePhase ?? 0)
         }
+      }
+      if (visual.__extractorRing) {
+        visual.__extractorRing.rotation = t_sec * EXTRACTOR_RING_SPEED
       }
       if (visual.__csRingGraphics && visual.__csColorDark !== undefined && visual.__csColorLight !== undefined) {
         drawCSRing(visual.__csRingGraphics, lerpColor(visual.__csColorDark, visual.__csColorLight, pulse))
