@@ -360,6 +360,7 @@ const CONT_W = TILE_SIZE * 0.45
 const CONT_H = TILE_SIZE * 0.6
 const CONT_X = TILE_SIZE * 0.275  // cx - TILE_SIZE * 0.225
 const CONT_Y = TILE_SIZE * 0.2    // cy - TILE_SIZE * 0.3
+const CONT_MARGIN = Math.max(0.5, TILE_SIZE * 0.02)  // frames the grey interior and insets the fill bands
 
 // Returns the fill level as a fraction [0,1] so the same value drives both the
 // procedural-fallback rect and the atlas rounded-rect geometry.
@@ -479,8 +480,7 @@ function updateContainerFill(visual: ContainerWithTarget, height: number): void 
   const fill = visual.__containerFillG
   if (!fill) return
   fill.clear()
-  const margin = Math.max(0.5, TILE_SIZE * 0.02)
-  drawStoreBands(fill, CONT_X, CONT_Y + CONT_H, CONT_W, height, visual.__containerBands, visual.__containerUsed ?? 0, margin)
+  drawStoreBands(fill, CONT_X, CONT_Y + CONT_H, CONT_W, height, visual.__containerBands, visual.__containerUsed ?? 0, CONT_MARGIN)
 }
 
 function calcStorageFillHeight(used: number, capacity: number): number {
@@ -1534,6 +1534,9 @@ function createObjectVisual(
       const { bands: contBands, used: contUsed, capacity: contCap } = getStoreBands(obj)
       g.rect(CONT_X, CONT_Y, CONT_W, CONT_H)
       g.fill(ST_DARK)
+      // Grey interior backdrop (like storage) — shows above the fill; the dark box frames it.
+      g.rect(CONT_X + CONT_MARGIN, CONT_Y + CONT_MARGIN, CONT_W - CONT_MARGIN * 2, CONT_H - CONT_MARGIN * 2)
+      g.fill(ST_GRAY)
       container.addChild(g)
 
       const contFillG = new Graphics()
