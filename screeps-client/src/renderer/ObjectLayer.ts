@@ -629,46 +629,64 @@ function updateNukerFill(visual: ContainerWithTarget, energyFraction: number, gh
   }
 }
 
-// Factory: a cog whose teeth pulse while producing, a level ring around the centre, and a
-// storage-style band fill in the centre box.
-const FACT_BODY_R     = TILE_SIZE * 0.4
+// Factory: a compact cog — short stubby teeth forming the gear silhouette, a level ring
+// around the centre, and a storage-style band fill in the centre box. The green outline
+// pulses while producing (it does not recolour the teeth themselves).
 const FACT_TEETH      = 8
-const FACT_TOOTH_IN   = TILE_SIZE * 0.36
-const FACT_TOOTH_OUT  = TILE_SIZE * 0.52
-const FACT_TOOTH_HALF = 0.26                 // radians, half angular width of a tooth
-const FACT_RING_IN    = TILE_SIZE * 0.27
-const FACT_RING_OUT   = TILE_SIZE * 0.35
-const FACT_BOX_W      = TILE_SIZE * 0.30
-const FACT_BOX_H      = TILE_SIZE * 0.40
-const FACT_BOX_X      = TILE_SIZE * 0.35      // centred: 0.5 - 0.15
-const FACT_BOX_Y      = TILE_SIZE * 0.30      // centred: 0.5 - 0.20
+const FACT_BODY_R     = TILE_SIZE * 0.4       // body disc / tooth valley radius
+const FACT_TOOTH_OUT  = TILE_SIZE * 0.5       // tooth tips reach the tile edge
+const FACT_TOOTH_HALF = 0.22                  // radians, half angular width of a tooth
+const FACT_RING_IN    = TILE_SIZE * 0.25
+const FACT_RING_OUT   = TILE_SIZE * 0.32
+const FACT_BOX_W      = TILE_SIZE * 0.24
+const FACT_BOX_H      = TILE_SIZE * 0.28
+const FACT_BOX_X      = TILE_SIZE * 0.38      // centred: 0.5 - 0.12
+const FACT_BOX_Y      = TILE_SIZE * 0.36      // centred: 0.5 - 0.14
 const FACT_LEVELS     = 5
+const FACT_GLOW       = 0xFFFFFF              // pulse brightens the outline toward white
+
+// One closed polygon tracing the whole cog perimeter: body-radius arcs in the valleys,
+// outer-radius arcs across the tooth tips, with the radial rises/falls between them as
+// the straight segments the poly draws automatically. Filled it is a solid gear.
+function factoryGearPoints(): number[] {
+  const c = TILE_SIZE / 2
+  const step = (2 * Math.PI) / FACT_TEETH
+  const SEG = 3
+  const pts: number[] = []
+  for (let i = 0; i < FACT_TEETH; i++) {
+    const ac = -Math.PI / 2 + i * step
+    const ts = ac - FACT_TOOTH_HALF
+    const te = ac + FACT_TOOTH_HALF
+    const prevTe = ac - step + FACT_TOOTH_HALF
+    for (let s = 0; s <= SEG; s++) {          // valley arc at body radius
+      const a = prevTe + (ts - prevTe) * (s / SEG)
+      pts.push(c + FACT_BODY_R * Math.cos(a), c + FACT_BODY_R * Math.sin(a))
+    }
+    for (let s = 0; s <= SEG; s++) {          // tooth tip arc at outer radius
+      const a = ts + (te - ts) * (s / SEG)
+      pts.push(c + FACT_TOOTH_OUT * Math.cos(a), c + FACT_TOOTH_OUT * Math.sin(a))
+    }
+  }
+  return pts
+}
+const FACT_GEAR_PTS = factoryGearPoints()
 
 function factoryActive(obj: RoomObject): boolean {
   return typeof obj.cooldown === 'number' && obj.cooldown > 0
 }
 
-function drawFactoryTeeth(g: Graphics, color: number): void {
+function drawFactoryGear(g: Graphics, strokeColor: number): void {
   g.clear()
-  const c = TILE_SIZE / 2
-  for (let i = 0; i < FACT_TEETH; i++) {
-    const a = -Math.PI / 2 + i * (2 * Math.PI / FACT_TEETH)
-    const a0 = a - FACT_TOOTH_HALF
-    const a1 = a + FACT_TOOTH_HALF
-    g.poly([
-      c + FACT_TOOTH_IN * Math.cos(a0), c + FACT_TOOTH_IN * Math.sin(a0),
-      c + FACT_TOOTH_OUT * Math.cos(a0), c + FACT_TOOTH_OUT * Math.sin(a0),
-      c + FACT_TOOTH_OUT * Math.cos(a1), c + FACT_TOOTH_OUT * Math.sin(a1),
-      c + FACT_TOOTH_IN * Math.cos(a1), c + FACT_TOOTH_IN * Math.sin(a1),
-    ])
-    g.fill(color)
-  }
+  g.poly(FACT_GEAR_PTS)
+  g.fill(ST_DARK)
+  g.poly(FACT_GEAR_PTS)
+  g.stroke({ width: TILE_SIZE * 0.06, color: strokeColor })
 }
 
 function drawFactoryRing(g: Graphics, level: number): void {
   g.clear()
   const c = TILE_SIZE / 2
-  const gap = 0.22
+  const gap = 0.14
   const seg = (2 * Math.PI / FACT_LEVELS) - gap
   for (let i = 0; i < FACT_LEVELS; i++) {
     const a0 = -Math.PI / 2 + i * (2 * Math.PI / FACT_LEVELS) + gap / 2
@@ -677,8 +695,7 @@ function drawFactoryRing(g: Graphics, level: number): void {
     g.arc(c, c, FACT_RING_OUT, a0, a1)
     g.arc(c, c, FACT_RING_IN, a1, a0, true)
     g.closePath()
-    const lit = i < level
-    g.fill({ color: lit ? ST_LIGHT : ST_DARK, alpha: lit ? 0.95 : 0.55 })
+    g.fill(i < level ? ST_LIGHT : ST_GRAY)
   }
 }
 
@@ -1569,16 +1586,12 @@ function createObjectVisual(
       const factLevel = typeof obj.level === 'number' ? obj.level : 0
       const { bands: factBands, used: factUsed, capacity: factCap } = getStoreBands(obj)
 
-      // Teeth (back): pulse while producing, via the per-frame loop in tick().
-      const factTeethG = new Graphics()
-      drawFactoryTeeth(factTeethG, ST_DARK)
-      container.addChild(factTeethG)
+      // Gear silhouette (body + teeth in one shape); its outline pulses while producing.
+      const factGearG = new Graphics()
+      drawFactoryGear(factGearG, outlineColor)
+      container.addChild(factGearG)
 
-      // Body + centre box background.
-      g.circle(cx, cy, FACT_BODY_R)
-      g.fill(ST_DARK)
-      g.circle(cx, cy, FACT_BODY_R)
-      g.stroke({ width: TILE_SIZE * 0.05, color: outlineColor })
+      // Centre box background, over the gear's dark fill.
       g.rect(FACT_BOX_X, FACT_BOX_Y, FACT_BOX_W, FACT_BOX_H)
       g.fill(ST_GRAY)
       container.addChild(g)
@@ -1593,7 +1606,7 @@ function createObjectVisual(
       container.addChild(factFillG)
 
       const factVisual = container as ContainerWithTarget
-      factVisual.__factoryTeethG = factTeethG
+      factVisual.__factoryGearG = factGearG
       factVisual.__factoryRingG = factRingG
       factVisual.__factoryFillG = factFillG
       factVisual.__factoryBands = factBands
@@ -1933,7 +1946,7 @@ type ContainerWithTarget = Container & {
   __nukerEnergyCap?: number
   __nukerGhodium?: number
   __nukerGhodiumCap?: number
-  __factoryTeethG?: Graphics
+  __factoryGearG?: Graphics
   __factoryRingG?: Graphics
   __factoryFillG?: Graphics
   __factoryBands?: StoreBand[]
@@ -2191,9 +2204,9 @@ export class ObjectLayer {
       if (visual.__csRingGraphics && visual.__csColorDark !== undefined && visual.__csColorLight !== undefined) {
         drawCSRing(visual.__csRingGraphics, lerpColor(visual.__csColorDark, visual.__csColorLight, pulse))
       }
-      // Factory teeth pulse green→ while producing (cooldown active).
-      if (visual.__factoryTeethG && visual.__factoryActive) {
-        drawFactoryTeeth(visual.__factoryTeethG, lerpColor(ST_DARK, visual.__factoryGlowColor ?? ST_OUTLINE, pulse))
+      // Factory outline pulses brighter while producing (cooldown active).
+      if (visual.__factoryGearG && visual.__factoryActive) {
+        drawFactoryGear(visual.__factoryGearG, lerpColor(visual.__factoryGlowColor ?? ST_OUTLINE, FACT_GLOW, 0.5 * pulse))
       }
     }
 
@@ -2783,8 +2796,8 @@ export class ObjectLayer {
               }
               if (existing.__factoryActive !== active) {
                 existing.__factoryActive = active
-                // Stopped producing — reset teeth to their static dark colour.
-                if (!active && existing.__factoryTeethG) drawFactoryTeeth(existing.__factoryTeethG, ST_DARK)
+                // Stopped producing — reset the outline to its static colour.
+                if (!active && existing.__factoryGearG) drawFactoryGear(existing.__factoryGearG, existing.__factoryGlowColor ?? ST_OUTLINE)
               }
               if (existing.__factoryUsed !== used || existing.__factoryCapacity !== capacity) {
                 const fromUsed = existing.__factoryUsed ?? 0
