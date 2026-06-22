@@ -16,7 +16,7 @@ import {
   ENERGY_FILL,
   CREEP_RING_DARK, CREEP_NOTCH,
   ST_DARK, ST_GRAY, ST_LIGHT, ST_OUTLINE, ST_ENERGY, ST_POWER, ST_RAMPART,
-  ST_RESOURCE_OTHER, RESOURCE_BAND_COLORS,
+  ST_RESOURCE_OTHER, RESOURCE_COLORS,
   TERRAIN_WALL_BORDER,
   FLAG_COLORS,
   CS_OWN, CS_FOREIGN, CS_OWN_DARK, CS_OWN_LIGHT, CS_FOREIGN_DARK, CS_FOREIGN_LIGHT,
@@ -50,16 +50,8 @@ const EXT_INNER_R = TILE_SIZE * 0.30
 const EXT_STROKE_W = Math.max(1, TILE_SIZE * 0.08)
 
 // ── Mineral helpers ────────────────────────────────────────────────────────
-// Canonical Screeps mineral palette (disc fill + letter glyph).
-const MINERAL_COLORS: Record<string, number> = {
-  H: 0xCCCCCC,  // hydrogen — light gray
-  O: 0xFFFFFF,  // oxygen — white
-  U: 0x58D7F9,  // utrium — cyan
-  L: 0x00F4A2,  // lemergium — mint
-  K: 0xA071FF,  // keanium — purple
-  Z: 0xFDC78E,  // zynthium — tan
-  X: 0xB084FB,  // catalyst — lavender
-}
+// Mineral disc fill colours come from the shared RESOURCE_COLORS palette (colors.ts),
+// so a mineral reads the same as a deposit disc and as a structure store-fill band.
 // Letter color: dark for very light discs (H, O), white otherwise.
 const MINERAL_TEXT_COLORS: Record<string, number> = {
   H: 0x222222,
@@ -405,17 +397,23 @@ interface StoreBand { color: number; amount: number }
 const BAND_ORDER = ['energy', 'power']
 
 // Break a store into stacked, colored bands ordered bottom-up. `used` is the sum of
-// the band amounts, so callers size the fill from a single total exactly as before.
-function getStoreBands(obj: RoomObject): { bands: StoreBand[]; used: number; capacity: number } {
+// the band amounts, so callers size the fill from a single total exactly as before;
+// `dominant` is the highest-amount resource (null when empty), for single-tint structures.
+function getStoreBands(obj: RoomObject): { bands: StoreBand[]; used: number; capacity: number; dominant: string | null } {
   const capacity = typeof obj.storeCapacity === 'number' ? obj.storeCapacity : 0
   if (capacity === 0 || !obj.store || typeof obj.store !== 'object') {
-    return { bands: [], used: 0, capacity: 0 }
+    return { bands: [], used: 0, capacity: 0, dominant: null }
   }
   const store = obj.store as Record<string, unknown>
   const entries: Array<[string, number]> = []
+  let dominant: string | null = null
+  let dominantAmt = 0
   for (const k in store) {
     const v = store[k]
-    if (typeof v === 'number' && v > 0) entries.push([k, v])
+    if (typeof v === 'number' && v > 0) {
+      entries.push([k, v])
+      if (v > dominantAmt) { dominantAmt = v; dominant = k }
+    }
   }
   entries.sort(([a], [b]) => {
     const ra = BAND_ORDER.indexOf(a), rb = BAND_ORDER.indexOf(b)
@@ -424,9 +422,9 @@ function getStoreBands(obj: RoomObject): { bands: StoreBand[]; used: number; cap
   let used = 0
   const bands = entries.map(([res, amount]): StoreBand => {
     used += amount
-    return { color: RESOURCE_BAND_COLORS[res] ?? ST_RESOURCE_OTHER, amount }
+    return { color: RESOURCE_COLORS[res] ?? ST_RESOURCE_OTHER, amount }
   })
-  return { bands, used, capacity }
+  return { bands, used, capacity, dominant }
 }
 
 // Stack resource bands bottom-up inside a box. `yBottom` is the box floor; `height` is the
@@ -499,20 +497,7 @@ function updateStorageFill(visual: ContainerWithTarget, height: number): void {
 // These structures tint their fill by resource type (shared band palette), rather
 // than showing only how full they are.
 function resourceColor(res: string): number {
-  return RESOURCE_BAND_COLORS[res] ?? ST_RESOURCE_OTHER
-}
-
-// Resource holding the largest amount in a store, or null when empty.
-function getDominantResource(obj: RoomObject): string | null {
-  if (!obj.store || typeof obj.store !== 'object') return null
-  const store = obj.store as Record<string, unknown>
-  let best: string | null = null
-  let bestAmt = 0
-  for (const k in store) {
-    const v = store[k]
-    if (typeof v === 'number' && v > bestAmt) { bestAmt = v; best = k }
-  }
-  return best
+  return RESOURCE_COLORS[res] ?? ST_RESOURCE_OTHER
 }
 
 function calcCenterFillFraction(used: number, capacity: number): number {
@@ -1070,7 +1055,7 @@ function createObjectVisual(
         }
       } else {
         // Fallback: colored disc + letter glyph
-        const mcolor = MINERAL_COLORS[mtype] ?? OBJ_CYAN
+        const mcolor = RESOURCE_COLORS[mtype] ?? OBJ_CYAN
         const textColor = MINERAL_TEXT_COLORS[mtype] ?? 0xFFFFFF
         const discG = new Graphics()
         discG.circle(cx, cy, MINERAL_R)
@@ -1452,9 +1437,8 @@ function createObjectVisual(
       container.addChild(g)
 
       // Store fill: a square that grows from the centre, tinted by the dominant resource,
-      // animated each tick via the terminalFillAnimations loop.
-      const { used: termUsed, capacity: termCap } = getStoreBands(obj)
-      const termDominant = getDominantResource(obj)
+      // animated each tick via the shared fill-tween loop (see startTerminalFillAnimation).
+      const { used: termUsed, capacity: termCap, dominant: termDominant } = getStoreBands(obj)
       const termFillG = new Graphics()
       container.addChild(termFillG)
       const termVisual = container as ContainerWithTarget
@@ -1478,7 +1462,7 @@ function createObjectVisual(
       container.addChild(g)
 
       // Energy core: a diamond that scales with stored energy, animated each tick
-      // via the linkFillAnimations loop (see startLinkAnimation / updateLinkFill).
+      // via the shared fill-tween loop (see startLinkAnimation / updateLinkFill).
       const { energy: linkEnergy, capacity: linkCapacity } = getExtensionEnergy(obj)
       const linkFill = new Graphics()
       container.addChild(linkFill)
@@ -2043,20 +2027,16 @@ function buildSayBubble(message: string): Container {
   return bubble
 }
 
-interface ExtAnimation {
-  visual: ContainerWithTarget
-  fromRadius: number
-  toRadius: number
-  startTime: number
-}
-
-// Two independent fill fractions tweened together (lab energy+mineral, nuker energy+ghodium).
-interface DualFillAnimation {
+// One generic fill tween. Channel `a` (and optional `b`, for two-channel fills like lab
+// energy+mineral or nuker energy+ghodium) eases from→to over EXT_ANIM_DURATION, then `apply`
+// repaints the visual. Single-channel fills leave `b` at 0; their `apply` ignores it.
+interface FillAnimation {
   visual: ContainerWithTarget
   fromA: number
   toA: number
   fromB: number
   toB: number
+  apply: (visual: ContainerWithTarget, a: number, b: number) => void
   startTime: number
 }
 
@@ -2076,17 +2056,9 @@ export class ObjectLayer {
   private wallMarkGraphics: Graphics
   private ticker: Ticker | null = null
   private tickerCallback: (() => void) | null = null
-  private extAnimations = new Map<string, ExtAnimation>()
-  private creepFillAnimations = new Map<string, ExtAnimation>()
-  private towerFillAnimations = new Map<string, ExtAnimation>()
-  private storageFillAnimations = new Map<string, ExtAnimation>()
-  private containerFillAnimations = new Map<string, ExtAnimation>()
-  private terminalFillAnimations = new Map<string, ExtAnimation>()
-  private factoryFillAnimations = new Map<string, ExtAnimation>()
-  private labFillAnimations = new Map<string, DualFillAnimation>()
-  private nukerFillAnimations = new Map<string, DualFillAnimation>()
-  private linkFillAnimations = new Map<string, ExtAnimation>()
-  private sourceAnimations = new Map<string, ExtAnimation>()
+  // One map for every fill tween (extension/creep/tower/storage/container/terminal/factory/
+  // lab/nuker/link/source). An object has a single type, so its id maps to at most one entry.
+  private fillAnimations = new Map<string, FillAnimation>()
   private buildGlowAnimations = new Map<string, { startTime: number; duration: number }>()
   private ctrlFlashAnimations = new Map<string, { segIndex: number; startTime: number; duration: number }>()
   private currentGameTime = 0
@@ -2223,83 +2195,12 @@ export class ObjectLayer {
       }
     }
 
-    // Extension + creep fill animations
-    for (const [id, anim] of this.extAnimations) {
-      const elapsed = now - anim.startTime
-      const t = Math.min(1, elapsed / this.EXT_ANIM_DURATION)
+    // Fill tweens (extension/creep/tower/storage/container/terminal/factory/lab/nuker/link/source)
+    for (const [id, anim] of this.fillAnimations) {
+      const t = Math.min(1, (now - anim.startTime) / this.EXT_ANIM_DURATION)
       const ease = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2
-      updateExtensionFill(anim.visual, anim.fromRadius + (anim.toRadius - anim.fromRadius) * ease)
-      if (t >= 1) this.extAnimations.delete(id)
-    }
-    for (const [id, anim] of this.creepFillAnimations) {
-      const elapsed = now - anim.startTime
-      const t = Math.min(1, elapsed / this.EXT_ANIM_DURATION)
-      const ease = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2
-      updateCreepFill(anim.visual, anim.fromRadius + (anim.toRadius - anim.fromRadius) * ease)
-      if (t >= 1) this.creepFillAnimations.delete(id)
-    }
-    for (const [id, anim] of this.towerFillAnimations) {
-      const elapsed = now - anim.startTime
-      const t = Math.min(1, elapsed / this.EXT_ANIM_DURATION)
-      const ease = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2
-      updateTowerFill(anim.visual, anim.fromRadius + (anim.toRadius - anim.fromRadius) * ease)
-      if (t >= 1) this.towerFillAnimations.delete(id)
-    }
-    for (const [id, anim] of this.storageFillAnimations) {
-      const elapsed = now - anim.startTime
-      const t = Math.min(1, elapsed / this.EXT_ANIM_DURATION)
-      const ease = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2
-      updateStorageFill(anim.visual, anim.fromRadius + (anim.toRadius - anim.fromRadius) * ease)
-      if (t >= 1) this.storageFillAnimations.delete(id)
-    }
-    for (const [id, anim] of this.containerFillAnimations) {
-      const elapsed = now - anim.startTime
-      const t = Math.min(1, elapsed / this.EXT_ANIM_DURATION)
-      const ease = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2
-      updateContainerFill(anim.visual, anim.fromRadius + (anim.toRadius - anim.fromRadius) * ease)
-      if (t >= 1) this.containerFillAnimations.delete(id)
-    }
-    for (const [id, anim] of this.terminalFillAnimations) {
-      const elapsed = now - anim.startTime
-      const t = Math.min(1, elapsed / this.EXT_ANIM_DURATION)
-      const ease = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2
-      updateTerminalFill(anim.visual, anim.fromRadius + (anim.toRadius - anim.fromRadius) * ease)
-      if (t >= 1) this.terminalFillAnimations.delete(id)
-    }
-    for (const [id, anim] of this.factoryFillAnimations) {
-      const elapsed = now - anim.startTime
-      const t = Math.min(1, elapsed / this.EXT_ANIM_DURATION)
-      const ease = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2
-      updateFactoryFill(anim.visual, anim.fromRadius + (anim.toRadius - anim.fromRadius) * ease)
-      if (t >= 1) this.factoryFillAnimations.delete(id)
-    }
-    for (const [id, anim] of this.labFillAnimations) {
-      const elapsed = now - anim.startTime
-      const t = Math.min(1, elapsed / this.EXT_ANIM_DURATION)
-      const ease = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2
-      updateLabFill(anim.visual, anim.fromA + (anim.toA - anim.fromA) * ease, anim.fromB + (anim.toB - anim.fromB) * ease)
-      if (t >= 1) this.labFillAnimations.delete(id)
-    }
-    for (const [id, anim] of this.nukerFillAnimations) {
-      const elapsed = now - anim.startTime
-      const t = Math.min(1, elapsed / this.EXT_ANIM_DURATION)
-      const ease = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2
-      updateNukerFill(anim.visual, anim.fromA + (anim.toA - anim.fromA) * ease, anim.fromB + (anim.toB - anim.fromB) * ease)
-      if (t >= 1) this.nukerFillAnimations.delete(id)
-    }
-    for (const [id, anim] of this.linkFillAnimations) {
-      const elapsed = now - anim.startTime
-      const t = Math.min(1, elapsed / this.EXT_ANIM_DURATION)
-      const ease = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2
-      updateLinkFill(anim.visual, anim.fromRadius + (anim.toRadius - anim.fromRadius) * ease)
-      if (t >= 1) this.linkFillAnimations.delete(id)
-    }
-    for (const [id, anim] of this.sourceAnimations) {
-      const elapsed = now - anim.startTime
-      const t = Math.min(1, elapsed / this.EXT_ANIM_DURATION)
-      const ease = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2
-      updateSourceVisual(anim.visual, anim.fromRadius + (anim.toRadius - anim.fromRadius) * ease)
-      if (t >= 1) this.sourceAnimations.delete(id)
+      anim.apply(anim.visual, anim.fromA + (anim.toA - anim.fromA) * ease, anim.fromB + (anim.toB - anim.fromB) * ease)
+      if (t >= 1) this.fillAnimations.delete(id)
     }
 
     // Source pulse: every tick repaint each source so the golden core (or the dark
@@ -2400,136 +2301,82 @@ export class ObjectLayer {
     this.lighting?.render()
   }
 
-  private startExtAnimation(
+  // Centralised fill-tween launcher. Instant-mode snaps straight to the target; an
+  // unchanged target is a no-op; otherwise the tween runs and `apply` repaints each frame.
+  // `apply` is the per-structure repaint (single-channel repaints ignore the `b` value).
+  private startFill(
     id: string,
     visual: ContainerWithTarget,
-    fromEnergy: number,
-    fromCapacity: number,
-    toEnergy: number,
-    toCapacity: number,
+    apply: (visual: ContainerWithTarget, a: number, b: number) => void,
+    fromA: number, toA: number, fromB = 0, toB = 0,
   ): void {
-    const toRadius = calcExtensionFillRadius(toEnergy, toCapacity)
-    if (this.instantMode) {
-      updateExtensionFill(visual, toRadius)
-      return
-    }
-    const fromRadius = calcExtensionFillRadius(fromEnergy, fromCapacity)
-    if (fromRadius === toRadius) return
-    this.extAnimations.set(id, { visual, fromRadius, toRadius, startTime: performance.now() })
+    if (this.instantMode) { apply(visual, toA, toB); return }
+    if (fromA === toA && fromB === toB) return
+    this.fillAnimations.set(id, { visual, fromA, toA, fromB, toB, apply, startTime: performance.now() })
   }
 
-  // Links animate a diamond fill; fromRadius/toRadius hold the 0..1 fill fraction
-  // (the ExtAnimation shape is reused across fill families, cf. tower levels).
-  private startLinkAnimation(
-    id: string,
-    visual: ContainerWithTarget,
-    fromEnergy: number,
-    fromCapacity: number,
-    toEnergy: number,
-    toCapacity: number,
+  private startExtAnimation(
+    id: string, visual: ContainerWithTarget,
+    fromEnergy: number, fromCapacity: number, toEnergy: number, toCapacity: number,
   ): void {
-    const toRadius = calcLinkFillFraction(toEnergy, toCapacity)
-    if (this.instantMode) {
-      updateLinkFill(visual, toRadius)
-      return
-    }
-    const fromRadius = calcLinkFillFraction(fromEnergy, fromCapacity)
-    if (fromRadius === toRadius) return
-    this.linkFillAnimations.set(id, { visual, fromRadius, toRadius, startTime: performance.now() })
+    this.startFill(id, visual, updateExtensionFill,
+      calcExtensionFillRadius(fromEnergy, fromCapacity), calcExtensionFillRadius(toEnergy, toCapacity))
+  }
+
+  private startLinkAnimation(
+    id: string, visual: ContainerWithTarget,
+    fromEnergy: number, fromCapacity: number, toEnergy: number, toCapacity: number,
+  ): void {
+    this.startFill(id, visual, updateLinkFill,
+      calcLinkFillFraction(fromEnergy, fromCapacity), calcLinkFillFraction(toEnergy, toCapacity))
   }
 
   private startCreepFillAnimation(
-    id: string,
-    visual: ContainerWithTarget,
-    fromUsed: number,
-    fromCapacity: number,
-    toUsed: number,
-    toCapacity: number,
+    id: string, visual: ContainerWithTarget,
+    fromUsed: number, fromCapacity: number, toUsed: number, toCapacity: number,
   ): void {
-    const toRadius = calcCreepFillRadius(toUsed, toCapacity)
-    if (this.instantMode) {
-      updateCreepFill(visual, toRadius)
-      return
-    }
-    const fromRadius = calcCreepFillRadius(fromUsed, fromCapacity)
-    if (fromRadius === toRadius) return
-    this.creepFillAnimations.set(id, { visual, fromRadius, toRadius, startTime: performance.now() })
+    this.startFill(id, visual, updateCreepFill,
+      calcCreepFillRadius(fromUsed, fromCapacity), calcCreepFillRadius(toUsed, toCapacity))
   }
 
   private startTowerFillAnimation(
-    id: string,
-    visual: ContainerWithTarget,
-    fromEnergy: number,
-    fromCapacity: number,
-    toEnergy: number,
-    toCapacity: number,
+    id: string, visual: ContainerWithTarget,
+    fromEnergy: number, fromCapacity: number, toEnergy: number, toCapacity: number,
   ): void {
-    const toH = calcTowerFillHeight(toEnergy, toCapacity)
-    if (this.instantMode) {
-      updateTowerFill(visual, toH)
-      return
-    }
-    const fromH = calcTowerFillHeight(fromEnergy, fromCapacity)
-    if (fromH === toH) return
-    this.towerFillAnimations.set(id, { visual, fromRadius: fromH, toRadius: toH, startTime: performance.now() })
+    this.startFill(id, visual, updateTowerFill,
+      calcTowerFillHeight(fromEnergy, fromCapacity), calcTowerFillHeight(toEnergy, toCapacity))
   }
 
   private startStorageFillAnimation(
-    id: string,
-    visual: ContainerWithTarget,
-    fromUsed: number,
-    fromCapacity: number,
-    toUsed: number,
-    toCapacity: number,
+    id: string, visual: ContainerWithTarget,
+    fromUsed: number, fromCapacity: number, toUsed: number, toCapacity: number,
   ): void {
-    const toH = calcStorageFillHeight(toUsed, toCapacity)
-    if (this.instantMode) {
-      updateStorageFill(visual, toH)
-      return
-    }
-    const fromH = calcStorageFillHeight(fromUsed, fromCapacity)
-    if (fromH === toH) return
-    this.storageFillAnimations.set(id, { visual, fromRadius: fromH, toRadius: toH, startTime: performance.now() })
+    this.startFill(id, visual, updateStorageFill,
+      calcStorageFillHeight(fromUsed, fromCapacity), calcStorageFillHeight(toUsed, toCapacity))
   }
 
   private startContainerFillAnimation(
-    id: string,
-    visual: ContainerWithTarget,
-    fromUsed: number,
-    fromCapacity: number,
-    toUsed: number,
-    toCapacity: number,
+    id: string, visual: ContainerWithTarget,
+    fromUsed: number, fromCapacity: number, toUsed: number, toCapacity: number,
   ): void {
-    const toH = calcContainerFillHeight(toUsed, toCapacity)
-    if (this.instantMode) {
-      updateContainerFill(visual, toH)
-      return
-    }
-    const fromH = calcContainerFillHeight(fromUsed, fromCapacity)
-    if (fromH === toH) return
-    this.containerFillAnimations.set(id, { visual, fromRadius: fromH, toRadius: toH, startTime: performance.now() })
+    this.startFill(id, visual, updateContainerFill,
+      calcContainerFillHeight(fromUsed, fromCapacity), calcContainerFillHeight(toUsed, toCapacity))
   }
 
   private startTerminalFillAnimation(
     id: string, visual: ContainerWithTarget,
     fromUsed: number, fromCapacity: number, toUsed: number, toCapacity: number,
   ): void {
-    const to = calcCenterFillFraction(toUsed, toCapacity)
-    if (this.instantMode) { updateTerminalFill(visual, to); return }
-    const from = calcCenterFillFraction(fromUsed, fromCapacity)
-    if (from === to) return
-    this.terminalFillAnimations.set(id, { visual, fromRadius: from, toRadius: to, startTime: performance.now() })
+    this.startFill(id, visual, updateTerminalFill,
+      calcCenterFillFraction(fromUsed, fromCapacity), calcCenterFillFraction(toUsed, toCapacity))
   }
 
   private startFactoryFillAnimation(
     id: string, visual: ContainerWithTarget,
     fromUsed: number, fromCapacity: number, toUsed: number, toCapacity: number,
   ): void {
-    const toH = calcFactoryFillHeight(toUsed, toCapacity)
-    if (this.instantMode) { updateFactoryFill(visual, toH); return }
-    const fromH = calcFactoryFillHeight(fromUsed, fromCapacity)
-    if (fromH === toH) return
-    this.factoryFillAnimations.set(id, { visual, fromRadius: fromH, toRadius: toH, startTime: performance.now() })
+    this.startFill(id, visual, updateFactoryFill,
+      calcFactoryFillHeight(fromUsed, fromCapacity), calcFactoryFillHeight(toUsed, toCapacity))
   }
 
   private startLabFillAnimation(
@@ -2537,13 +2384,9 @@ export class ObjectLayer {
     fromE: number, fromECap: number, fromM: number, fromMCap: number,
     toE: number, toECap: number, toM: number, toMCap: number,
   ): void {
-    const toA = calcCenterFillFraction(toE, toECap)
-    const toB = calcCenterFillFraction(toM, toMCap)
-    if (this.instantMode) { updateLabFill(visual, toA, toB); return }
-    const fromA = calcCenterFillFraction(fromE, fromECap)
-    const fromB = calcCenterFillFraction(fromM, fromMCap)
-    if (fromA === toA && fromB === toB) return
-    this.labFillAnimations.set(id, { visual, fromA, toA, fromB, toB, startTime: performance.now() })
+    this.startFill(id, visual, updateLabFill,
+      calcCenterFillFraction(fromE, fromECap), calcCenterFillFraction(toE, toECap),
+      calcCenterFillFraction(fromM, fromMCap), calcCenterFillFraction(toM, toMCap))
   }
 
   private startNukerFillAnimation(
@@ -2551,31 +2394,17 @@ export class ObjectLayer {
     fromE: number, fromECap: number, fromG: number, fromGCap: number,
     toE: number, toECap: number, toG: number, toGCap: number,
   ): void {
-    const toA = calcCenterFillFraction(toE, toECap)
-    const toB = calcCenterFillFraction(toG, toGCap)
-    if (this.instantMode) { updateNukerFill(visual, toA, toB); return }
-    const fromA = calcCenterFillFraction(fromE, fromECap)
-    const fromB = calcCenterFillFraction(fromG, fromGCap)
-    if (fromA === toA && fromB === toB) return
-    this.nukerFillAnimations.set(id, { visual, fromA, toA, fromB, toB, startTime: performance.now() })
+    this.startFill(id, visual, updateNukerFill,
+      calcCenterFillFraction(fromE, fromECap), calcCenterFillFraction(toE, toECap),
+      calcCenterFillFraction(fromG, fromGCap), calcCenterFillFraction(toG, toGCap))
   }
 
   private startSourceAnimation(
-    id: string,
-    visual: ContainerWithTarget,
-    fromEnergy: number,
-    fromCapacity: number,
-    toEnergy: number,
-    toCapacity: number,
+    id: string, visual: ContainerWithTarget,
+    fromEnergy: number, fromCapacity: number, toEnergy: number, toCapacity: number,
   ): void {
-    const toSize = calcSourceSize(toEnergy, toCapacity)
-    if (this.instantMode) {
-      updateSourceVisual(visual, toSize)
-      return
-    }
-    const fromSize = calcSourceSize(fromEnergy, fromCapacity)
-    if (fromSize === toSize) return
-    this.sourceAnimations.set(id, { visual, fromRadius: fromSize, toRadius: toSize, startTime: performance.now() })
+    this.startFill(id, visual, updateSourceVisual,
+      calcSourceSize(fromEnergy, fromCapacity), calcSourceSize(toEnergy, toCapacity))
   }
 
   update(objects: RoomObjectMap, diff?: RoomObjectDiff, users?: Record<string, { _id: string; username: string; badge?: Badge }>, gameTime?: number): void {
@@ -2601,17 +2430,7 @@ export class ObjectLayer {
             destroyVisual(visual)
             this.objects.delete(id)
             this.rawObjects.delete(id)
-            this.extAnimations.delete(id)
-            this.creepFillAnimations.delete(id)
-            this.towerFillAnimations.delete(id)
-            this.storageFillAnimations.delete(id)
-            this.containerFillAnimations.delete(id)
-            this.terminalFillAnimations.delete(id)
-            this.factoryFillAnimations.delete(id)
-            this.labFillAnimations.delete(id)
-            this.nukerFillAnimations.delete(id)
-            this.linkFillAnimations.delete(id)
-            this.sourceAnimations.delete(id)
+            this.fillAnimations.delete(id)
             this.buildGlowAnimations.delete(id)
             this.ctrlFlashAnimations.delete(id)
             this.sayBubbles.delete(id)
@@ -2754,8 +2573,8 @@ export class ObjectLayer {
               }
             }
             if (obj.type === 'terminal') {
-              const { used, capacity } = getStoreBands(obj)
-              const dominant = getDominantResource(obj) ?? undefined
+              const { used, capacity, dominant: dom } = getStoreBands(obj)
+              const dominant = dom ?? undefined
               if (existing.__terminalDominant !== dominant) {
                 existing.__terminalDominant = dominant
                 existing.__terminalFillColor = dominant ? resourceColor(dominant) : ST_ENERGY
@@ -3060,11 +2879,7 @@ export class ObjectLayer {
           destroyVisual(visual)
           this.objects.delete(id)
           this.rawObjects.delete(id)
-          this.extAnimations.delete(id)
-          this.creepFillAnimations.delete(id)
-          this.towerFillAnimations.delete(id)
-          this.linkFillAnimations.delete(id)
-          this.sourceAnimations.delete(id)
+          this.fillAnimations.delete(id)
           this.buildGlowAnimations.delete(id)
           this.ctrlFlashAnimations.delete(id)
           this.sayBubbles.delete(id)
@@ -3580,16 +3395,8 @@ export class ObjectLayer {
       }
     }
     this.sayBubbles.clear()
-    for (const anim of this.extAnimations.values()) updateExtensionFill(anim.visual, anim.toRadius)
-    this.extAnimations.clear()
-    for (const anim of this.creepFillAnimations.values()) updateCreepFill(anim.visual, anim.toRadius)
-    this.creepFillAnimations.clear()
-    for (const anim of this.towerFillAnimations.values()) updateTowerFill(anim.visual, anim.toRadius)
-    this.towerFillAnimations.clear()
-    for (const anim of this.sourceAnimations.values()) updateSourceVisual(anim.visual, anim.toRadius)
-    this.sourceAnimations.clear()
-    for (const anim of this.linkFillAnimations.values()) updateLinkFill(anim.visual, anim.toRadius)
-    this.linkFillAnimations.clear()
+    for (const anim of this.fillAnimations.values()) anim.apply(anim.visual, anim.toA, anim.toB)
+    this.fillAnimations.clear()
     this.buildGlowAnimations.clear()
     this.ctrlFlashAnimations.clear()
   }
@@ -3612,11 +3419,7 @@ export class ObjectLayer {
     }
     this.objects.clear()
     this.rawObjects.clear()
-    this.extAnimations.clear()
-    this.creepFillAnimations.clear()
-    this.towerFillAnimations.clear()
-    this.sourceAnimations.clear()
-    this.linkFillAnimations.clear()
+    this.fillAnimations.clear()
     this.buildGlowAnimations.clear()
     this.ctrlFlashAnimations.clear()
     this.sayBubbles.clear()
