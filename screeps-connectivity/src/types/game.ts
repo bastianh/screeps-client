@@ -68,6 +68,8 @@ export interface UserInfo {
     gcl: number
     credits: number
     badge: Badge
+    /** True when the account has a password set. Absent for password-less accounts (e.g. Steam-only logins). Only present for the authenticated user's own info. */
+    password?: boolean
 }
 
 export interface CpuStats {

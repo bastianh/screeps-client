@@ -1,5 +1,5 @@
 import { createEffect, createSignal, lazy, onCleanup, onMount, Show, untrack, type JSX } from 'solid-js'
-import { Map, LayoutGrid, Code2, Settings, LogOut, LogIn, ChevronLeft, ChevronRight } from 'lucide-solid'
+import { Map, LayoutGrid, Code2, Settings, LogIn, ChevronLeft, ChevronRight } from 'lucide-solid'
 import { ConnectionStatus } from '~/components/ConnectionStatus.js'
 import { RoomViewer } from '~/components/RoomViewer.js'
 import { ToastContainer } from '~/components/ToastContainer.js'
@@ -9,6 +9,7 @@ import { Sidebar } from '~/components/Sidebar/index.js'
 import { StatsBar } from '~/components/StatsBar.js'
 import { SettingsPanel } from '~/components/SettingsPanel.js'
 import { MotdOverlay } from '~/components/MotdOverlay.js'
+import { UserMenu } from '~/components/UserMenu.js'
 
 const CodePanel = lazy(() =>
   import('~/components/CodePanel.js').then((m) => ({ default: m.CodePanel })),
@@ -458,26 +459,35 @@ export function Dashboard() {
             <Code2 size={16} />
           </HeaderButton>
         </Show>
-        <HeaderButton title="Settings" active={showSettings()} onClick={() => { setShowSettings((v) => !v); setShowCode(false) }}>
-          <Settings size={16} />
-        </HeaderButton>
-        <button
-          title={isGuest() ? 'Login' : 'Logout'}
-          onClick={disconnect}
-          style={{
-            padding: '7px',
-            'border-radius': '4px',
-            border: 'none',
-            background: isGuest() ? '#238636' : '#da3633',
-            color: '#fff',
-            cursor: 'pointer',
-            margin: '0 16px 0 8px',
-            display: 'flex',
-            'align-items': 'center',
-          }}
+        <Show
+          when={!isGuest()}
+          fallback={
+            <>
+              <HeaderButton title="Settings" active={showSettings()} onClick={() => { setShowSettings((v) => !v); setShowCode(false) }}>
+                <Settings size={16} />
+              </HeaderButton>
+              <button
+                title="Login"
+                onClick={disconnect}
+                style={{
+                  padding: '7px',
+                  'border-radius': '4px',
+                  border: 'none',
+                  background: '#238636',
+                  color: '#fff',
+                  cursor: 'pointer',
+                  margin: '0 16px 0 8px',
+                  display: 'flex',
+                  'align-items': 'center',
+                }}
+              >
+                <LogIn size={16} />
+              </button>
+            </>
+          }
         >
-          {isGuest() ? <LogIn size={16} /> : <LogOut size={16} />}
-        </button>
+          <UserMenu onOpenSettings={() => { setShowSettings(true); setShowCode(false) }} />
+        </Show>
       </div>
 
       {/* Main body — layout depends on widescreenMode setting */}

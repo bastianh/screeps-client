@@ -19,7 +19,6 @@ export const LS = {
   roomDarkOverlay: 'screeps:settings:roomDarkOverlay',
   showRoomVisuals: 'screeps:settings:showRoomVisuals',
   spriteTheme: 'screeps:settings:spriteTheme',
-  verboseCreepDetails: 'screeps:settings:verboseCreepDetails',
   showMapVisuals: 'screeps:settings:showMapVisuals',
 } as const
 
@@ -27,6 +26,7 @@ export const SS = {
   url: 'screeps:url',
   token: 'screeps:token',
   serverPassword: 'screeps:serverPassword',
+  authMethod: 'screeps:authMethod',
 } as const
 
 export function getStr(key: string): string | null {

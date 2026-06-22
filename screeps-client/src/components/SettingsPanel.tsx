@@ -2,14 +2,10 @@ import { JSX, createSignal, Show, createMemo } from 'solid-js'
 import { X } from 'lucide-solid'
 import {
   widescreenMode, setWidescreenMode,
-  showCreepLabels, setShowCreepLabels,
-  showMapRoomNames, setShowMapRoomNames,
-  showUnclaimableRooms, setShowUnclaimableRooms,
   terrainEffects, setTerrainEffects,
   showRoomDecorations, setShowRoomDecorations,
   roomDarkOverlay, setRoomDarkOverlay,
   spriteTheme, setSpriteTheme,
-  verboseCreepDetails, setVerboseCreepDetails,
 } from '~/stores/settingsStore.js'
 import { clientVersion, embeddedModInfo } from '~/utils/embedded.js'
 import { userInfo, isGuest } from '~/stores/clientStore.js'
@@ -205,22 +201,10 @@ export function SettingsPanel(props: { onClose: () => void }) {
 
           <Section title="Room View">
             <Toggle
-              label="Show creep labels"
-              description="Display each creep's name above its sprite."
-              value={showCreepLabels()}
-              onChange={setShowCreepLabels}
-            />
-            <Toggle
               label="Terrain effects"
               description="Swamp glow and wall noise texture overlay."
               value={terrainEffects()}
               onChange={setTerrainEffects}
-            />
-            <Toggle
-              label="Verbose creep details"
-              description="Show a colour-coded body part breakdown (e.g. 8×MOVE, 4×WORK) in the creep property panel."
-              value={verboseCreepDetails()}
-              onChange={setVerboseCreepDetails}
             />
             <Toggle
               label="Room decorations"
@@ -245,21 +229,6 @@ export function SettingsPanel(props: { onClose: () => void }) {
                 <option value="default">Default (sprites)</option>
               </select>
             </div>
-          </Section>
-
-          <Section title="Map View">
-            <Toggle
-              label="Show room names"
-              description="Render a small room name in the top-left corner of each map tile."
-              value={showMapRoomNames()}
-              onChange={setShowMapRoomNames}
-            />
-            <Toggle
-              label="Show unclaimable rooms"
-              description="Highlight rooms where you cannot claim a controller: corridors, sector centres, rooms already owned, and restricted areas."
-              value={showUnclaimableRooms()}
-              onChange={setShowUnclaimableRooms}
-            />
           </Section>
 
           <Show when={!isGuest()}>

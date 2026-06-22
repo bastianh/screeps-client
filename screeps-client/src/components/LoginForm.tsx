@@ -300,7 +300,7 @@ export function LoginForm() {
     const onMessage = (event: MessageEvent) => {
       try {
         const data = JSON.parse(event.data as string) as { token?: string }
-        if (data.token) { cleanup(); connect({ url: serverUrl, auth: 'token', token: data.token, serverPassword: serverPassword() || undefined, storage: null }) }
+        if (data.token) { cleanup(); connect({ url: serverUrl, auth: 'token', authMethod: 'steam', token: data.token, serverPassword: serverPassword() || undefined, storage: null }) }
       } catch { /* non-JSON */ }
     }
     const checkClosed = setInterval(() => { if (popup?.closed) cleanup() }, 500)

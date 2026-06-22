@@ -22,5 +22,4 @@ export const [showRoomDecorations, setShowRoomDecorations] = boolSetting(LS.show
 export const [roomDarkOverlay, setRoomDarkOverlay] = boolSetting(LS.roomDarkOverlay, true)
 export const [showRoomVisuals, setShowRoomVisuals] = boolSetting(LS.showRoomVisuals, true)
 export const [spriteTheme, setSpriteTheme] = strSetting(LS.spriteTheme, 'default')
-export const [verboseCreepDetails, setVerboseCreepDetails] = boolSetting(LS.verboseCreepDetails, true)
 export const [showMapVisuals, setShowMapVisuals] = boolSetting(LS.showMapVisuals, true)

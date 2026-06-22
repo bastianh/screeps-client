@@ -27,6 +27,7 @@ const [serverVersion, setServerVersion] = createSignal<ServerVersion | null>(nul
 const [gameTime, setGameTime] = createSignal<number | null>(null)
 const [tickDuration, setTickDuration] = createSignal<number | null>(null)
 const [isGuest, setIsGuest] = createSignal(false)
+const [authMethod, setAuthMethod] = createSignal<'password' | 'steam' | 'token' | 'guest' | null>(null)
 const [worldBounds, setWorldBounds] = createSignal<WorldInfo | null>(null)
 const [userFlags, setUserFlags] = createSignal<Record<string, UserFlag>>({})
 const [worldStatus, setWorldStatus] = createSignal<WorldStatus | null>(null)
@@ -68,11 +69,13 @@ export const isPrivateServer = () => {
   return (v.serverData?.shards?.length ?? 0) === 0
 }
 
-export { client, status, error, userInfo, serverVersion, gameTime, setGameTime, tickDuration, setTickDuration, isGuest, worldBounds, setWorldBounds, userFlags, worldStatus }
+export { client, status, error, userInfo, serverVersion, gameTime, setGameTime, tickDuration, setTickDuration, isGuest, authMethod, worldBounds, setWorldBounds, userFlags, worldStatus }
 
 export async function connect(opts: {
   url: string
   auth: 'password' | 'token' | 'guest'
+  /** Original login method, preserved across reloads. Defaults to `auth`. Auto-connect passes the persisted value so a password/steam login still reports its real method even though it reconnects via its session token. Steam logins use `auth: 'token'` but should report 'steam'. */
+  authMethod?: 'password' | 'steam' | 'token' | 'guest'
   email?: string
   password?: string
   token?: string
@@ -173,6 +176,9 @@ export async function connect(opts: {
       log(`world: ${info.width}x${info.height} x[${info.minX},${info.maxX}] y[${info.minY},${info.maxY}]`)
     }).catch(() => {})
     setSession(SS.url, opts.url)
+    const resolvedAuthMethod = opts.authMethod ?? opts.auth
+    setAuthMethod(resolvedAuthMethod)
+    setSession(SS.authMethod, resolvedAuthMethod)
     if (screepsClient.http.token) {
       setSession(SS.token, screepsClient.http.token)
     }
@@ -197,12 +203,13 @@ export async function tryAutoConnect(): Promise<void> {
   if (!url || !token) return
 
   const serverPassword = getSession(SS.serverPassword) ?? undefined
+  const storedAuthMethod = getSession(SS.authMethod) as 'password' | 'steam' | 'token' | 'guest' | null
   log(`auto-connect: ${url}`)
   try {
     if (token === 'guest') {
       await connect({ url, auth: 'guest', storage: null, serverPassword })
     } else {
-      await connect({ url, auth: 'token', token, serverPassword })
+      await connect({ url, auth: 'token', token, serverPassword, authMethod: storedAuthMethod ?? 'token' })
     }
   } catch {
     log('auto-connect failed — clearing stored token')
@@ -223,6 +230,7 @@ export function disconnect(): void {
   setServerVersion(null)
   setGameTime(null)
   setIsGuest(false)
+  setAuthMethod(null)
   setWorldBounds(null)
   setUserFlags({})
   setWorldStatus(null)
@@ -230,4 +238,5 @@ export function disconnect(): void {
   removeSession(SS.token)
   removeSession(SS.url)
   removeSession(SS.serverPassword)
+  removeSession(SS.authMethod)
 }
