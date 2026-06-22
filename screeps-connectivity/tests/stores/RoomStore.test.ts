@@ -163,6 +163,31 @@ describe('RoomStore', () => {
     expect(before.store).toEqual({ energy: 100, H: 5000 })
   })
 
+  // actionLog is a transient per-tick field the client reads from merged state to drive
+  // action beams. The engine emits explicit `null` when an action stops, so deep-merge must
+  // (a) keep an unchanged action across ticks where the diff omits it (continuous beam) and
+  // (b) drop it on a null leaf (beam stops) — never accumulate a stale action.
+  it('keeps a continuing actionLog entry but clears it on an explicit null', async () => {
+    const { store, socket } = makeStore()
+    let messageHandler: (data: unknown) => void = () => {}
+    ;(socket.on as ReturnType<typeof vi.fn>).mockImplementation((_ch: string, cb: (data: unknown) => void) => {
+      messageHandler = cb
+      return { dispose: vi.fn() }
+    })
+
+    store.subscribe('W7N7', 'shard0')
+    // Harvest begins.
+    messageHandler({ objects: { c1: { _id: 'c1', type: 'creep', room: 'W7N7', actionLog: { harvest: { x: 5, y: 6 } } } }, gameTime: 1000 })
+    // Next tick the source is unchanged, so the diff omits actionLog entirely — the beam must persist.
+    messageHandler({ objects: { c1: { fatigue: 0 } }, gameTime: 1001 })
+    expect((store.objects('W7N7', 'shard0')?.['c1'] as { actionLog: Record<string, unknown> }).actionLog)
+      .toEqual({ harvest: { x: 5, y: 6 } })
+    // Creep stops harvesting: the engine sends a null leaf — the entry (and beam) must clear.
+    messageHandler({ objects: { c1: { actionLog: { harvest: null } } }, gameTime: 1002 })
+    expect((store.objects('W7N7', 'shard0')?.['c1'] as { actionLog: Record<string, unknown> }).actionLog)
+      .toEqual({})
+  })
+
   it('emits room:update event on WS message', async () => {
     const { store, socket } = makeStore()
     let messageHandler: (data: unknown) => void = () => {}
