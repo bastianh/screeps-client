@@ -1,7 +1,7 @@
 // screeps-client/src/stores/roomViewStore.tsx
 import { createEffect, createRoot, createSignal, untrack, type JSX } from 'solid-js'
 import { controllerLevel, structureCounts } from './roomDataStore.js'
-import { client, worldStatus } from './clientStore.js'
+import { client, worldStatus, expectWorldStatusChange } from './clientStore.js'
 import { addToast } from './toastStore.js'
 import { createLogger } from '~/utils/log.js'
 
@@ -247,7 +247,7 @@ export function modeHint(): JSX.Element | null {
             c.http.user.respawn()
               .then(() => {
                 addToast('Respawn successful', 'success')
-                void c.stores.user.refreshWorldStatus()
+                expectWorldStatusChange()
               })
               .catch((err: Error) => {
                 addToast(`Respawn failed: ${err.message}`, 'error')

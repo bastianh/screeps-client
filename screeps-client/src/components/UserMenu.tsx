@@ -1,7 +1,7 @@
 import { createSignal, createMemo, createEffect, onCleanup, Show, type JSX } from 'solid-js'
 import { ChevronDown, KeyRound, LogOut, RotateCcw, Settings } from 'lucide-solid'
 import { badgeToSvg } from 'screeps-connectivity'
-import { authMethod, client, disconnect, userInfo } from '~/stores/clientStore.js'
+import { authMethod, client, disconnect, expectWorldStatusChange, userInfo } from '~/stores/clientStore.js'
 import { addToast } from '~/stores/toastStore.js'
 
 export function UserMenu(props: { onOpenSettings: () => void }) {
@@ -58,7 +58,7 @@ export function UserMenu(props: { onOpenSettings: () => void }) {
     c.http.user.respawn()
       .then(() => {
         addToast('Respawn successful', 'success')
-        void c.stores.user.refreshWorldStatus()
+        expectWorldStatusChange()
       })
       .catch((err: Error) => addToast(`Respawn failed: ${err.message}`, 'error'))
       .finally(() => {

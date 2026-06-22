@@ -32,6 +32,52 @@ const [worldBounds, setWorldBounds] = createSignal<WorldInfo | null>(null)
 const [userFlags, setUserFlags] = createSignal<Record<string, UserFlag>>({})
 const [worldStatus, setWorldStatus] = createSignal<WorldStatus | null>(null)
 
+// While the user has lost all spawns ('lost') or hasn't placed a first spawn
+// ('empty'), world status only refreshes on the slow idle path, so a respawn or
+// first-spawn placement can go unnoticed for up to a minute. Poll frequently in
+// those states so the UI reacts almost immediately, and stop once 'normal'.
+const WORLD_STATUS_POLL_MS = 1000
+// After an action we know changes world state (e.g. respawn), the server may
+// still briefly report the old status. Force-poll for this window regardless of
+// the current status so we catch the transition instead of relying on one check.
+const WORLD_STATUS_FORCE_POLL_MS = 15_000
+let worldStatusPollTimer: ReturnType<typeof setInterval> | null = null
+let worldStatusPollUntil = 0
+
+function startWorldStatusPolling(): void {
+  if (worldStatusPollTimer !== null) return
+  log('world status polling: start')
+  worldStatusPollTimer = setInterval(() => {
+    const c = client()
+    if (!c) return
+    void c.stores.user.refreshWorldStatus().catch(() => {})
+  }, WORLD_STATUS_POLL_MS)
+}
+
+function stopWorldStatusPolling(): void {
+  if (worldStatusPollTimer === null) return
+  log('world status polling: stop')
+  clearInterval(worldStatusPollTimer)
+  worldStatusPollTimer = null
+}
+
+function updateWorldStatusPolling(s: WorldStatus | null): void {
+  const shouldPoll = s === 'empty' || s === 'lost' || Date.now() < worldStatusPollUntil
+  if (shouldPoll) startWorldStatusPolling()
+  else stopWorldStatusPolling()
+}
+
+/**
+ * Force world-status polling on for a short window, e.g. right after a respawn,
+ * so the resulting state change is picked up quickly even while the server still
+ * reports the old status. The poll loop reverts to status-based behaviour (and
+ * stops once 'normal') after the window elapses.
+ */
+export function expectWorldStatusChange(): void {
+  worldStatusPollUntil = Date.now() + WORLD_STATUS_FORCE_POLL_MS
+  startWorldStatusPolling()
+}
+
 let lastGameTime = -1
 let lastTickTimestamp = -1
 const tickDurations: number[] = []
@@ -133,6 +179,8 @@ export async function connect(opts: {
         setClient(null)
         setUserInfo(null)
         setServerVersion(null)
+        worldStatusPollUntil = 0
+        updateWorldStatusPolling(null)
       }
     })
 
@@ -164,6 +212,7 @@ export async function connect(opts: {
     screepsClient.stores.user.on('user:worldStatus', ({ status }) => {
       log(`world status: ${status}`)
       setWorldStatus(status)
+      updateWorldStatusPolling(status)
     })
 
     await screepsClient.connect()
@@ -239,6 +288,8 @@ export function disconnect(): void {
   setWorldBounds(null)
   setUserFlags({})
   setWorldStatus(null)
+  worldStatusPollUntil = 0
+  updateWorldStatusPolling(null)
   resetTickTracking()
   removeSession(SS.token)
   removeSession(SS.url)
