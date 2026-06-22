@@ -16,6 +16,7 @@ import {
   ENERGY_FILL,
   CREEP_RING_DARK, CREEP_NOTCH,
   ST_DARK, ST_GRAY, ST_LIGHT, ST_OUTLINE, ST_ENERGY, ST_POWER, ST_RAMPART,
+  ST_RESOURCE_OTHER, RESOURCE_BAND_COLORS,
   TERRAIN_WALL_BORDER,
   FLAG_COLORS,
   CS_OWN, CS_FOREIGN, CS_OWN_DARK, CS_OWN_LIGHT, CS_FOREIGN_DARK, CS_FOREIGN_LIGHT,
@@ -397,18 +398,66 @@ const STORAGE_BOX_Y = -TILE_SIZE * 0.1
 const STORAGE_BOX_W = TILE_SIZE * 1.0
 const STORAGE_BOX_H = TILE_SIZE * 1.2
 
-function getStoreFill(obj: RoomObject): { used: number; capacity: number } {
+interface StoreBand { color: number; amount: number }
+
+// Resources pinned to the bottom of the stack, in this order; others follow alphabetically.
+const BAND_ORDER = ['energy', 'power']
+
+// Break a store into stacked, colored bands ordered bottom-up. `used` is the sum of
+// the band amounts, so callers size the fill from a single total exactly as before.
+function getStoreBands(obj: RoomObject): { bands: StoreBand[]; used: number; capacity: number } {
   const capacity = typeof obj.storeCapacity === 'number' ? obj.storeCapacity : 0
-  if (capacity === 0) return { used: 0, capacity: 0 }
-  let used = 0
-  if (obj.store && typeof obj.store === 'object') {
-    const storeObj = obj.store as Record<string, unknown>
-    for (const k in storeObj) {
-      const v = storeObj[k]
-      if (typeof v === 'number') used += v
-    }
+  if (capacity === 0 || !obj.store || typeof obj.store !== 'object') {
+    return { bands: [], used: 0, capacity: 0 }
   }
-  return { used, capacity }
+  const store = obj.store as Record<string, unknown>
+  const entries: Array<[string, number]> = []
+  for (const k in store) {
+    const v = store[k]
+    if (typeof v === 'number' && v > 0) entries.push([k, v])
+  }
+  entries.sort(([a], [b]) => {
+    const ra = BAND_ORDER.indexOf(a), rb = BAND_ORDER.indexOf(b)
+    return (ra === -1 ? 99 : ra) - (rb === -1 ? 99 : rb) || (a < b ? -1 : a > b ? 1 : 0)
+  })
+  let used = 0
+  const bands = entries.map(([res, amount]): StoreBand => {
+    used += amount
+    return { color: RESOURCE_BAND_COLORS[res] ?? ST_RESOURCE_OTHER, amount }
+  })
+  return { bands, used, capacity }
+}
+
+// Stack resource bands bottom-up inside a box. `yBottom` is the box floor; `height` is the
+// (animated) total fill height; bands sum to `used`. `margin` insets the whole envelope on
+// all sides — bands stay contiguous within it. Falls back to a solid energy fill if bands
+// are missing, matching the previous single-color behavior.
+function drawStoreBands(
+  fill: Graphics,
+  x: number, yBottom: number, width: number,
+  height: number, bands: StoreBand[] | undefined, used: number,
+  margin = 0,
+): void {
+  if (height <= 0 || used <= 0) return
+  const innerX = x + margin
+  const innerW = width - margin * 2
+  const totalH = height - margin * 2
+  const baseY = yBottom - margin
+  if (totalH <= 0) return
+  if (!bands || bands.length === 0) {
+    fill.rect(innerX, baseY - totalH, innerW, totalH)
+    fill.fill(ST_ENERGY)
+    return
+  }
+  let y = baseY
+  for (const band of bands) {
+    const h = totalH * (band.amount / used)
+    if (h > 0) {
+      fill.rect(innerX, y - h, innerW, h)
+      fill.fill(band.color)
+    }
+    y -= h
+  }
 }
 
 function calcContainerFillHeight(used: number, capacity: number): number {
@@ -420,11 +469,8 @@ function updateContainerFill(visual: ContainerWithTarget, height: number): void 
   const fill = visual.__containerFillG
   if (!fill) return
   fill.clear()
-  if (height > 0) {
-    const margin = Math.max(0.5, TILE_SIZE * 0.02)
-    fill.rect(CONT_X + margin, CONT_Y + CONT_H - height + margin, CONT_W - margin * 2, height - margin * 2)
-    fill.fill(ST_ENERGY)
-  }
+  const margin = Math.max(0.5, TILE_SIZE * 0.02)
+  drawStoreBands(fill, CONT_X, CONT_Y + CONT_H, CONT_W, height, visual.__containerBands, visual.__containerUsed ?? 0, margin)
 }
 
 function calcStorageFillHeight(used: number, capacity: number): number {
@@ -436,15 +482,217 @@ function updateStorageFill(visual: ContainerWithTarget, height: number): void {
   const fill = visual.__storageFillG
   if (!fill) return
   fill.clear()
-  if (height > 0) {
-    fill.rect(
-      STORAGE_BOX_X,
-      STORAGE_BOX_Y + STORAGE_BOX_H - height,
-      STORAGE_BOX_W,
-      height,
-    )
-    fill.fill(ST_ENERGY)
+  drawStoreBands(fill, STORAGE_BOX_X, STORAGE_BOX_Y + STORAGE_BOX_H, STORAGE_BOX_W, height, visual.__storageBands, visual.__storageUsed ?? 0)
+}
+
+// ── Terminal / lab / nuker / factory fills ──────────────────────────────────
+// These structures tint their fill by resource type (shared band palette), rather
+// than showing only how full they are.
+function resourceColor(res: string): number {
+  return RESOURCE_BAND_COLORS[res] ?? ST_RESOURCE_OTHER
+}
+
+// Resource holding the largest amount in a store, or null when empty.
+function getDominantResource(obj: RoomObject): string | null {
+  if (!obj.store || typeof obj.store !== 'object') return null
+  const store = obj.store as Record<string, unknown>
+  let best: string | null = null
+  let bestAmt = 0
+  for (const k in store) {
+    const v = store[k]
+    if (typeof v === 'number' && v > bestAmt) { bestAmt = v; best = k }
   }
+  return best
+}
+
+function calcCenterFillFraction(used: number, capacity: number): number {
+  if (capacity <= 0 || used <= 0) return 0
+  return Math.min(1, used / capacity)
+}
+
+// Terminal: a square that grows from the plate centre, tinted by the dominant resource.
+const TERMINAL_FILL_HALF = TILE_SIZE * 0.35
+function updateTerminalFill(visual: ContainerWithTarget, fraction: number): void {
+  const fill = visual.__terminalFillG
+  if (!fill) return
+  fill.clear()
+  if (fraction > 0) {
+    const c = TILE_SIZE / 2
+    const half = TERMINAL_FILL_HALF * fraction
+    fill.rect(c - half, c - half, half * 2, half * 2)
+    fill.fill(visual.__terminalFillColor ?? ST_ENERGY)
+  }
+}
+
+// Lab: energy fills the base bar (left→right); the single stored mineral fills the bowl
+// as a disc from the centre, drawn behind the bar and tinted by mineral type.
+const LAB_BOWL_DY     = TILE_SIZE * 0.025
+const LAB_FILL_MAX_R  = TILE_SIZE * 0.36
+const LAB_BAR_X       = TILE_SIZE * 0.05
+const LAB_BAR_Y       = TILE_SIZE * 0.8
+const LAB_BAR_W       = TILE_SIZE * 0.9
+const LAB_BAR_H       = TILE_SIZE * 0.25
+const LAB_ENERGY_CAP  = 2000   // fallback when the server omits per-resource caps
+const LAB_MINERAL_CAP = 3000
+
+function getLabContents(obj: RoomObject): {
+  energy: number; energyCap: number; mineralType: string | null; mineral: number; mineralCap: number
+} {
+  const store = (obj.store && typeof obj.store === 'object') ? obj.store as Record<string, number> : {}
+  const caps = (obj.storeCapacityResource && typeof obj.storeCapacityResource === 'object')
+    ? obj.storeCapacityResource as Record<string, number> : {}
+  const energy = typeof store.energy === 'number' ? store.energy : 0
+  const energyCap = typeof caps.energy === 'number' ? caps.energy : LAB_ENERGY_CAP
+  let mineralType: string | null = null
+  let mineral = 0
+  for (const k in store) {
+    if (k === 'energy') continue
+    const v = store[k]
+    if (typeof v === 'number' && v > mineral) { mineral = v; mineralType = k }
+  }
+  const mineralCap = (mineralType && typeof caps[mineralType] === 'number') ? caps[mineralType]! : LAB_MINERAL_CAP
+  return { energy, energyCap, mineralType, mineral, mineralCap }
+}
+
+function updateLabFill(visual: ContainerWithTarget, energyFraction: number, mineralFraction: number): void {
+  const disc = visual.__labMineralG
+  if (disc) {
+    disc.clear()
+    if (mineralFraction > 0) {
+      const c = TILE_SIZE / 2
+      disc.circle(c, c - LAB_BOWL_DY, LAB_FILL_MAX_R * mineralFraction)
+      disc.fill(visual.__labMineralColor ?? ST_RESOURCE_OTHER)
+    }
+  }
+  const bar = visual.__labEnergyG
+  if (bar) {
+    bar.clear()
+    if (energyFraction > 0) {
+      const m = Math.max(0.5, TILE_SIZE * 0.04)
+      bar.rect(LAB_BAR_X + m, LAB_BAR_Y + m, (LAB_BAR_W - m * 2) * energyFraction, LAB_BAR_H - m * 2)
+      bar.fill(ST_ENERGY)
+    }
+  }
+}
+
+// Nuker: energy fills the inner triangle bottom→top; ghodium fills a bar across the base.
+const NUKER_ENERGY_CAP_FALLBACK = 300000
+const NUKER_GHODIUM_CAP = 5000
+const NUKER_TRI_APEX_Y = -0.8
+const NUKER_TRI_BASE_Y = 0.2
+const NUKER_TRI_HALF   = 0.4
+const NUKER_BAR_X0 = -0.34, NUKER_BAR_X1 = 0.34, NUKER_BAR_Y0 = 0.27, NUKER_BAR_Y1 = 0.45
+
+function getNukerContents(obj: RoomObject): {
+  energy: number; energyCap: number; ghodium: number; ghodiumCap: number
+} {
+  const store = (obj.store && typeof obj.store === 'object') ? obj.store as Record<string, number> : {}
+  const caps = (obj.storeCapacityResource && typeof obj.storeCapacityResource === 'object')
+    ? obj.storeCapacityResource as Record<string, number> : {}
+  const energy = typeof store.energy === 'number' ? store.energy : 0
+  const energyCap = typeof caps.energy === 'number' ? caps.energy
+    : typeof obj.storeCapacity === 'number' ? obj.storeCapacity : NUKER_ENERGY_CAP_FALLBACK
+  const ghodium = typeof store.G === 'number' ? store.G : 0
+  const ghodiumCap = typeof caps.G === 'number' ? caps.G : NUKER_GHODIUM_CAP
+  return { energy, energyCap, ghodium, ghodiumCap }
+}
+
+function updateNukerFill(visual: ContainerWithTarget, energyFraction: number, ghodiumFraction: number): void {
+  const c = TILE_SIZE / 2
+  const tri = visual.__nukerEnergyG
+  if (tri) {
+    tri.clear()
+    if (energyFraction > 0) {
+      const span = NUKER_TRI_BASE_Y - NUKER_TRI_APEX_Y
+      const topY = NUKER_TRI_BASE_Y - span * energyFraction
+      const halfAt = NUKER_TRI_HALF * (topY - NUKER_TRI_APEX_Y) / span
+      tri.poly([
+        c + halfAt * TILE_SIZE, c + topY * TILE_SIZE,
+        c + NUKER_TRI_HALF * TILE_SIZE, c + NUKER_TRI_BASE_Y * TILE_SIZE,
+        c - NUKER_TRI_HALF * TILE_SIZE, c + NUKER_TRI_BASE_Y * TILE_SIZE,
+        c - halfAt * TILE_SIZE, c + topY * TILE_SIZE,
+      ])
+      tri.fill(ST_ENERGY)
+    }
+  }
+  const bar = visual.__nukerGhodiumG
+  if (bar) {
+    bar.clear()
+    if (ghodiumFraction > 0) {
+      const x = c + NUKER_BAR_X0 * TILE_SIZE
+      const y = c + NUKER_BAR_Y0 * TILE_SIZE
+      const w = (NUKER_BAR_X1 - NUKER_BAR_X0) * TILE_SIZE
+      const h = (NUKER_BAR_Y1 - NUKER_BAR_Y0) * TILE_SIZE
+      bar.rect(x, y, w * ghodiumFraction, h)
+      bar.fill(resourceColor('G'))
+    }
+  }
+}
+
+// Factory: a cog whose teeth pulse while producing, a level ring around the centre, and a
+// storage-style band fill in the centre box.
+const FACT_BODY_R     = TILE_SIZE * 0.4
+const FACT_TEETH      = 8
+const FACT_TOOTH_IN   = TILE_SIZE * 0.36
+const FACT_TOOTH_OUT  = TILE_SIZE * 0.52
+const FACT_TOOTH_HALF = 0.26                 // radians, half angular width of a tooth
+const FACT_RING_IN    = TILE_SIZE * 0.27
+const FACT_RING_OUT   = TILE_SIZE * 0.35
+const FACT_BOX_W      = TILE_SIZE * 0.30
+const FACT_BOX_H      = TILE_SIZE * 0.40
+const FACT_BOX_X      = TILE_SIZE * 0.35      // centred: 0.5 - 0.15
+const FACT_BOX_Y      = TILE_SIZE * 0.30      // centred: 0.5 - 0.20
+const FACT_LEVELS     = 5
+
+function factoryActive(obj: RoomObject): boolean {
+  return typeof obj.cooldown === 'number' && obj.cooldown > 0
+}
+
+function drawFactoryTeeth(g: Graphics, color: number): void {
+  g.clear()
+  const c = TILE_SIZE / 2
+  for (let i = 0; i < FACT_TEETH; i++) {
+    const a = -Math.PI / 2 + i * (2 * Math.PI / FACT_TEETH)
+    const a0 = a - FACT_TOOTH_HALF
+    const a1 = a + FACT_TOOTH_HALF
+    g.poly([
+      c + FACT_TOOTH_IN * Math.cos(a0), c + FACT_TOOTH_IN * Math.sin(a0),
+      c + FACT_TOOTH_OUT * Math.cos(a0), c + FACT_TOOTH_OUT * Math.sin(a0),
+      c + FACT_TOOTH_OUT * Math.cos(a1), c + FACT_TOOTH_OUT * Math.sin(a1),
+      c + FACT_TOOTH_IN * Math.cos(a1), c + FACT_TOOTH_IN * Math.sin(a1),
+    ])
+    g.fill(color)
+  }
+}
+
+function drawFactoryRing(g: Graphics, level: number): void {
+  g.clear()
+  const c = TILE_SIZE / 2
+  const gap = 0.22
+  const seg = (2 * Math.PI / FACT_LEVELS) - gap
+  for (let i = 0; i < FACT_LEVELS; i++) {
+    const a0 = -Math.PI / 2 + i * (2 * Math.PI / FACT_LEVELS) + gap / 2
+    const a1 = a0 + seg
+    g.moveTo(c + FACT_RING_IN * Math.cos(a0), c + FACT_RING_IN * Math.sin(a0))
+    g.arc(c, c, FACT_RING_OUT, a0, a1)
+    g.arc(c, c, FACT_RING_IN, a1, a0, true)
+    g.closePath()
+    const lit = i < level
+    g.fill({ color: lit ? ST_LIGHT : ST_DARK, alpha: lit ? 0.95 : 0.55 })
+  }
+}
+
+function calcFactoryFillHeight(used: number, capacity: number): number {
+  if (capacity <= 0 || used <= 0) return 0
+  return FACT_BOX_H * Math.min(1, used / capacity)
+}
+
+function updateFactoryFill(visual: ContainerWithTarget, height: number): void {
+  const fill = visual.__factoryFillG
+  if (!fill) return
+  fill.clear()
+  const margin = Math.max(0.5, TILE_SIZE * 0.03)
+  drawStoreBands(fill, FACT_BOX_X, FACT_BOX_Y + FACT_BOX_H, FACT_BOX_W, height, visual.__factoryBands, visual.__factoryUsed ?? 0, margin)
 }
 
 // ── Controller helpers ─────────────────────────────────────────────────────
@@ -1096,7 +1344,7 @@ function createObjectVisual(
     case 'storage': {
       const spec = theme?.sprites['storage']
       if (spec && atlasCache) {
-        const { used: storageUsed, capacity: storageCap } = getStoreFill(obj)
+        const { bands: storageBands, used: storageUsed, capacity: storageCap } = getStoreBands(obj)
         const targetSize = TILE_SIZE * spec.tileScale
         const applyTexture = (sprite: Sprite, tex: Texture) => {
           sprite.texture = tex
@@ -1122,12 +1370,13 @@ function createObjectVisual(
         const storageFillG = new Graphics()
         container.addChild(storageFillG)
         ;(container as ContainerWithTarget).__storageFillG = storageFillG
+        ;(container as ContainerWithTarget).__storageBands = storageBands
         ;(container as ContainerWithTarget).__storageUsed = storageUsed
         ;(container as ContainerWithTarget).__storageCapacity = storageCap
         updateStorageFill(container as ContainerWithTarget, calcStorageFillHeight(storageUsed, storageCap))
         break
       }
-      const { used: storageUsed, capacity: storageCap } = getStoreFill(obj)
+      const { bands: storageBands, used: storageUsed, capacity: storageCap } = getStoreBands(obj)
       const storagePts = spts(cx, cy, [
         [-0.6, -0.7], [0, -0.8], [0.6, -0.7], [0.65, 0],
         [0.6, 0.7], [0, 0.8], [-0.6, 0.7], [-0.65, 0], [-0.6, -0.7],
@@ -1143,6 +1392,7 @@ function createObjectVisual(
       const storageFillG = new Graphics()
       container.addChild(storageFillG)
       ;(container as ContainerWithTarget).__storageFillG = storageFillG
+      ;(container as ContainerWithTarget).__storageBands = storageBands
       ;(container as ContainerWithTarget).__storageUsed = storageUsed
       ;(container as ContainerWithTarget).__storageCapacity = storageCap
       updateStorageFill(container as ContainerWithTarget, calcStorageFillHeight(storageUsed, storageCap))
@@ -1172,6 +1422,21 @@ function createObjectVisual(
       g.fill(ST_GRAY)
       g.rect(cx - TILE_SIZE * 0.45, cy - TILE_SIZE * 0.45, TILE_SIZE * 0.9, TILE_SIZE * 0.9)
       g.stroke({ width: TILE_SIZE * 0.1, color: ST_DARK })
+      container.addChild(g)
+
+      // Store fill: a square that grows from the centre, tinted by the dominant resource,
+      // animated each tick via the terminalFillAnimations loop.
+      const { used: termUsed, capacity: termCap } = getStoreBands(obj)
+      const termDominant = getDominantResource(obj)
+      const termFillG = new Graphics()
+      container.addChild(termFillG)
+      const termVisual = container as ContainerWithTarget
+      termVisual.__terminalFillG = termFillG
+      termVisual.__terminalDominant = termDominant ?? undefined
+      termVisual.__terminalFillColor = termDominant ? resourceColor(termDominant) : ST_ENERGY
+      termVisual.__terminalUsed = termUsed
+      termVisual.__terminalCapacity = termCap
+      updateTerminalFill(termVisual, calcCenterFillFraction(termUsed, termCap))
       break
     }
     case 'link': {
@@ -1199,20 +1464,47 @@ function createObjectVisual(
     }
     case 'lab': {
       const labCy = cy - TILE_SIZE * 0.025
+      // Bowl: ring + inner basin (on the shared graphics g, at the back).
       g.circle(cx, labCy, TILE_SIZE * 0.55)
       g.fill(ST_DARK)
       g.circle(cx, labCy, TILE_SIZE * 0.55)
       g.stroke({ width: TILE_SIZE * 0.05, color: outlineColor })
       g.circle(cx, labCy, TILE_SIZE * 0.4)
       g.fill(ST_GRAY)
-      g.rect(cx - TILE_SIZE * 0.45, cy + TILE_SIZE * 0.3, TILE_SIZE * 0.9, TILE_SIZE * 0.25)
-      g.fill(ST_DARK)
-      g.poly(spts(cx, cy, [[-0.45, 0.3], [-0.45, 0.55], [0.45, 0.55], [0.45, 0.3]]))
-      g.stroke({ width: TILE_SIZE * 0.05, color: outlineColor })
+      container.addChild(g)
+
+      const { energy: labEnergy, energyCap, mineralType, mineral, mineralCap } = getLabContents(obj)
+
+      // Mineral fill: a disc growing from the bowl centre, drawn behind the base bar.
+      const labMineralG = new Graphics()
+      container.addChild(labMineralG)
+
+      // Base bar: dark background + outline, over the disc so it caps the bowl.
+      const labBarG = new Graphics()
+      labBarG.rect(cx - TILE_SIZE * 0.45, cy + TILE_SIZE * 0.3, TILE_SIZE * 0.9, TILE_SIZE * 0.25)
+      labBarG.fill(ST_DARK)
+      labBarG.poly(spts(cx, cy, [[-0.45, 0.3], [-0.45, 0.55], [0.45, 0.55], [0.45, 0.3]]))
+      labBarG.stroke({ width: TILE_SIZE * 0.05, color: outlineColor })
+      container.addChild(labBarG)
+
+      // Energy fill: fills the base bar left→right.
+      const labEnergyG = new Graphics()
+      container.addChild(labEnergyG)
+
+      const labVisual = container as ContainerWithTarget
+      labVisual.__labMineralG = labMineralG
+      labVisual.__labEnergyG = labEnergyG
+      labVisual.__labMineralType = mineralType ?? undefined
+      labVisual.__labMineralColor = mineralType ? resourceColor(mineralType) : undefined
+      labVisual.__labEnergy = labEnergy
+      labVisual.__labEnergyCap = energyCap
+      labVisual.__labMineral = mineral
+      labVisual.__labMineralCap = mineralCap
+      updateLabFill(labVisual, calcCenterFillFraction(labEnergy, energyCap), calcCenterFillFraction(mineral, mineralCap))
       break
     }
     case 'container': {
-      const { used: contUsed, capacity: contCap } = getStoreFill(obj)
+      const { bands: contBands, used: contUsed, capacity: contCap } = getStoreBands(obj)
       g.rect(CONT_X, CONT_Y, CONT_W, CONT_H)
       g.fill(ST_DARK)
       container.addChild(g)
@@ -1220,6 +1512,7 @@ function createObjectVisual(
       const contFillG = new Graphics()
       container.addChild(contFillG)
       ;(container as ContainerWithTarget).__containerFillG = contFillG
+      ;(container as ContainerWithTarget).__containerBands = contBands
       ;(container as ContainerWithTarget).__containerUsed = contUsed
       ;(container as ContainerWithTarget).__containerCapacity = contCap
       updateContainerFill(container as ContainerWithTarget, calcContainerFillHeight(contUsed, contCap))
@@ -1254,9 +1547,64 @@ function createObjectVisual(
       g.fill(ST_GRAY)
       g.poly(nukerInner)
       g.stroke({ width: TILE_SIZE * 0.01, color: outlineColor })
+      container.addChild(g)
+
+      // Energy fills the inner triangle bottom→top; ghodium fills the base bar.
+      const { energy: nukeEnergy, energyCap: nukeECap, ghodium, ghodiumCap } = getNukerContents(obj)
+      const nukerEnergyG = new Graphics()
+      container.addChild(nukerEnergyG)
+      const nukerGhodiumG = new Graphics()
+      container.addChild(nukerGhodiumG)
+      const nukerVisual = container as ContainerWithTarget
+      nukerVisual.__nukerEnergyG = nukerEnergyG
+      nukerVisual.__nukerGhodiumG = nukerGhodiumG
+      nukerVisual.__nukerEnergy = nukeEnergy
+      nukerVisual.__nukerEnergyCap = nukeECap
+      nukerVisual.__nukerGhodium = ghodium
+      nukerVisual.__nukerGhodiumCap = ghodiumCap
+      updateNukerFill(nukerVisual, calcCenterFillFraction(nukeEnergy, nukeECap), calcCenterFillFraction(ghodium, ghodiumCap))
       break
     }
-    case 'factory':
+    case 'factory': {
+      const factLevel = typeof obj.level === 'number' ? obj.level : 0
+      const { bands: factBands, used: factUsed, capacity: factCap } = getStoreBands(obj)
+
+      // Teeth (back): pulse while producing, via the per-frame loop in tick().
+      const factTeethG = new Graphics()
+      drawFactoryTeeth(factTeethG, ST_DARK)
+      container.addChild(factTeethG)
+
+      // Body + centre box background.
+      g.circle(cx, cy, FACT_BODY_R)
+      g.fill(ST_DARK)
+      g.circle(cx, cy, FACT_BODY_R)
+      g.stroke({ width: TILE_SIZE * 0.05, color: outlineColor })
+      g.rect(FACT_BOX_X, FACT_BOX_Y, FACT_BOX_W, FACT_BOX_H)
+      g.fill(ST_GRAY)
+      container.addChild(g)
+
+      // Level ring around the centre box.
+      const factRingG = new Graphics()
+      drawFactoryRing(factRingG, factLevel)
+      container.addChild(factRingG)
+
+      // Storage-style band fill inside the centre box.
+      const factFillG = new Graphics()
+      container.addChild(factFillG)
+
+      const factVisual = container as ContainerWithTarget
+      factVisual.__factoryTeethG = factTeethG
+      factVisual.__factoryRingG = factRingG
+      factVisual.__factoryFillG = factFillG
+      factVisual.__factoryBands = factBands
+      factVisual.__factoryUsed = factUsed
+      factVisual.__factoryCapacity = factCap
+      factVisual.__factoryLevel = factLevel
+      factVisual.__factoryActive = factoryActive(obj)
+      factVisual.__factoryGlowColor = outlineColor
+      updateFactoryFill(factVisual, calcFactoryFillHeight(factUsed, factCap))
+      break
+    }
     case 'extractor':
     case 'invaderCore': {
       g.circle(cx, cy, TILE_SIZE * 0.45)
@@ -1487,7 +1835,7 @@ function createObjectVisual(
     }
   }
 
-  if (obj.type !== 'extension' && obj.type !== 'road' && obj.type !== 'creep' && obj.type !== 'tower' && obj.type !== 'controller' && obj.type !== 'flag' && obj.type !== 'source' && obj.type !== 'constructionSite' && obj.type !== 'mineral' && obj.type !== 'tombstone' && obj.type !== 'ruin' && obj.type !== 'storage' && obj.type !== 'constructedWall' && obj.type !== 'rampart' && obj.type !== 'container' && obj.type !== 'deposit' && obj.type !== 'link') {
+  if (obj.type !== 'extension' && obj.type !== 'road' && obj.type !== 'creep' && obj.type !== 'tower' && obj.type !== 'controller' && obj.type !== 'flag' && obj.type !== 'source' && obj.type !== 'constructionSite' && obj.type !== 'mineral' && obj.type !== 'tombstone' && obj.type !== 'ruin' && obj.type !== 'storage' && obj.type !== 'constructedWall' && obj.type !== 'rampart' && obj.type !== 'container' && obj.type !== 'deposit' && obj.type !== 'link' && obj.type !== 'terminal' && obj.type !== 'lab' && obj.type !== 'nuker' && obj.type !== 'factory') {
     container.addChild(g)
   }
 
@@ -1559,11 +1907,41 @@ type ContainerWithTarget = Container & {
   __linkEnergy?: number
   __linkCapacity?: number
   __storageFillG?: Graphics
+  __storageBands?: StoreBand[]
   __storageUsed?: number
   __storageCapacity?: number
   __containerFillG?: Graphics
+  __containerBands?: StoreBand[]
   __containerUsed?: number
   __containerCapacity?: number
+  __terminalFillG?: Graphics
+  __terminalFillColor?: number
+  __terminalDominant?: string
+  __terminalUsed?: number
+  __terminalCapacity?: number
+  __labMineralG?: Graphics
+  __labEnergyG?: Graphics
+  __labMineralColor?: number
+  __labMineralType?: string
+  __labEnergy?: number
+  __labEnergyCap?: number
+  __labMineral?: number
+  __labMineralCap?: number
+  __nukerEnergyG?: Graphics
+  __nukerGhodiumG?: Graphics
+  __nukerEnergy?: number
+  __nukerEnergyCap?: number
+  __nukerGhodium?: number
+  __nukerGhodiumCap?: number
+  __factoryTeethG?: Graphics
+  __factoryRingG?: Graphics
+  __factoryFillG?: Graphics
+  __factoryBands?: StoreBand[]
+  __factoryUsed?: number
+  __factoryCapacity?: number
+  __factoryLevel?: number
+  __factoryActive?: boolean
+  __factoryGlowColor?: number
   __barrelContainer?: Container
   __towerAimAngle?: number   // target rotation while an action is active
   __towerAimUntil?: number   // performance.now() timestamp when the aim hold ends
@@ -1646,6 +2024,16 @@ interface ExtAnimation {
   startTime: number
 }
 
+// Two independent fill fractions tweened together (lab energy+mineral, nuker energy+ghodium).
+interface DualFillAnimation {
+  visual: ContainerWithTarget
+  fromA: number
+  toA: number
+  fromB: number
+  toB: number
+  startTime: number
+}
+
 export interface ObjectEntry {
   id: string
   obj: RoomObject
@@ -1667,6 +2055,10 @@ export class ObjectLayer {
   private towerFillAnimations = new Map<string, ExtAnimation>()
   private storageFillAnimations = new Map<string, ExtAnimation>()
   private containerFillAnimations = new Map<string, ExtAnimation>()
+  private terminalFillAnimations = new Map<string, ExtAnimation>()
+  private factoryFillAnimations = new Map<string, ExtAnimation>()
+  private labFillAnimations = new Map<string, DualFillAnimation>()
+  private nukerFillAnimations = new Map<string, DualFillAnimation>()
   private linkFillAnimations = new Map<string, ExtAnimation>()
   private sourceAnimations = new Map<string, ExtAnimation>()
   private buildGlowAnimations = new Map<string, { startTime: number; duration: number }>()
@@ -1799,6 +2191,10 @@ export class ObjectLayer {
       if (visual.__csRingGraphics && visual.__csColorDark !== undefined && visual.__csColorLight !== undefined) {
         drawCSRing(visual.__csRingGraphics, lerpColor(visual.__csColorDark, visual.__csColorLight, pulse))
       }
+      // Factory teeth pulse green→ while producing (cooldown active).
+      if (visual.__factoryTeethG && visual.__factoryActive) {
+        drawFactoryTeeth(visual.__factoryTeethG, lerpColor(ST_DARK, visual.__factoryGlowColor ?? ST_OUTLINE, pulse))
+      }
     }
 
     // Extension + creep fill animations
@@ -1836,6 +2232,34 @@ export class ObjectLayer {
       const ease = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2
       updateContainerFill(anim.visual, anim.fromRadius + (anim.toRadius - anim.fromRadius) * ease)
       if (t >= 1) this.containerFillAnimations.delete(id)
+    }
+    for (const [id, anim] of this.terminalFillAnimations) {
+      const elapsed = now - anim.startTime
+      const t = Math.min(1, elapsed / this.EXT_ANIM_DURATION)
+      const ease = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2
+      updateTerminalFill(anim.visual, anim.fromRadius + (anim.toRadius - anim.fromRadius) * ease)
+      if (t >= 1) this.terminalFillAnimations.delete(id)
+    }
+    for (const [id, anim] of this.factoryFillAnimations) {
+      const elapsed = now - anim.startTime
+      const t = Math.min(1, elapsed / this.EXT_ANIM_DURATION)
+      const ease = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2
+      updateFactoryFill(anim.visual, anim.fromRadius + (anim.toRadius - anim.fromRadius) * ease)
+      if (t >= 1) this.factoryFillAnimations.delete(id)
+    }
+    for (const [id, anim] of this.labFillAnimations) {
+      const elapsed = now - anim.startTime
+      const t = Math.min(1, elapsed / this.EXT_ANIM_DURATION)
+      const ease = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2
+      updateLabFill(anim.visual, anim.fromA + (anim.toA - anim.fromA) * ease, anim.fromB + (anim.toB - anim.fromB) * ease)
+      if (t >= 1) this.labFillAnimations.delete(id)
+    }
+    for (const [id, anim] of this.nukerFillAnimations) {
+      const elapsed = now - anim.startTime
+      const t = Math.min(1, elapsed / this.EXT_ANIM_DURATION)
+      const ease = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2
+      updateNukerFill(anim.visual, anim.fromA + (anim.toA - anim.fromA) * ease, anim.fromB + (anim.toB - anim.fromB) * ease)
+      if (t >= 1) this.nukerFillAnimations.delete(id)
     }
     for (const [id, anim] of this.linkFillAnimations) {
       const elapsed = now - anim.startTime
@@ -2060,6 +2484,56 @@ export class ObjectLayer {
     this.containerFillAnimations.set(id, { visual, fromRadius: fromH, toRadius: toH, startTime: performance.now() })
   }
 
+  private startTerminalFillAnimation(
+    id: string, visual: ContainerWithTarget,
+    fromUsed: number, fromCapacity: number, toUsed: number, toCapacity: number,
+  ): void {
+    const to = calcCenterFillFraction(toUsed, toCapacity)
+    if (this.instantMode) { updateTerminalFill(visual, to); return }
+    const from = calcCenterFillFraction(fromUsed, fromCapacity)
+    if (from === to) return
+    this.terminalFillAnimations.set(id, { visual, fromRadius: from, toRadius: to, startTime: performance.now() })
+  }
+
+  private startFactoryFillAnimation(
+    id: string, visual: ContainerWithTarget,
+    fromUsed: number, fromCapacity: number, toUsed: number, toCapacity: number,
+  ): void {
+    const toH = calcFactoryFillHeight(toUsed, toCapacity)
+    if (this.instantMode) { updateFactoryFill(visual, toH); return }
+    const fromH = calcFactoryFillHeight(fromUsed, fromCapacity)
+    if (fromH === toH) return
+    this.factoryFillAnimations.set(id, { visual, fromRadius: fromH, toRadius: toH, startTime: performance.now() })
+  }
+
+  private startLabFillAnimation(
+    id: string, visual: ContainerWithTarget,
+    fromE: number, fromECap: number, fromM: number, fromMCap: number,
+    toE: number, toECap: number, toM: number, toMCap: number,
+  ): void {
+    const toA = calcCenterFillFraction(toE, toECap)
+    const toB = calcCenterFillFraction(toM, toMCap)
+    if (this.instantMode) { updateLabFill(visual, toA, toB); return }
+    const fromA = calcCenterFillFraction(fromE, fromECap)
+    const fromB = calcCenterFillFraction(fromM, fromMCap)
+    if (fromA === toA && fromB === toB) return
+    this.labFillAnimations.set(id, { visual, fromA, toA, fromB, toB, startTime: performance.now() })
+  }
+
+  private startNukerFillAnimation(
+    id: string, visual: ContainerWithTarget,
+    fromE: number, fromECap: number, fromG: number, fromGCap: number,
+    toE: number, toECap: number, toG: number, toGCap: number,
+  ): void {
+    const toA = calcCenterFillFraction(toE, toECap)
+    const toB = calcCenterFillFraction(toG, toGCap)
+    if (this.instantMode) { updateNukerFill(visual, toA, toB); return }
+    const fromA = calcCenterFillFraction(fromE, fromECap)
+    const fromB = calcCenterFillFraction(fromG, fromGCap)
+    if (fromA === toA && fromB === toB) return
+    this.nukerFillAnimations.set(id, { visual, fromA, toA, fromB, toB, startTime: performance.now() })
+  }
+
   private startSourceAnimation(
     id: string,
     visual: ContainerWithTarget,
@@ -2106,6 +2580,10 @@ export class ObjectLayer {
             this.towerFillAnimations.delete(id)
             this.storageFillAnimations.delete(id)
             this.containerFillAnimations.delete(id)
+            this.terminalFillAnimations.delete(id)
+            this.factoryFillAnimations.delete(id)
+            this.labFillAnimations.delete(id)
+            this.nukerFillAnimations.delete(id)
             this.linkFillAnimations.delete(id)
             this.sourceAnimations.delete(id)
             this.buildGlowAnimations.delete(id)
@@ -2222,19 +2700,99 @@ export class ObjectLayer {
               }
             }
             if (obj.type === 'storage') {
-              const { used, capacity } = getStoreFill(obj)
+              const { bands, used, capacity } = getStoreBands(obj)
               if (existing.__storageUsed !== used || existing.__storageCapacity !== capacity) {
-                this.startStorageFillAnimation(id, existing, existing.__storageUsed ?? 0, existing.__storageCapacity ?? capacity, used, capacity)
+                const fromUsed = existing.__storageUsed ?? 0
+                const fromCap = existing.__storageCapacity ?? capacity
+                existing.__storageBands = bands
                 existing.__storageUsed = used
                 existing.__storageCapacity = capacity
+                this.startStorageFillAnimation(id, existing, fromUsed, fromCap, used, capacity)
               }
             }
             if (obj.type === 'container') {
-              const { used, capacity } = getStoreFill(obj)
+              const { bands, used, capacity } = getStoreBands(obj)
               if (existing.__containerUsed !== used || existing.__containerCapacity !== capacity) {
-                this.startContainerFillAnimation(id, existing, existing.__containerUsed ?? 0, existing.__containerCapacity ?? capacity, used, capacity)
+                const fromUsed = existing.__containerUsed ?? 0
+                const fromCap = existing.__containerCapacity ?? capacity
+                existing.__containerBands = bands
                 existing.__containerUsed = used
                 existing.__containerCapacity = capacity
+                this.startContainerFillAnimation(id, existing, fromUsed, fromCap, used, capacity)
+              }
+            }
+            if (obj.type === 'terminal') {
+              const { used, capacity } = getStoreBands(obj)
+              const dominant = getDominantResource(obj) ?? undefined
+              if (existing.__terminalDominant !== dominant) {
+                existing.__terminalDominant = dominant
+                existing.__terminalFillColor = dominant ? resourceColor(dominant) : ST_ENERGY
+                updateTerminalFill(existing, calcCenterFillFraction(used, capacity))
+              }
+              if (existing.__terminalUsed !== used || existing.__terminalCapacity !== capacity) {
+                const fromUsed = existing.__terminalUsed ?? 0
+                const fromCap = existing.__terminalCapacity ?? capacity
+                existing.__terminalUsed = used
+                existing.__terminalCapacity = capacity
+                this.startTerminalFillAnimation(id, existing, fromUsed, fromCap, used, capacity)
+              }
+            }
+            if (obj.type === 'lab') {
+              const { energy, energyCap, mineralType, mineral, mineralCap } = getLabContents(obj)
+              const newType = mineralType ?? undefined
+              if (existing.__labMineralType !== newType) {
+                existing.__labMineralType = newType
+                existing.__labMineralColor = mineralType ? resourceColor(mineralType) : undefined
+                updateLabFill(existing, calcCenterFillFraction(energy, energyCap), calcCenterFillFraction(mineral, mineralCap))
+              }
+              if (existing.__labEnergy !== energy || existing.__labEnergyCap !== energyCap ||
+                  existing.__labMineral !== mineral || existing.__labMineralCap !== mineralCap) {
+                const fromE = existing.__labEnergy ?? 0
+                const fromECap = existing.__labEnergyCap ?? energyCap
+                const fromM = existing.__labMineral ?? 0
+                const fromMCap = existing.__labMineralCap ?? mineralCap
+                existing.__labEnergy = energy
+                existing.__labEnergyCap = energyCap
+                existing.__labMineral = mineral
+                existing.__labMineralCap = mineralCap
+                this.startLabFillAnimation(id, existing, fromE, fromECap, fromM, fromMCap, energy, energyCap, mineral, mineralCap)
+              }
+            }
+            if (obj.type === 'nuker') {
+              const { energy, energyCap, ghodium, ghodiumCap } = getNukerContents(obj)
+              if (existing.__nukerEnergy !== energy || existing.__nukerEnergyCap !== energyCap ||
+                  existing.__nukerGhodium !== ghodium || existing.__nukerGhodiumCap !== ghodiumCap) {
+                const fromE = existing.__nukerEnergy ?? 0
+                const fromECap = existing.__nukerEnergyCap ?? energyCap
+                const fromG = existing.__nukerGhodium ?? 0
+                const fromGCap = existing.__nukerGhodiumCap ?? ghodiumCap
+                existing.__nukerEnergy = energy
+                existing.__nukerEnergyCap = energyCap
+                existing.__nukerGhodium = ghodium
+                existing.__nukerGhodiumCap = ghodiumCap
+                this.startNukerFillAnimation(id, existing, fromE, fromECap, fromG, fromGCap, energy, energyCap, ghodium, ghodiumCap)
+              }
+            }
+            if (obj.type === 'factory') {
+              const { bands, used, capacity } = getStoreBands(obj)
+              const level = typeof obj.level === 'number' ? obj.level : 0
+              const active = factoryActive(obj)
+              if (existing.__factoryLevel !== level && existing.__factoryRingG) {
+                existing.__factoryLevel = level
+                drawFactoryRing(existing.__factoryRingG, level)
+              }
+              if (existing.__factoryActive !== active) {
+                existing.__factoryActive = active
+                // Stopped producing — reset teeth to their static dark colour.
+                if (!active && existing.__factoryTeethG) drawFactoryTeeth(existing.__factoryTeethG, ST_DARK)
+              }
+              if (existing.__factoryUsed !== used || existing.__factoryCapacity !== capacity) {
+                const fromUsed = existing.__factoryUsed ?? 0
+                const fromCap = existing.__factoryCapacity ?? capacity
+                existing.__factoryBands = bands
+                existing.__factoryUsed = used
+                existing.__factoryCapacity = capacity
+                this.startFactoryFillAnimation(id, existing, fromUsed, fromCap, used, capacity)
               }
             }
             if (obj.type === 'controller') {

@@ -133,5 +133,15 @@ export const ST_LIGHT          = 0xAAAAAA  // structure light elements
 export const ST_OUTLINE        = 0x8FBB93  // structure green outline
 export const ST_ENERGY         = 0xFFE87B  // energy (structure displays)
 export const ST_POWER          = 0xF53547  // power red
+
+// Store-fill band colors, keyed by resource type. Clean-room approximations of
+// the in-game resource hues — tune by eye, not lifted from the official client.
+export const ST_RESOURCE_OTHER = 0x6C6C6C  // commodities / unknown fallback
+export const RESOURCE_BAND_COLORS: Record<string, number> = {
+  energy: ST_ENERGY,
+  power:  ST_POWER,
+  H: 0xCCCCCC, O: 0x9CB4CC, U: 0x50D7E0, K: 0xA45EE0,
+  L: 0x6FD46F, Z: 0xE0B05E, X: 0xE05FC8, G: 0xFFFFFF,
+}
 export const ST_RAMPART        = 0x434C43  // rampart fill
 export const ST_RAMPART_STROKE = 0x5D735F  // rampart border
