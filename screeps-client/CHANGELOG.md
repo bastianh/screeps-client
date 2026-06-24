@@ -1,5 +1,11 @@
 # screeps-client
 
+## 0.10.0
+
+### Minor Changes
+
+- cb2129e: Animate lab reactions with converging white beams from the input labs to the output lab.
+
 ## 0.9.0
 
 ### Minor Changes

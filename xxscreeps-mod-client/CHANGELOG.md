@@ -1,5 +1,12 @@
 # xxscreeps-mod-client
 
+## 0.2.13
+
+### Patch Changes
+
+- Updated dependencies [cb2129e]
+  - screeps-client@0.10.0
+
 ## 0.2.12
 
 ### Patch Changes
