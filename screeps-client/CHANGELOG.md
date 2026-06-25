@@ -1,5 +1,18 @@
 # screeps-client
 
+## 0.11.0
+
+### Minor Changes
+
+- 58ba2bc: Render invader creeps as a red gem, matching the vanilla client.
+- 2e21be5: Pulse a lab ring glow during reaction cooldown, and key the factory glow off absolute cooldownTime.
+- 69d132d: Add an account Overview page (GCL/GPL rings, lifetime stats, per-room minimap previews) and a public Profile page with routing between them; optional dashboard endpoints (`user/overview`, `user/rooms`) now fail silently on servers that don't implement them.
+
+### Patch Changes
+
+- 97d6fdf: Spin the extractor ring only while on cooldown, matching vanilla.
+- 2e67d21: Remove leftover debug logging from the memory store's user:memory handler.
+
 ## 0.10.0
 
 ### Minor Changes
