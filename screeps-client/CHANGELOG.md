@@ -1,5 +1,15 @@
 # screeps-client
 
+## 0.12.0
+
+### Minor Changes
+
+- fb4ab0a: Add a read-only Market section — all orders, my orders, and history — matching the vanilla client.
+- 6d383dc: Add power bank room rendering (animated red ellipse inside an octagonal shell, sized by stored power) and a property panel showing power amount, hits, and ticks until decay.
+- 620f551: Add Power Creeps pages — list, create, and per-creep power upgrades — from the Overview page.
+- e0dac0b: Show stored power as a sweeping ring on the power spawn, matching the vanilla client.
+- 3c7b10f: Pulse a terminal's four triangles while it's on send cooldown, matching the vanilla client.
+
 ## 0.11.0
 
 ### Minor Changes

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.8.0
+
+### Minor Changes
+
+- fb4ab0a: Add a read-only Market section — all orders, my orders, and history — matching the vanilla client.
+
+### Patch Changes
+
+- 620f551: Add Power Creeps pages — list, create, and per-creep power upgrades — from the Overview page.
+
 ## 0.7.0
 
 ### Minor Changes
