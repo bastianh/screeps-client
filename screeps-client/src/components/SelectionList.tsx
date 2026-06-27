@@ -837,6 +837,53 @@ function StoreStructureDetails(props: { item: SelectedObject }) {
   )
 }
 
+function PowerBankDetails(props: { item: SelectedObject }) {
+  const raw = () => props.item.raw as Record<string, unknown>
+
+  const decayCountdown = () => {
+    const dt = raw().decayTime
+    if (typeof dt !== 'number') return null
+    const gt = gameTime()
+    return gt !== null ? Math.max(0, dt - gt) : dt
+  }
+
+  const power = () => {
+    // Old-format servers: direct obj.power; new-format: store.power
+    const direct = raw().power
+    if (typeof direct === 'number') return direct
+    const store = raw().store as Record<string, number> | undefined
+    return typeof store?.power === 'number' ? store.power : null
+  }
+
+  const hits = () => typeof raw().hits === 'number' ? (raw().hits as number) : null
+  const hitsMax = () => typeof raw().hitsMax === 'number' ? (raw().hitsMax as number) : null
+
+  return (
+    <div style={kvGrid}>
+      <Show when={power() !== null}>
+        <>
+          <div style={kvCell(true)}>Power</div>
+          <div style={{ ...kvCell(), 'font-variant-numeric': 'tabular-nums' }}>{power()}</div>
+        </>
+      </Show>
+      <Show when={hits() !== null}>
+        <>
+          <div style={kvCell(true)}>Hits</div>
+          <div style={{ ...kvCell(), 'font-variant-numeric': 'tabular-nums' }}>
+            {hits()} {hitsMax() !== null ? `/ ${hitsMax()}` : ''}
+          </div>
+        </>
+      </Show>
+      <Show when={decayCountdown() !== null}>
+        <>
+          <div style={kvCell(true)}>Decays in</div>
+          <div style={{ ...kvCell(), 'font-variant-numeric': 'tabular-nums' }}>{decayCountdown()}</div>
+        </>
+      </Show>
+    </div>
+  )
+}
+
 function RuinDetails(props: { item: SelectedObject }) {
   const raw = () => props.item.raw as Record<string, unknown>
 
@@ -935,6 +982,7 @@ const CUSTOM_DETAILS: Record<string, (props: { item: SelectedObject }) => JSX.El
   factory: StoreStructureDetails,
   nuker: StoreStructureDetails,
   powerSpawn: StoreStructureDetails,
+  powerBank: PowerBankDetails,
   ruin: RuinDetails,
 }
 
