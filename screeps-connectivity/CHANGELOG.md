@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.1
+
+### Patch Changes
+
+- f29f9a8: Fix world bounds calculation for single-quadrant maps (e.g. E/S-only servers) — previously the client assumed a symmetric world and mapped e.g. E0S0–E11S11 to W6N6–E5S5.
+
 ## 0.8.0
 
 ### Minor Changes
