@@ -7,6 +7,7 @@ import { spawnSync } from 'node:child_process'
 
 const changesetDir = new URL('../.changeset/', import.meta.url)
 const companionFile = new URL('../.changeset/screeps-client-mod-consumers.md', import.meta.url)
+const connectivityClientFile = new URL('../.changeset/screeps-connectivity-client-consumer.md', import.meta.url)
 const rootDir = fileURLToPath(new URL('..', import.meta.url))
 const modPackages = ['screepsmod-client-new', 'xxscreeps-mod-client']
 
@@ -70,13 +71,39 @@ const newChangesets = newFiles
 const createdClientChangeset = newChangesets.some(
   ({ changeset }) => changeset != null && 'screeps-client' in changeset.releases,
 )
+const createdConnectivityChangeset = newChangesets.some(
+  ({ changeset }) => changeset != null && 'screeps-connectivity' in changeset.releases,
+)
 const newChangesetAlreadyCoversMods = newChangesets.some(({ changeset }) => hasAllModPackages(changeset))
 
-if (!createdClientChangeset || newChangesetAlreadyCoversMods) {
+// connectivity → client cascade: when screeps-connectivity is bumped, auto-bump screeps-client
+// (it's a devDependency so changesets won't cascade it automatically)
+let wroteClientCompanion = false
+if (createdConnectivityChangeset) {
+  const clientAlreadyCovered = filesAfter.some((fileName) => {
+    const cs = readChangeset(fileName)
+    return cs != null && 'screeps-client' in cs.releases
+  })
+  if (!clientAlreadyCovered) {
+    writeFileSync(connectivityClientFile, [
+      '---',
+      '"screeps-client": patch',
+      '---',
+      '',
+      'Rebuild client bundle to include screeps-connectivity update.',
+      '',
+    ].join('\n'))
+    process.stdout.write('Created .changeset/screeps-connectivity-client-consumer.md for screeps-client.\n')
+    wroteClientCompanion = true
+  }
+}
+
+// client → mods cascade
+if ((!createdClientChangeset && !wroteClientCompanion) || newChangesetAlreadyCoversMods) {
   process.exit(0)
 }
 
-const existingChangesetsCoverMods = filesAfter
+const existingChangesetsCoverMods = listChangesetFiles()
   .filter((fileName) => fileName !== 'screeps-client-mod-consumers.md')
   .some((fileName) => hasAllModPackages(readChangeset(fileName)))
 
