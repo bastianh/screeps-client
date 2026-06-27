@@ -102,16 +102,30 @@ export class ServerStore extends TypedStore<ServerStoreEvents> {
       const stats = probe.stats ?? {}
       const found = (['W0N0', 'E0N0', 'W0S0', 'E0S0'] as const).filter(r => r in stats)
       this.logger.log(`worldInfo corner probe — found: [${found.length ? found.join(', ') : 'none'}]`)
-      if ('E0N0' in stats || 'E0S0' in stats) {
-        // E quadrant exists: width spans both W and E sides, split evenly
+      const hasEast  = 'E0N0' in stats || 'E0S0' in stats
+      const hasWest  = 'W0N0' in stats || 'W0S0' in stats
+      const hasSouth = 'W0S0' in stats || 'E0S0' in stats
+      const hasNorth = 'W0N0' in stats || 'E0N0' in stats
+      if (hasEast && hasWest) {
+        // Both E and W quadrants exist: split width evenly around E0/W0
         minX = -Math.ceil(width / 2)
         maxX = Math.floor(width / 2) - 1
+      } else if (hasEast) {
+        // Only E quadrant: all rooms are east of E0
+        minX = 0
+        maxX = width - 1
       }
-      if ('W0S0' in stats || 'E0S0' in stats) {
-        // S quadrant exists: height spans both N and S sides, split evenly
+      // else: W-only keeps default (minX=-width, maxX=-1)
+      if (hasSouth && hasNorth) {
+        // Both S and N quadrants exist: split height evenly around S0/N0
         minY = -Math.ceil(height / 2)
         maxY = Math.floor(height / 2) - 1
+      } else if (hasSouth) {
+        // Only S quadrant: all rooms are south of S0
+        minY = 0
+        maxY = height - 1
       }
+      // else: N-only keeps default (minY=-height, maxY=-1)
     } catch (e) {
       this.logger.log('worldInfo corner probe failed — keeping W/N defaults:', e)
     }
