@@ -1,5 +1,13 @@
 # xxscreeps-mod-client
 
+## 0.2.16
+
+### Patch Changes
+
+- db24504: Update to screeps-client 0.12.1 (includes screeps-connectivity 0.8.1 world-bounds fix).
+- Updated dependencies [db24504]
+  - screeps-client@0.12.1
+
 ## 0.2.15
 
 ### Patch Changes

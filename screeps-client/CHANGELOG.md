@@ -1,5 +1,11 @@
 # screeps-client
 
+## 0.12.1
+
+### Patch Changes
+
+- db24504: Rebuild against screeps-connectivity 0.8.1 to include the single-quadrant world-bounds fix.
+
 ## 0.12.0
 
 ### Minor Changes

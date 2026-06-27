@@ -1,6 +1,6 @@
 {
   "name": "screepsmod-client-new",
-  "version": "0.2.15",
+  "version": "0.2.16",
   "description": "Screeps server mod that serves the screeps-client at /client and connects it to the same server.",
   "type": "commonjs",
   "main": "index.js",
