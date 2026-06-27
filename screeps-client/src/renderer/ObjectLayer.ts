@@ -18,7 +18,7 @@ import {
   INVADER_BORDER, INVADER_FILL_TOP, INVADER_FILL_BOT,
   ST_DARK, ST_GRAY, ST_LIGHT, ST_OUTLINE, ST_ENERGY, ST_POWER, ST_RAMPART,
   ST_RAMPART_STROKE, ST_RAMPART_ENEMY, ST_RAMPART_ENEMY_STROKE,
-  ST_RESOURCE_OTHER, RESOURCE_COLORS,
+  ST_RESOURCE_OTHER, RESOURCE_COLORS, DEPOSIT_COLORS,
   TERRAIN_WALL_BORDER,
   FLAG_COLORS,
   CS_OWN, CS_FOREIGN, CS_OWN_DARK, CS_OWN_LIGHT, CS_FOREIGN_DARK, CS_FOREIGN_LIGHT,
@@ -58,13 +58,6 @@ const EXT_STROKE_W = Math.max(1, TILE_SIZE * 0.08)
 const MINERAL_TEXT_COLORS: Record<string, number> = {
   H: 0x222222,
   O: 0x222222,
-}
-// Deposit commodity colors — from the official client's market-resource SVGs.
-const DEPOSIT_COLORS: Record<string, number> = {
-  biomass: 0x84b012,  // green
-  metal:   0x956f5c,  // copper/brown
-  mist:    0xda6bf5,  // violet
-  silicon: 0x4ca7e5,  // blue
 }
 // Fill layer is kept mostly transparent so the rock shape reads through it.
 const DEPOSIT_FILL_ALPHA = 0.2

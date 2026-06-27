@@ -245,6 +245,8 @@ export interface ApiUserFindResponse {
 export interface ApiUserMoneyHistoryResponse {
   ok: number
   page: number
+  // True when an older page exists; drives the History "Older" pager.
+  hasMore?: boolean
   list: Array<{
     _id: string
     date: string
@@ -252,8 +254,62 @@ export interface ApiUserMoneyHistoryResponse {
     type: string
     balance: number
     change: number
+    // Shard the transaction occurred on (official multi-shard servers only).
+    shard?: string
     market?: unknown
   }>
+}
+
+// Market — a single order from game/market/orders (public) or my-orders (own).
+// `active`/`totalAmount` are returned only for your own orders. `range` is not
+// part of the API response — the client computes it as the room distance to a
+// chosen target room.
+export interface ApiMarketOrder {
+  _id: string
+  type: 'sell' | 'buy'
+  resourceType: string
+  price: number
+  amount: number
+  remainingAmount: number
+  /** Original order size — own orders only. */
+  totalAmount?: number
+  /** Whether the order is currently funded/stocked — own orders only. */
+  active?: boolean
+  /** Source/target room; absent for token and other roomless orders. */
+  roomName?: string
+  created?: number
+}
+
+export interface ApiMarketOrdersIndexResponse {
+  ok: number
+  // One entry per resource type that has open orders; `_id` is the resource type.
+  list: Array<{ _id: string; count: number }>
+}
+
+export interface ApiMarketOrdersResponse {
+  ok: number
+  list: ApiMarketOrder[]
+}
+
+// Own orders: multi-shard servers return `shards` keyed by shard name;
+// single-shard servers return a flat `list` instead.
+export interface ApiMarketMyOrdersResponse {
+  ok: number
+  shards?: Record<string, ApiMarketOrder[]>
+  list?: ApiMarketOrder[]
+}
+
+export interface ApiMarketStat {
+  date: string
+  transactions: number
+  volume: number
+  avgPrice: number
+  stddevPrice: number
+}
+
+export interface ApiMarketStatsResponse {
+  ok: number
+  stats: ApiMarketStat[]
 }
 
 export interface ApiUserMessage {

@@ -156,6 +156,14 @@ export const RESOURCE_COLORS: Record<string, number> = {
   X: 0xB084FB,  // catalyst — lavender
   G: 0xFFFFFF,  // ghodium — white
 }
+// Raw deposit (commodity) hues, shared by the in-room deposit discs and the
+// market resource swatches so a deposit resource reads the same in both places.
+export const DEPOSIT_COLORS: Record<string, number> = {
+  biomass: 0x84b012,  // green
+  metal:   0x956f5c,  // copper/brown
+  mist:    0xda6bf5,  // violet
+  silicon: 0x4ca7e5,  // blue
+}
 export const ST_RAMPART        = 0x55B84F  // rampart fill (vanilla green; drawn translucent over structures/terrain)
 export const ST_RAMPART_STROKE = 0x8AD97A  // rampart border (brighter rim leading the fill)
 export const ST_RAMPART_ENEMY        = 0xB23A3A  // foreign rampart fill

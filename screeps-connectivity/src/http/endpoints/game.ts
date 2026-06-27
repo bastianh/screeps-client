@@ -15,6 +15,10 @@ import type {
   ApiGameTickResponse,
   RoomHistoryChunk,
   ApiRoomDecorationsResponse,
+  ApiMarketOrdersIndexResponse,
+  ApiMarketOrdersResponse,
+  ApiMarketMyOrdersResponse,
+  ApiMarketStatsResponse,
 } from '../../types/api.js'
 import { createPowerCreepsEndpoints, type PowerCreepsEndpoints } from './power-creeps.js'
 
@@ -49,10 +53,10 @@ export interface GameEndpoints {
   removeInvader(id: string): Promise<{ ok: number }>
   powerCreeps: PowerCreepsEndpoints
   market: {
-    ordersIndex(shard?: string | null): Promise<unknown>
-    myOrders(): Promise<unknown>
-    orders(resourceType: string, shard?: string | null): Promise<unknown>
-    stats(resourceType: string, shard?: string | null): Promise<unknown>
+    ordersIndex(shard?: string | null): Promise<ApiMarketOrdersIndexResponse>
+    myOrders(): Promise<ApiMarketMyOrdersResponse>
+    orders(resourceType: string, shard?: string | null): Promise<ApiMarketOrdersResponse>
+    stats(resourceType: string, shard?: string | null): Promise<ApiMarketStatsResponse>
   }
   shards: {
     info(): Promise<ApiShardsInfoResponse>
