@@ -1,6 +1,15 @@
 // Centralized storage keys and helpers.
 // localStorage = persistent UI/settings; sessionStorage = auth tokens (cleared on browser close).
 
+import { isTauri } from './tauri.js'
+
+// Auth keys live in sessionStorage in the browser (cleared on close). In the desktop
+// app there is no "tab close" and re-logging in every launch is poor UX, so persist
+// them in localStorage instead (private to the app's WebView data dir).
+function sessionBackend(): Storage {
+  return isTauri() ? localStorage : sessionStorage
+}
+
 export const LS = {
   room: 'screeps:room',
   shard: 'screeps:shard',
@@ -64,15 +73,15 @@ export function setJson(key: string, value: unknown): void {
 }
 
 export function getSession(key: string): string | null {
-  return sessionStorage.getItem(key)
+  return sessionBackend().getItem(key)
 }
 
 export function setSession(key: string, value: string): void {
-  sessionStorage.setItem(key, value)
+  sessionBackend().setItem(key, value)
 }
 
 export function removeSession(key: string): void {
-  sessionStorage.removeItem(key)
+  sessionBackend().removeItem(key)
 }
 
 export async function clearAllCaches(): Promise<void> {

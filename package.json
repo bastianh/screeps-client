@@ -6,6 +6,8 @@
     "build": "pnpm --filter screeps-connectivity build && pnpm --filter screeps-client build",
     "build:mod": "pnpm --filter screeps-connectivity build && pnpm --filter screeps-client build:embedded",
     "build:release": "pnpm --filter screeps-connectivity build && pnpm --filter screeps-client build:all",
+    "desktop": "pnpm --filter screeps-connectivity build && pnpm --filter screeps-desktop dev",
+    "desktop:build": "pnpm --filter screeps-connectivity build && pnpm --filter screeps-desktop build",
     "test": "pnpm -r test",
     "lint": "pnpm -r lint",
     "changeset": "node scripts/changeset-with-mod-sync.mjs",
