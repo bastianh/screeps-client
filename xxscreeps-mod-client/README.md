@@ -33,7 +33,7 @@ SCREEPS_MOD_CLIENT_MOUNT_PATH=/play npx xxscreeps start
 
 ## How it works
 
-The mod resolves the client bundle from its [`screeps-client`](../screeps-client) dependency at runtime — no separate build step is needed. The shipped bundle is built with `base=/` (absolute asset URLs at the server root), which means non-default mount paths require a custom build of `screeps-client` with a matching base.
+The mod resolves the client bundle from its [`screeps-client`](../screeps-client) dependency at runtime — no separate build step is needed. The shipped bundle is built with `base=./`, but the client resolves some assets (e.g. the sprite atlas under `themes/`) against the server root `/`. Mounting anywhere other than `/` therefore breaks those asset URLs and requires a custom build of `screeps-client` with a matching base — which is why the mount path defaults to `/`.
 
 ## xxscreeps mode
 

@@ -54,8 +54,8 @@ function normalizeMount(input) {
   return p === '' ? '/' : p
 }
 
-const mountPath = normalizeMount(process.env.SCREEPS_MOD_CLIENT_MOUNT_PATH ?? '/client')
-const rootRedirect = readBool('SCREEPS_MOD_CLIENT_ROOT_REDIRECT', true)
+const mountPath = normalizeMount(process.env.SCREEPS_MOD_CLIENT_MOUNT_PATH ?? '/')
+const rootRedirect = readBool('SCREEPS_MOD_CLIENT_ROOT_REDIRECT', mountPath !== '/')
 
 // Paths that should never be handled by the client mod, even when mounted at '/'.
 // Can be overridden via SCREEPS_MOD_CLIENT_EXCLUDE (comma-separated prefixes).
