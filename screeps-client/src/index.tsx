@@ -1,12 +1,12 @@
 import { render } from 'solid-js/web'
 import { isTauri, installTauriFetch } from './utils/tauri.js'
 
-if (import.meta.env.DEV) {
+if (import.meta.env.DEV && !isTauri()) {
   await import('@solid-devtools/debugger/setup')
 }
 
-// In the desktop app, route fetch through the Tauri HTTP plugin before any
-// ScreepsClient request runs (bypasses WebView CORS). No-op in the browser.
+// In the desktop app, route screeps-connectivity's fetch through the Tauri HTTP
+// plugin (reqwest in Rust), bypassing WKWebView CORS. Does not touch window.fetch.
 if (isTauri()) {
   await installTauriFetch()
 }

@@ -1,6 +1,7 @@
 import type { ServerVersion } from '../types/game.js'
 import type { ScreepsmodAuthFeature, ServerFeature } from '../types/game.js'
 import type { ApiAuthModInfoResponse, ApiRegisterCheckResponse } from '../types/api.js'
+import { getFetch } from './fetchFn.js'
 
 export type { ApiAuthModInfoResponse }
 
@@ -56,7 +57,7 @@ export async function fetchServerVersion(url: string): Promise<ServerVersion> {
   const cached = readFromSession<ServerVersion>(key)
   if (cached) return cached
 
-  const res = await fetch(`${baseUrl(url)}api/version`)
+  const res = await getFetch()(`${baseUrl(url)}api/version`)
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   const data = await res.json() as ServerVersion
   writeToSession(key, data)
@@ -73,7 +74,7 @@ export async function fetchAuthModInfo(url: string): Promise<ApiAuthModInfoRespo
   const cached = readFromSession<ApiAuthModInfoResponse>(key)
   if (cached) return cached
 
-  const res = await fetch(`${baseUrl(url)}api/authmod`)
+  const res = await getFetch()(`${baseUrl(url)}api/authmod`)
   if (!res.ok) return null
   const data = await res.json() as ApiAuthModInfoResponse
   if (!data.ok) return null
@@ -87,7 +88,7 @@ export async function fetchAuthModInfo(url: string): Promise<ApiAuthModInfoRespo
  */
 export async function checkUsername(url: string, username: string): Promise<ApiRegisterCheckResponse> {
   const params = new URLSearchParams({ username })
-  const res = await fetch(`${baseUrl(url)}api/register/check-username?${params}`)
+  const res = await getFetch()(`${baseUrl(url)}api/register/check-username?${params}`)
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   return res.json() as Promise<ApiRegisterCheckResponse>
 }
@@ -98,7 +99,7 @@ export async function checkUsername(url: string, username: string): Promise<ApiR
  */
 export async function checkEmail(url: string, email: string): Promise<ApiRegisterCheckResponse> {
   const params = new URLSearchParams({ email })
-  const res = await fetch(`${baseUrl(url)}api/register/check-email?${params}`)
+  const res = await getFetch()(`${baseUrl(url)}api/register/check-email?${params}`)
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   return res.json() as Promise<ApiRegisterCheckResponse>
 }
@@ -113,7 +114,7 @@ export async function registerUser(
   email: string,
   password: string,
 ): Promise<{ ok: number; error?: string }> {
-  const res = await fetch(`${baseUrl(url)}api/register/submit`, {
+  const res = await getFetch()(`${baseUrl(url)}api/register/submit`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username, email, password }),

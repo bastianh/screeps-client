@@ -1,4 +1,5 @@
 import { decompressGzip } from './decompress.js'
+import { getFetch } from './fetchFn.js'
 import { Logger } from '../logger.js'
 import type { AuthStrategy } from './auth/AuthStrategy.js'
 import { createAuthEndpoints, type AuthEndpoints } from './endpoints/auth.js'
@@ -113,7 +114,7 @@ export class HttpClient extends EventTarget {
       init.body = JSON.stringify(body)
     }
 
-    const res = await fetch(url.toString(), init)
+    const res = await getFetch()(url.toString(), init)
 
     const newToken = res.headers.get('x-token')
     if (newToken) {

@@ -1,4 +1,5 @@
 export { ScreepsClient } from './ScreepsClient.js'
+export { setFetch } from './http/fetchFn.js'
 export type { ScreepsClientOptions } from './ScreepsClient.js'
 
 export { Logger } from './logger.js'

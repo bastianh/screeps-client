@@ -16,15 +16,17 @@ export function isTauri(): boolean {
 let fetchInstalled = false
 
 /**
- * Replace the global fetch with the Tauri HTTP plugin's fetch. Requests are then
- * performed in Rust (reqwest), bypassing WebView CORS so the client can talk to
- * official and arbitrary private Screeps servers. The plugin returns a web-standard
- * Response, so HttpClient's header reads (x-token, x-ratelimit-*) and res.json()
- * keep working unchanged. Idempotent.
+ * Wire the Tauri HTTP plugin's fetch into screeps-connectivity so that all
+ * Screeps API requests are performed in Rust (reqwest), bypassing WKWebView CORS.
+ * Does NOT patch window.fetch — only screeps-connectivity's internal transport is
+ * affected, leaving Vite HMR, devtools, and other browser APIs untouched. Idempotent.
  */
 export async function installTauriFetch(): Promise<void> {
   if (fetchInstalled) return
-  const { fetch: tauriFetch } = await import('@tauri-apps/plugin-http')
-  window.fetch = tauriFetch as typeof window.fetch
+  const [{ fetch: tauriFetch }, { setFetch }] = await Promise.all([
+    import('@tauri-apps/plugin-http'),
+    import('screeps-connectivity'),
+  ])
+  setFetch(tauriFetch as typeof globalThis.fetch)
   fetchInstalled = true
 }
