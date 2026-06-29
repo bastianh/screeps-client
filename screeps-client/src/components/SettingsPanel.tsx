@@ -1,4 +1,4 @@
-import { JSX, createSignal, Show, createMemo } from 'solid-js'
+import { JSX, createSignal, Show, createMemo, For } from 'solid-js'
 import { X } from 'lucide-solid'
 import {
   widescreenMode, setWidescreenMode,
@@ -8,9 +8,9 @@ import {
   spriteTheme, setSpriteTheme,
 } from '~/stores/settingsStore.js'
 import { clientVersion, embeddedModInfo } from '~/utils/embedded.js'
-import { userInfo, isGuest } from '~/stores/clientStore.js'
+import { userInfo, isGuest, client } from '~/stores/clientStore.js'
 import { badgeToSvg } from 'screeps-connectivity'
-import type { Badge } from 'screeps-connectivity'
+import type { Badge, NotifyPrefs } from 'screeps-connectivity'
 import { BadgePickerModal } from '~/components/BadgePickerModal.js'
 import { clearAllCaches } from '~/utils/storage.js'
 import { addToast } from '~/stores/toastStore.js'
@@ -75,6 +75,48 @@ function Toggle(props: ToggleProps) {
   )
 }
 
+function SelectRow(props: { label: string; description?: string; value: number | string; options: { value: number | string; label: string }[]; onChange: (v: number) => void }) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        'align-items': 'center',
+        'justify-content': 'space-between',
+        padding: '10px 0',
+        'border-bottom': '1px solid #21262d',
+        gap: '24px',
+      }}
+    >
+      <div>
+        <div style={{ 'font-size': '13px', color: '#c9d1d9' }}>{props.label}</div>
+        {props.description && (
+          <div style={{ 'font-size': '11px', color: '#8b949e', 'margin-top': '3px' }}>
+            {props.description}
+          </div>
+        )}
+      </div>
+      <select
+        value={String(props.value)}
+        onChange={(e) => props.onChange(Number(e.currentTarget.value))}
+        style={{
+          'flex-shrink': 0,
+          background: '#21262d',
+          color: '#c9d1d9',
+          border: '1px solid #30363d',
+          'border-radius': '4px',
+          padding: '4px 8px',
+          'font-size': '12px',
+          cursor: 'pointer',
+        }}
+      >
+        <For each={props.options}>
+          {(o) => <option value={String(o.value)}>{o.label}</option>}
+        </For>
+      </select>
+    </div>
+  )
+}
+
 function Section(props: { title: string; children: JSX.Element }) {
   return (
     <div style={{ 'margin-bottom': '24px' }}>
@@ -113,11 +155,47 @@ function InfoRow(props: { label: string; value: string }) {
   )
 }
 
+const INTERVAL_OPTIONS = [
+  { value: 5, label: '5 min' },
+  { value: 10, label: '10 min' },
+  { value: 30, label: '30 min' },
+  { value: 60, label: '1 hour' },
+  { value: 180, label: '3 hours' },
+  { value: 360, label: '6 hours' },
+  { value: 720, label: '12 hours' },
+  { value: 1440, label: '24 hours' },
+  { value: 4320, label: '3 days' },
+]
+
+const ERRORS_INTERVAL_OPTIONS = [
+  { value: 0, label: 'Immediately' },
+  { value: 10, label: 'Every 10 min' },
+  { value: 30, label: 'Every 30 min' },
+  { value: 60, label: 'Every 1 hour' },
+  { value: 180, label: 'Every 3 hours' },
+  { value: 360, label: 'Every 6 hours' },
+  { value: 720, label: 'Every 12 hours' },
+  { value: 1440, label: 'Every 24 hours' },
+  { value: 4320, label: 'Every 3 days' },
+  { value: 100000, label: 'Never' },
+]
+
 export function SettingsPanel(props: { onClose: () => void }) {
   const modInfo = embeddedModInfo()
   const openedForBadgeCreation = !isGuest() && !userInfo()?.badge
   const [showBadgePicker, setShowBadgePicker] = createSignal(openedForBadgeCreation)
   const [clearing, setClearing] = createSignal(false)
+
+  async function saveNotifyPref(pref: Partial<NotifyPrefs>) {
+    const c = client()
+    if (!c) return
+    try {
+      await c.http.user.notifyPrefs(pref)
+      await c.stores.user.refreshMe()
+    } catch (err) {
+      addToast(`Failed to save notification preference: ${(err as Error).message}`, 'error')
+    }
+  }
 
   const badgePreviewSrc = createMemo(() => {
     const badge = userInfo()?.badge
@@ -264,6 +342,53 @@ export function SettingsPanel(props: { onClose: () => void }) {
                   {badgePreviewSrc() ? 'Edit Badge' : 'Create Badge'}
                 </button>
               </div>
+            </Section>
+          </Show>
+
+          <Show when={!isGuest()}>
+            <Section title="Notifications">
+              {(() => {
+                const prefs = () => userInfo()?.notifyPrefs ?? {}
+                const enabled = () => !prefs().disabled
+                return (
+                  <>
+                    <Toggle
+                      label="Email notifications"
+                      description="Send email notifications for game events."
+                      value={enabled()}
+                      onChange={(v) => void saveNotifyPref({ disabled: !v })}
+                    />
+                    <Show when={enabled()}>
+                      <SelectRow
+                        label="Send interval"
+                        description="Notifications are grouped and mailed out at this interval."
+                        value={prefs().interval ?? 60}
+                        options={INTERVAL_OPTIONS}
+                        onChange={(v) => void saveNotifyPref({ interval: v })}
+                      />
+                      <Toggle
+                        label="Send when online"
+                        description="Send notifications even while you are active in the game."
+                        value={prefs().sendOnline ?? false}
+                        onChange={(v) => void saveNotifyPref({ sendOnline: v })}
+                      />
+                      <SelectRow
+                        label="Notify on errors"
+                        description="Send a notification when your script throws an error."
+                        value={prefs().errorsInterval ?? 30}
+                        options={ERRORS_INTERVAL_OPTIONS}
+                        onChange={(v) => void saveNotifyPref({ errorsInterval: v })}
+                      />
+                      <Toggle
+                        label="Notify on new messages"
+                        description="Send a notification when you receive a new in-game message."
+                        value={!(prefs().disabledOnMessages ?? false)}
+                        onChange={(v) => void saveNotifyPref({ disabledOnMessages: !v })}
+                      />
+                    </Show>
+                  </>
+                )
+              })()}
             </Section>
           </Show>
 

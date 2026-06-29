@@ -60,6 +60,14 @@ export interface RoomObject {
 export type RoomObjectMap = Record<string, RoomObject>
 export type RoomObjectDiff = Record<string, Partial<RoomObject> | null>
 
+export interface NotifyPrefs {
+    disabled: boolean
+    disabledOnMessages: boolean
+    sendOnline: boolean
+    interval: number
+    errorsInterval: number
+}
+
 export interface UserInfo {
     _id: string
     username: string
@@ -72,6 +80,7 @@ export interface UserInfo {
     badge: Badge
     /** True when the account has a password set. Absent for password-less accounts (e.g. Steam-only logins). Only present for the authenticated user's own info. */
     password?: boolean
+    notifyPrefs?: Partial<NotifyPrefs>
 }
 
 export interface CpuStats {

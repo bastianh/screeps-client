@@ -25,6 +25,7 @@ export type {
   RoomObjectDiff,
   RoomMap2Data,
   UserInfo,
+  NotifyPrefs,
   CpuStats,
   WorldStatus,
   ConsoleMessage,

@@ -6,15 +6,8 @@ import type {
   ApiUserOverviewResponse,
   ApiUserRoomsResponse,
 } from '../../types/api.js'
+import type { NotifyPrefs } from '../../types/game.js'
 import { createUserMessagesEndpoints, type UserMessagesEndpoints } from './user-messages.js'
-
-export interface NotifyPrefs {
-  disabled: boolean
-  disabledOnMessages: boolean
-  sendOnline: boolean
-  interval: number
-  errorsInterval: number
-}
 
 export interface UserEndpoints {
   branches(): Promise<ApiUserBranchesResponse>
