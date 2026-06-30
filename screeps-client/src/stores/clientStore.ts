@@ -1,5 +1,5 @@
 import { createSignal } from 'solid-js'
-import { ScreepsClient, PasswordAuth, TokenAuth, GuestAuth, IndexedDBStorage, ROOM_DECORATIONS_MOCK } from 'screeps-connectivity'
+import { ScreepsClient, PasswordAuth, TokenAuth, GuestAuth, IndexedDBStorage } from 'screeps-connectivity'
 import type { AuthStrategy, StorageAdapter, UserInfo, ServerVersion, WorldInfo, WorldStatus, ApiRoomDecorationsResponse } from 'screeps-connectivity'
 import { addToast } from './toastStore.js'
 import { isEmbedded, embeddedServerUrl } from '~/utils/embedded.js'
@@ -159,7 +159,6 @@ export async function connect(opts: {
       storage: opts.storage ?? new IndexedDBStorage('screeps-client'),
       debug: false,
       serverPassword: opts.serverPassword,
-      decorationsMock: ROOM_DECORATIONS_MOCK,
     })
 
     screepsClient.http.on('http:tokenRefresh', ({ token }) => {
@@ -222,10 +221,6 @@ export async function connect(opts: {
     setClient(screepsClient)
     setStatus('connected')
     log(`connected to ${opts.url}`)
-    screepsClient.stores.server.worldInfo().then((info) => {
-      setWorldBounds(info)
-      log(`world: ${info.width}x${info.height} x[${info.minX},${info.maxX}] y[${info.minY},${info.maxY}]`)
-    }).catch(() => {})
     setSession(SS.url, opts.url)
     const resolvedAuthMethod = opts.authMethod ?? opts.auth
     setAuthMethod(resolvedAuthMethod)

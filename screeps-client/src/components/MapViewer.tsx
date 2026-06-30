@@ -341,8 +341,7 @@ export function MapViewer(props: MapViewerProps) {
     renderer?.setOverlayMode(mapOverlayMode())
   })
 
-  // Re-fetch world bounds with the correct shard whenever client or shard changes.
-  // clientStore fetches without shard on connect which gives NaN bounds on multi-shard servers.
+  // Fetch world bounds with the correct shard whenever client or shard changes.
   createEffect(() => {
     const c = client()
     const shard = props.shard

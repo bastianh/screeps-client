@@ -2,7 +2,7 @@ import { createEffect, createSignal, onCleanup, onMount, untrack, Show } from 's
 import { RoomRenderer, Z } from '~/renderer/RoomRenderer.js'
 import { createTerrainLayer, setTerrainEffectsVisible } from '~/renderer/TerrainLayer.js'
 import { parseRoomDecorations, type RoomDecoration } from '~/renderer/roomDecorations.js'
-import { OBJ_ROAD } from '~/renderer/colors.js'
+import { OBJ_ROAD, ST_DARK } from '~/renderer/colors.js'
 import { ObjectLayer } from '~/renderer/ObjectLayer.js'
 import { ActionAnimationLayer } from '~/renderer/ActionAnimationLayer.js'
 import { VisualLayer } from '~/renderer/VisualLayer.js'
@@ -452,6 +452,7 @@ export function RoomViewer(props: RoomViewerProps) {
     r.world.addChildAt(terrainLayerRef, 0)
     r.bringNavOverlayToTop()
     objLayer?.setRoadColor(OBJ_ROAD)
+    objLayer?.setWallColor(ST_DARK)
   })
 
   // Re-apply terrain colors when decoration arrives after terrain (common async case)
@@ -472,6 +473,9 @@ export function RoomViewer(props: RoomViewerProps) {
 
     if (objLayer && dec.decoration.roadColor != null) {
       objLayer.setRoadColor(dec.decoration.roadColor)
+    }
+    if (objLayer && dec.decoration.terrain?.wallFillColor != null) {
+      objLayer.setWallColor(dec.decoration.terrain.wallFillColor)
     }
   })
 
@@ -505,8 +509,9 @@ export function RoomViewer(props: RoomViewerProps) {
       objLayer.setTheme(resolveTheme(untrack(spriteTheme)), sharedAtlasCache)
       objLayer.setInstantMode(untrack(historyMode))
       const dec = untrack(roomDecoration)
-      if (dec?.room === props.room && dec.decoration.roadColor != null) {
-        objLayer.setRoadColor(dec.decoration.roadColor)
+      if (dec?.room === props.room) {
+        if (dec.decoration.roadColor != null) objLayer.setRoadColor(dec.decoration.roadColor)
+        if (dec.decoration.terrain?.wallFillColor != null) objLayer.setWallColor(dec.decoration.terrain.wallFillColor)
       }
       objLayer.setLightingLayer(r.lighting)
       objLayer.container.label = 'objects'

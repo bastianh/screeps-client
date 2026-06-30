@@ -2491,6 +2491,7 @@ export class ObjectLayer {
   private activeTheme: Theme | null = null
   private atlasCache: AtlasCache | null = null
   private roadColor: number = OBJ_ROAD
+  private wallColor: number = ST_DARK
   private lighting: LightingLayer | null = null
 
   constructor(ticker?: Ticker, showLabels = true, currentUserId?: string, badge?: Badge, users?: Record<string, { _id: string; username: string; badge?: Badge }>) {
@@ -2537,6 +2538,11 @@ export class ObjectLayer {
   setRoadColor(color: number): void {
     this.roadColor = color
     this.redrawRoads()
+  }
+
+  setWallColor(color: number): void {
+    this.wallColor = color
+    this.redrawWalls()
   }
 
   // The dark-overlay lightmap. ObjectLayer drives per-frame light positions so a
@@ -3565,7 +3571,7 @@ export class ObjectLayer {
     const borderStroke = { color: TERRAIN_WALL_BORDER, width: T * 0.06, alignment: 0 as const, cap: 'round' as const, join: 'round' as const }
     if (drawQuadrants(this.wallGraphics)) this.wallGraphics.stroke(borderStroke)
     drawQuadrants(this.wallGraphics)
-    this.wallGraphics.fill(ST_DARK)
+    this.wallGraphics.fill(this.wallColor)
 
     // Dash marks — two staggered short dashes per tile to distinguish from terrain walls
     const dashW = T * 0.32

@@ -253,9 +253,8 @@ function createFloorBase(colors: ResolvedColors): Graphics {
 
 function createSwampShapes(terrain: RoomTerrain, colors: ResolvedColors): Graphics {
   const g = new Graphics()
-  const swampStroke: StrokeStyle = { color: colors.swampBorderColor, width: TILE_SIZE * colors.swampBorderWidth, alignment: 0, cap: 'round', join: 'round' }
-  drawTerrainQuadrants(g, terrain, TerrainType.Swamp, (gg) => gg.stroke(swampStroke))
   drawTerrainQuadrants(g, terrain, TerrainType.Swamp, (gg) => gg.fill(colors.swampFillColor))
+  g.alpha = 0.4
   return g
 }
 
@@ -314,7 +313,7 @@ export function createTerrainLayer(terrain: RoomTerrain, renderer: Renderer, dec
   }
 
   container.addChild(createFloorBase(colors))           // index 0: plain floor colour
-  container.addChild(createSwampShapes(terrain, colors)) // index 1: swamp fills + borders
+  container.addChild(createSwampShapes(terrain, colors)) // index 1: swamp fill at alpha 0.4 (fill only, no stroke)
   container.addChild(createWallShapes(terrain, colors))  // index 2: wall fills + borders + exits + room border
   container.addChild(createSwampGlow(terrain, colors))   // index 3
   container.addChild(wallNoise)                          // index 4
@@ -330,9 +329,9 @@ export function createTerrainLayer(terrain: RoomTerrain, renderer: Renderer, dec
       const sprite = new TilingSprite({ texture, width: W, height: W })
       sprite.tint = floorTextureTint
       sprite.alpha = floorTextureAlpha
-      sprite.tileScale.set(floorTextureTileScale)
-      // Insert between swamp shapes (1) and wall shapes (2): texture covers swamp, walls cover texture
-      container.addChildAt(sprite, 2)
+      sprite.tileScale.set(floorTextureTileScale * 0.8)
+      // Insert between floor base (0) and swamp shapes (1): swamp at alpha 0.4 blends over the texture
+      container.addChildAt(sprite, 1)
     }).catch(() => { /* texture load failed — silently skip */ })
   }
 
