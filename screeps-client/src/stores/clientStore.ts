@@ -3,8 +3,17 @@ import { ScreepsClient, PasswordAuth, TokenAuth, GuestAuth, IndexedDBStorage } f
 import type { AuthStrategy, StorageAdapter, UserInfo, ServerVersion, WorldInfo, WorldStatus, ApiRoomDecorationsResponse } from 'screeps-connectivity'
 import { addToast } from './toastStore.js'
 import { isEmbedded, embeddedServerUrl } from '~/utils/embedded.js'
+import { isTauri } from '~/utils/tauri.js'
 import { createLogger } from '~/utils/log.js'
 import { SS, getSession, setSession, removeSession } from '~/utils/storage.js'
+import {
+  saveTokenForUrl,
+  loadTokenForUrl,
+  deleteTokenForUrl,
+  saveServerPasswordForUrl,
+  loadServerPasswordForUrl,
+  deleteServerPasswordForUrl,
+} from '~/utils/keychain.js'
 
 
 export type ConnectionStatus = 'idle' | 'connecting' | 'connected' | 'error'
@@ -163,7 +172,11 @@ export async function connect(opts: {
 
     screepsClient.http.on('http:tokenRefresh', ({ token }) => {
       log('token refreshed')
-      setSession(SS.token, token)
+      if (isTauri()) {
+        void saveTokenForUrl(opts.url, token)
+      } else {
+        setSession(SS.token, token)
+      }
     })
 
     screepsClient.http.on('http:error', ({ method, path, error, silent }) => {
@@ -225,18 +238,26 @@ export async function connect(opts: {
     const resolvedAuthMethod = opts.authMethod ?? opts.auth
     setAuthMethod(resolvedAuthMethod)
     setSession(SS.authMethod, resolvedAuthMethod)
-    // Auth token and the private-server gate password are persisted to sessionStorage so
-    // tryAutoConnect() can reconnect after a page reload without re-prompting. sessionStorage is
-    // origin-scoped and cleared when the tab closes. This is an accepted tradeoff: any value here
-    // is readable by page JS under XSS, but the same applies to the session token stored alongside
-    // it, and keeping these only in memory would force a re-login on every reload.
     if (screepsClient.http.token) {
-      setSession(SS.token, screepsClient.http.token)
+      if (isTauri()) {
+        await saveTokenForUrl(opts.url, screepsClient.http.token)
+      } else {
+        // Browser: sessionStorage (origin-scoped, cleared on tab close).
+        setSession(SS.token, screepsClient.http.token)
+      }
     }
     if (opts.serverPassword) {
-      setSession(SS.serverPassword, opts.serverPassword)
+      if (isTauri()) {
+        await saveServerPasswordForUrl(opts.url, opts.serverPassword)
+      } else {
+        setSession(SS.serverPassword, opts.serverPassword)
+      }
     } else {
-      removeSession(SS.serverPassword)
+      if (isTauri()) {
+        void deleteServerPasswordForUrl(opts.url)
+      } else {
+        removeSession(SS.serverPassword)
+      }
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
@@ -250,10 +271,21 @@ export async function connect(opts: {
 
 export async function tryAutoConnect(): Promise<void> {
   const url = isEmbedded() ? embeddedServerUrl() : getSession(SS.url)
-  const token = getSession(SS.token)
-  if (!url || !token) return
+  if (!url) return
 
-  const serverPassword = getSession(SS.serverPassword) ?? undefined
+  let token: string | null
+  let serverPassword: string | undefined
+
+  if (isTauri()) {
+    token = await loadTokenForUrl(url)
+    serverPassword = (await loadServerPasswordForUrl(url)) ?? undefined
+  } else {
+    token = getSession(SS.token)
+    serverPassword = getSession(SS.serverPassword) ?? undefined
+  }
+
+  if (!token) return
+
   const storedAuthMethod = getSession(SS.authMethod) as 'password' | 'steam' | 'token' | 'guest' | null
   log(`auto-connect: ${url}`)
   try {
@@ -264,12 +296,30 @@ export async function tryAutoConnect(): Promise<void> {
     }
   } catch {
     log('auto-connect failed — clearing stored token')
-    removeSession(SS.token)
+    if (isTauri()) {
+      void deleteTokenForUrl(url)
+    } else {
+      removeSession(SS.token)
+    }
   }
 }
 
 export function disconnect(): void {
   log('disconnecting')
+  if (isTauri()) {
+    const url = getSession(SS.url)
+    const currentAuthMethod = authMethod()
+    if (url) {
+      // For token auth the session token IS the user's login credential — keep it
+      // so the next launch can auto-connect. Password/steam logins produce a
+      // temporary session token that is safe to discard.
+      if (currentAuthMethod !== 'token') {
+        void deleteTokenForUrl(url)
+      }
+      // Server password is a static access credential, not a session token —
+      // leave it in the keychain so it survives logout.
+    }
+  }
   const c = client()
   if (c) {
     c.disconnect()
@@ -288,8 +338,15 @@ export function disconnect(): void {
   worldStatusPollUntil = 0
   updateWorldStatusPolling(null)
   resetTickTracking()
-  removeSession(SS.token)
-  removeSession(SS.url)
-  removeSession(SS.serverPassword)
-  removeSession(SS.authMethod)
+  if (isTauri()) {
+    // In Tauri all session keys live in localStorage (app-private). Credentials
+    // and the server URL are persisted intentionally — clear only the auth method
+    // so the next auto-connect picks it up fresh from the stored token.
+    removeSession(SS.authMethod)
+  } else {
+    removeSession(SS.token)
+    removeSession(SS.url)
+    removeSession(SS.serverPassword)
+    removeSession(SS.authMethod)
+  }
 }

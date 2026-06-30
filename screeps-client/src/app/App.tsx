@@ -1,10 +1,12 @@
 import { createSignal, onMount } from 'solid-js'
 import { client, status, tryAutoConnect, connect } from '~/stores/clientStore.js'
 import { LoginForm } from '~/components/LoginForm.js'
+import { DesktopLoginForm } from '~/components/DesktopLoginForm.js'
 import { ConnectingScreen } from '~/components/ConnectingScreen.js'
 import { Dashboard } from './Dashboard.js'
 
 import { isEmbedded, isXxscreepsMode, embeddedServerUrl } from '~/utils/embedded.js'
+import { isTauri } from '~/utils/tauri.js'
 import { createLogger } from '~/utils/log.js'
 import { SS, getSession } from '~/utils/storage.js'
 
@@ -25,12 +27,16 @@ function willAutoConnect(): boolean {
   if (isXxscreepsMode()) return true
   if (guestAutoConnectUrl() !== null) return true
   const url = isEmbedded() ? embeddedServerUrl() : getSession(SS.url)
+  // In Tauri the token lives in the OS keychain (async) — if a URL is stored,
+  // optimistically show the boot screen and let tryAutoConnect() decide.
+  if (isTauri()) return Boolean(url)
   const token = getSession(SS.token)
   return Boolean(url && token)
 }
 
 export function App() {
   const isConnected = () => status() === 'connected' && client() !== null
+  const isDesktop = isTauri()
   // True until the initial auto-connect attempt settles, so the boot splash is
   // only shown during startup and never re-appears (e.g. after a later logout).
   const [booting, setBooting] = createSignal(willAutoConnect())
@@ -64,7 +70,7 @@ export function App() {
         ? <Dashboard />
         : booting()
           ? <ConnectingScreen />
-          : <LoginForm />}
+          : isDesktop ? <DesktopLoginForm /> : <LoginForm />}
     </div>
   )
 }
