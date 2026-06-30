@@ -1,8 +1,9 @@
 import { createEffect, createSignal, onCleanup, onMount, For, Show, Switch, Match } from 'solid-js'
-import { X, Zap } from 'lucide-solid'
+import { X, Zap, Mail } from 'lucide-solid'
 import type { ApiUserOverviewTotals, ApiPowerCreep } from 'screeps-connectivity'
 import { client, userInfo } from '~/stores/clientStore.js'
 import { goToGame, goToRoom, goToUser, goToUserPower, goToUserPowerNew, goToUserPowerCreep, userView, powerView, powerCreepId } from '~/stores/routeStore.js'
+import { Messages } from '~/components/Messages.js'
 import { RankRing, GCL_RING, GCL_TEXT, GPL_RING, GPL_TEXT } from '~/components/RankRing.js'
 import { PlayerBadge } from '~/components/PlayerBadge.js'
 import { RoomPreviewTile } from '~/components/RoomPreviewTile.js'
@@ -30,6 +31,7 @@ const TEXT = '#c9d1d9'
 const MUTED = '#8b949e'
 
 export function Overview() {
+  const [showMessages, setShowMessages] = createSignal(false)
   const [totals, setTotals] = createSignal<ApiUserOverviewTotals | null>(null)
   const [rooms, setRooms] = createSignal<OwnedRoom[]>([])
 
@@ -123,16 +125,34 @@ export function Overview() {
     goToCreep: goToUserPowerCreep,
   }
 
+  const title = () => {
+    if (showMessages()) return 'Messages'
+    if (userView() === 'power') return 'Power Creeps'
+    return 'Overview'
+  }
+
   return (
     <OverlayPage>
         {/* Header — this is the player's own account page, so it carries their identity. */}
         <div style={{ display: 'flex', 'align-items': 'center', gap: '10px', padding: '0 0 14px', 'border-bottom': `1px solid ${BORDER}`, 'margin-bottom': '24px' }}>
           <PlayerBadge badge={userInfo()?.badge} size={28} />
           <h1 style={{ margin: 0, 'font-size': '22px', 'font-weight': 600, color: TEXT }}>
-            {userView() === 'power' ? 'Power Creeps' : 'Overview'}
+            {title()}
           </h1>
           <span style={{ color: MUTED, 'font-size': '14px' }}>{userInfo()?.username}</span>
           <div style={{ flex: 1 }} />
+          <button
+            onClick={() => setShowMessages((v) => !v)}
+            title={showMessages() ? 'Back to overview' : 'Messages'}
+            style={{
+              display: 'flex', 'align-items': 'center', padding: '7px', 'border-radius': '4px', cursor: 'pointer',
+              border: showMessages() ? '1px solid #388bfd' : `1px solid ${BORDER}`,
+              background: showMessages() ? '#1f3158' : '#21262d',
+              color: showMessages() ? '#58a6ff' : TEXT,
+            }}
+          >
+            <Mail size={16} />
+          </button>
           <button
             onClick={togglePower}
             title={userView() === 'power' ? 'Back to Overview' : 'Manage Power Creeps'}
@@ -154,67 +174,73 @@ export function Overview() {
           </button>
         </div>
 
-        <Show
-          when={userView() === 'power'}
-          fallback={
-            <>
-              {/* GCL / GPL cards */}
-              <div style={{ display: 'flex', gap: '16px', 'margin-bottom': '16px' }}>
-                <div style={cardStyle}>
-                  <RankRing value={gclProg().level} label="GCL" ring={GCL_RING} text={GCL_TEXT} fraction={fraction(gclProg())} tooltip={tooltip(gclProg())} />
-                  <div>
-                    <div style={{ 'font-size': '16px', 'font-weight': 600, color: TEXT, 'margin-bottom': '6px' }}>Global Control Level</div>
-                    {/* Vanilla labels this "Rooms" but renders the GCL level number; mirror it. */}
-                    <div style={{ color: MUTED, 'font-size': '13px' }}>
-                      <span>Rooms: <strong style={{ color: TEXT }}>{gclProg().level}</strong></span>
-                      <span style={{ 'margin-left': '14px' }}>CPU: <strong style={{ color: TEXT }}>{userInfo()?.cpu ?? '—'}</strong></span>
+        <Show when={showMessages()}>
+          <Messages />
+        </Show>
+
+        <Show when={!showMessages()}>
+          <Show
+            when={userView() === 'power'}
+            fallback={
+              <>
+                {/* GCL / GPL cards */}
+                <div style={{ display: 'flex', gap: '16px', 'margin-bottom': '16px' }}>
+                  <div style={cardStyle}>
+                    <RankRing value={gclProg().level} label="GCL" ring={GCL_RING} text={GCL_TEXT} fraction={fraction(gclProg())} tooltip={tooltip(gclProg())} />
+                    <div>
+                      <div style={{ 'font-size': '16px', 'font-weight': 600, color: TEXT, 'margin-bottom': '6px' }}>Global Control Level</div>
+                      {/* Vanilla labels this "Rooms" but renders the GCL level number; mirror it. */}
+                      <div style={{ color: MUTED, 'font-size': '13px' }}>
+                        <span>Rooms: <strong style={{ color: TEXT }}>{gclProg().level}</strong></span>
+                        <span style={{ 'margin-left': '14px' }}>CPU: <strong style={{ color: TEXT }}>{userInfo()?.cpu ?? '—'}</strong></span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={cardStyle}>
+                    <RankRing value={gplProg().level} label="GPL" ring={GPL_RING} text={GPL_TEXT} fraction={fraction(gplProg())} tooltip={tooltip(gplProg())} />
+                    <div>
+                      <div style={{ 'font-size': '16px', 'font-weight': 600, color: TEXT, 'margin-bottom': '8px' }}>Global Power Level</div>
+                      <button
+                        onClick={togglePower}
+                        title="Manage your power creeps"
+                        style={{ padding: '5px 10px', 'border-radius': '4px', border: '1px solid #C54444', background: '#21262d', color: '#ffb7ba', 'font-size': '12px', cursor: 'pointer' }}
+                      >
+                        Manage Power Creeps
+                      </button>
                     </div>
                   </div>
                 </div>
 
-                <div style={cardStyle}>
-                  <RankRing value={gplProg().level} label="GPL" ring={GPL_RING} text={GPL_TEXT} fraction={fraction(gplProg())} tooltip={tooltip(gplProg())} />
-                  <div>
-                    <div style={{ 'font-size': '16px', 'font-weight': 600, color: TEXT, 'margin-bottom': '8px' }}>Global Power Level</div>
-                    <button
-                      onClick={togglePower}
-                      title="Manage your power creeps"
-                      style={{ padding: '5px 10px', 'border-radius': '4px', border: '1px solid #C54444', background: '#21262d', color: '#ffb7ba', 'font-size': '12px', cursor: 'pointer' }}
-                    >
-                      Manage Power Creeps
-                    </button>
-                  </div>
-                </div>
-              </div>
+                {/* Lifetime stat tiles */}
+                <StatTileRow totals={totals()} />
 
-              {/* Lifetime stat tiles */}
-              <StatTileRow totals={totals()} />
-
-              {/* Owned-room minimaps */}
-              <Show when={rooms().length}>
-                <div style={{ 'margin-top': '24px' }}>
-                  <div style={{ color: MUTED, 'font-size': '11px', 'text-transform': 'uppercase', 'margin-bottom': '12px' }}>Rooms</div>
-                  <div style={{ display: 'flex', 'flex-wrap': 'wrap', gap: '16px' }}>
-                    <For each={rooms()}>
-                      {(r) => <RoomPreviewTile room={r.room} shard={r.shard} onClick={() => goToRoom(r.room, r.shard)} />}
-                    </For>
+                {/* Owned-room minimaps */}
+                <Show when={rooms().length}>
+                  <div style={{ 'margin-top': '24px' }}>
+                    <div style={{ color: MUTED, 'font-size': '11px', 'text-transform': 'uppercase', 'margin-bottom': '12px' }}>Rooms</div>
+                    <div style={{ display: 'flex', 'flex-wrap': 'wrap', gap: '16px' }}>
+                      <For each={rooms()}>
+                        {(r) => <RoomPreviewTile room={r.room} shard={r.shard} onClick={() => goToRoom(r.room, r.shard)} />}
+                      </For>
+                    </div>
                   </div>
-                </div>
-              </Show>
-            </>
-          }
-        >
-          <Switch>
-            <Match when={powerView() === 'list'}>
-              <PowerCreepList ctx={powerCtx} loading={powerLoading()} nav={powerNav} />
-            </Match>
-            <Match when={powerView() === 'new'}>
-              <PowerCreepCreate ctx={powerCtx} nav={powerNav} />
-            </Match>
-            <Match when={powerView() === 'detail'}>
-              <PowerCreepDetail ctx={powerCtx} id={powerCreepId()} nav={powerNav} />
-            </Match>
-          </Switch>
+                </Show>
+              </>
+            }
+          >
+            <Switch>
+              <Match when={powerView() === 'list'}>
+                <PowerCreepList ctx={powerCtx} loading={powerLoading()} nav={powerNav} />
+              </Match>
+              <Match when={powerView() === 'new'}>
+                <PowerCreepCreate ctx={powerCtx} nav={powerNav} />
+              </Match>
+              <Match when={powerView() === 'detail'}>
+                <PowerCreepDetail ctx={powerCtx} id={powerCreepId()} nav={powerNav} />
+              </Match>
+            </Switch>
+          </Show>
         </Show>
     </OverlayPage>
   )

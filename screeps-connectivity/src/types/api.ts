@@ -337,6 +337,7 @@ export interface ApiUserMessage {
   respondent: string
   user: string
   text: string
+  type?: 'in' | 'out'
   unread: boolean
 }
 
@@ -348,12 +349,12 @@ export interface ApiUserMessagesListResponse {
 export interface ApiUserMessagesIndexEntry {
   _id: string
   message: ApiUserMessage
-  user: { _id: string; username: string; badge: import('./game.js').Badge }
 }
 
 export interface ApiUserMessagesIndexResponse {
   ok: number
-  list: ApiUserMessagesIndexEntry[]
+  messages: ApiUserMessagesIndexEntry[]
+  users: Record<string, { _id: string; username: string; badge: import('./game.js').Badge }>
 }
 
 export interface ApiUserMessagesUnreadCountResponse {
