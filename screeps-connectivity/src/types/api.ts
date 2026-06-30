@@ -142,6 +142,25 @@ export interface ApiLeaderboardSeasonsResponse {
   seasons: Array<{ _id: string; name: string; date: string }>
 }
 
+export interface ApiDecorationActive {
+  world?: boolean
+  tileScale?: number | string
+  // terrain theme
+  floorBackgroundColor?: string
+  floorForegroundColor?: string
+  floorForegroundAlpha?: string | number
+  swampColor?: string
+  swampStrokeColor?: string
+  roadsColor?: string
+  roadsBrightness?: number | string
+  // room overlay (not used on world map yet)
+  foregroundColor?: string
+  foregroundAlpha?: number | string
+  backgroundColor?: string
+  strokeColor?: string
+  [key: string]: unknown
+}
+
 export interface ApiMapStatsRoomStat {
   status: string
   novice: number | null
@@ -150,7 +169,8 @@ export interface ApiMapStatsRoomStat {
   own?: { user: string; level: number }
   sign?: { user: string; text: string; time: number; datetime: number }
   safeMode?: boolean
-  [mineral: `minerals${number}`]: { type: string; density: number } | undefined
+  minerals0?: { type: string; density: number }
+  decorations?: Array<{ _id: string; user: string; decoration: string; active: ApiDecorationActive }>
 }
 
 export interface ApiMapStatsBadge {

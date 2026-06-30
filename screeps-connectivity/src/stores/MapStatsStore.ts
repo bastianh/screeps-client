@@ -3,6 +3,41 @@ import type { Logger } from '../logger.js'
 import type { HttpClient } from '../http/HttpClient.js'
 import type { ApiMapStatsRoomStat, ApiMapStatsBadge } from '../types/api.js'
 
+/** Fixed stat names for the map-stats API (no interval parameter). */
+export const MapStatName = {
+  owner:    'owner0',
+  minerals: 'minerals0',
+  power:    'power0',
+} as const
+
+/** Stat name prefixes that take an interval suffix — combine with {@link MapStatInterval} via {@link mapStat}. */
+export const MapStatPrefix = {
+  energyControl:      'energyControl',
+  energyHarvested:    'energyHarvested',
+  energyConstruction: 'energyConstruction',
+  energyCreeps:       'energyCreeps',
+  creepsProduced:     'creepsProduced',
+  creepsLost:         'creepsLost',
+  powerProcessed:     'powerProcessed',
+} as const
+
+/** Tick-bucket intervals supported by the Screeps API for parameterised stats. */
+export const MapStatInterval = {
+  hour1:   8,
+  hours24: 180,
+  days7:   1440,
+} as const
+
+/** Build a parameterised stat name, e.g. `mapStat(MapStatPrefix.energyControl, MapStatInterval.hours24)` → `"energyControl180"`. */
+export const mapStat = (prefix: string, interval: number): string => `${prefix}${interval}`
+
+/** Custom terrain palette extracted from a room's active world-map decoration. */
+export interface TerrainColors {
+  plain?: string  // CSS color string, e.g. "#68DFFF"
+  swamp?: string
+  road?: string
+}
+
 export interface MapStatsRoomData {
   own?: { user: string; level: number }
   mineral?: string
@@ -16,10 +51,12 @@ export interface MapStatsRoomData {
    * response's user map and may be absent if the signer isn't included there.
    */
   sign?: { user: string; text: string; datetime: number; username?: string; badge?: ApiMapStatsBadge }
+  /** Custom terrain colors from an active world-map decoration, if any. */
+  terrainColors?: TerrainColors
 }
 
 export interface MapStatsStoreEvents {
-  'mapStats:room': { room: string; shard: string | null; stat: MapStatsRoomData }
+  'mapStats:room': { room: string; shard: string | null; stat: MapStatsRoomData; statName: string }
 }
 
 interface PendingBatch {
@@ -79,15 +116,16 @@ export class MapStatsStore extends TypedStore<MapStatsStoreEvents> {
 
         const userMap = res.users ?? {}
 
+        const shardKey = batch.shard === 'shard0' ? null : batch.shard
         for (const [room, stat] of Object.entries(res.stats)) {
           const data = this.buildData(stat, userMap)
-          this.emit('mapStats:room', { room, shard: batch.shard === 'shard0' ? null : batch.shard, stat: data })
+          this.emit('mapStats:room', { room, shard: shardKey, stat: data, statName: batch.statName })
         }
 
         // Emit empty data for rooms that don't exist on server
         for (const room of allRooms) {
           if (!res.stats[room]) {
-            this.emit('mapStats:room', { room, shard: batch.shard === 'shard0' ? null : batch.shard, stat: {} })
+            this.emit('mapStats:room', { room, shard: shardKey, stat: {}, statName: batch.statName })
           }
         }
       } catch (err) {
@@ -97,19 +135,19 @@ export class MapStatsStore extends TypedStore<MapStatsStoreEvents> {
   }
 
   private buildData(stat: ApiMapStatsRoomStat, userMap: Record<string, { username: string; badge: ApiMapStatsBadge }>): MapStatsRoomData {
-    let mineral: string | undefined
-    let density: number | undefined
-    for (let i = 0; i < 3; i++) {
-      const mineralKey = `minerals${i}` as `minerals${number}`
-      const mineralData = stat[mineralKey]
-      if (mineralData) {
-        mineral = mineralData.type
-        density = mineralData.density
-        break
-      }
-    }
+    const mineral = stat.minerals0?.type
+    const density = stat.minerals0?.density
     const ownerId = stat.own?.user
     const signUserId = stat.sign?.user
+
+    // Find the terrain-theme decoration (world=true + floor/swamp color properties).
+    const terrainDeco = stat.decorations?.find(d => d.active.world && (d.active.floorBackgroundColor || d.active.swampColor))
+    const terrainColors: TerrainColors | undefined = terrainDeco ? {
+      plain: terrainDeco.active.floorBackgroundColor,
+      swamp: terrainDeco.active.swampColor,
+      road: terrainDeco.active.roadsColor,
+    } : undefined
+
     return {
       own: stat.own,
       mineral,
@@ -127,6 +165,7 @@ export class MapStatsStore extends TypedStore<MapStatsStoreEvents> {
             badge: signUserId ? userMap[signUserId]?.badge : undefined,
           }
         : undefined,
+      terrainColors,
     }
   }
 }

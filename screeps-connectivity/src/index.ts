@@ -60,3 +60,6 @@ export type { UserStore } from './stores/UserStore.js'
 export type { ServerStore } from './stores/ServerStore.js'
 export type { MapStore, Map2Subscription, MapStoreOptions } from './stores/MapStore.js'
 export type { NavigationStore, NavigationState, NavigationStoreEvents } from './stores/NavigationStore.js'
+export { MapStatName, MapStatPrefix, MapStatInterval, mapStat } from './stores/MapStatsStore.js'
+export type { MapStatsRoomData, MapStatsStoreEvents, TerrainColors } from './stores/MapStatsStore.js'
+

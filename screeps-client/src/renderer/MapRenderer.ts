@@ -1,5 +1,5 @@
 import { Application, Container, Graphics, RenderTexture, Sprite, Text, Texture } from 'pixi.js'
-import type { RoomMap2Data, Badge } from 'screeps-connectivity'
+import type { RoomMap2Data, Badge, TerrainColors } from 'screeps-connectivity'
 import { BadgeTextureCache } from './BadgeTextureCache.js'
 import { MapVisualLayer } from './MapVisualLayer.js'
 import { sharedAtlasCache } from './AtlasCache.js'
@@ -51,7 +51,7 @@ interface RoomEntry {
   texHi: RenderTexture | null  // LOD 1
   map2Graphics: Graphics
   ownerOverlay: Graphics
-  ownerState: 'none' | 'own' | 'other'
+  ownerState: 'none' | 'own' | 'other' | 'prohibited'
   lastMap2Data?: Partial<RoomMap2Data>
   lastMap2Source?: 'cache' | 'live'
   badgeSprite?: Sprite
@@ -81,6 +81,9 @@ export class MapRenderer {
   private readonly roomPool: RoomEntry[] = []
   private readonly terrainBaked = new Set<string>()
   private readonly terrainData  = new Map<string, Uint8Array>()  // raw bytes kept until texHi is baked
+  private readonly statsApplied = new Set<string>()
+  private readonly roomDecorations = new Map<string, TerrainColors>()
+  private showDecorations = true
   private worker: Worker
   private pendingBakes = new Map<number, { roomName: string, lod: number, resolve: (bmp: ImageBitmap) => void, reject: (err: unknown) => void }>()
   private nextBakeId = 0
@@ -241,23 +244,24 @@ export class MapRenderer {
   }
 
 
-  private async getTerrainBitmap(roomName: string, lod: number, raw: Uint8Array): Promise<ImageBitmap | null> {
+  private async getTerrainBitmap(roomName: string, lod: number, raw: Uint8Array, colors?: TerrainColors): Promise<ImageBitmap | null> {
     const shard = this.currentShard
     try {
-      // Check Cache API first
-      const cachedBlob = await getTerrainCacheBlob(shard, roomName, lod)
-      if (cachedBlob) {
-        return await blobToImageBitmap(cachedBlob)
+      // Only hit the bitmap cache when using default colors — decorated bakes
+      // must not overwrite the cached default, and we want the default restored
+      // from cache instantly when decorations are removed.
+      if (!colors) {
+        const cachedBlob = await getTerrainCacheBlob(shard, roomName, lod)
+        if (cachedBlob) {
+          return await blobToImageBitmap(cachedBlob)
+        }
       }
 
-      // Cache miss -> use Web Worker. The worker posts the baked bitmap back
-      // first (resolving this promise) and then encodes + posts the cache copy
-      // separately, so caching never delays the visible tile.
       const id = this.nextBakeId++
       const promise = new Promise<ImageBitmap>((resolve, reject) => {
         this.pendingBakes.set(id, { roomName, lod, resolve, reject })
       })
-      this.worker.postMessage({ id, roomName, lod, raw, shard })
+      this.worker.postMessage({ id, roomName, lod, raw, shard, colors })
 
       return await promise
     } catch (e) {
@@ -324,6 +328,7 @@ export class MapRenderer {
     // while baking, we just baked the other LOD's texture; ensureCurrentLod
     // bakes the missing one from the kept raw bytes so the room is never blank.
     void this.ensureCurrentLod(roomName, entry)
+    this.revealIfReady(roomName, entry)
   }
 
 
@@ -345,13 +350,13 @@ export class MapRenderer {
     }
     const raw = this.terrainData.get(roomName)
     if (!raw) return
-    return this.getTerrainBitmap(roomName, hi ? 1 : 0, raw).then((bitmap) => {
+    const colors = this.showDecorations ? this.roomDecorations.get(roomName) : undefined
+    return this.getTerrainBitmap(roomName, hi ? 1 : 0, raw, colors).then((bitmap) => {
       if (!bitmap) return
       if (!this.activeRooms.has(roomName)) { bitmap.close(); return }
       const tex = Texture.from(bitmap)
       if (hi) entry.texHi = tex as unknown as RenderTexture
       else entry.texLo = tex as unknown as RenderTexture
-      // Re-check: another zoom may have happened while this bake was in flight.
       if ((this.getLOD() === 1) === hi) entry.terrainSprite.texture = tex
     })
   }
@@ -393,7 +398,7 @@ export class MapRenderer {
     for (const [x, y] of walls) {
       g.rect(x * MT + 0.5, y * MT + 0.5, MT - 1, MT - 1)
     }
-    if (walls.length) g.fill(entry.ownerState === 'other' ? MINIMAP_WALLS_FOREIGN : MINIMAP_WALLS_OWN)
+    if (walls.length) g.fill(entry.ownerState === 'other' || entry.ownerState === 'prohibited' ? MINIMAP_WALLS_FOREIGN : MINIMAP_WALLS_OWN)
 
     // Point features (sources, controllers, minerals, keepers, power banks, deposits) — dots
     for (const feat of MAP2_DOT_FEATURES) {
@@ -429,31 +434,82 @@ export class MapRenderer {
     }
   }
 
-  setRoomOwned(roomName: string, state: 'none' | 'own' | 'other'): void {
+  setRoomOwned(roomName: string, state: 'none' | 'own' | 'other' | 'prohibited'): void {
     const entry = this.activeRooms.get(roomName)
     if (!entry) return
+    this.statsApplied.add(roomName)
     if (entry.ownerState !== state) {
       entry.ownerState = state
       if (entry.lastMap2Data) this.drawMap2(entry, entry.lastMap2Data, entry.lastMap2Source ?? 'live')
     }
     const g = entry.ownerOverlay
     g.clear()
-    if (state === 'other') {
+    if (state === 'prohibited') {
+      g.rect(0, 0, MAP_ROOM_SIZE, MAP_ROOM_SIZE)
+      g.fill({ color: 0x000000, alpha: 0.5 })
+    } else if (state === 'other') {
       g.rect(0, 0, MAP_ROOM_SIZE, MAP_ROOM_SIZE)
       g.fill({ color: 0x990000, alpha: 0.18 })
     } else if (state === 'own') {
       g.rect(0, 0, MAP_ROOM_SIZE, MAP_ROOM_SIZE)
       g.fill({ color: 0x000066, alpha: 0.35 })
     }
-    g.visible = this.showUnclaimableOverlay
+    g.visible = state === 'prohibited' || this.showUnclaimableOverlay
+    this.revealIfReady(roomName, entry)
   }
 
   setUnclaimableOverlayVisible(show: boolean): void {
     if (this.showUnclaimableOverlay === show) return
     this.showUnclaimableOverlay = show
     for (const entry of this.activeRooms.values()) {
-      entry.ownerOverlay.visible = show
+      entry.ownerOverlay.visible = entry.ownerState === 'prohibited' || show
     }
+  }
+
+  private revealIfReady(roomName: string, entry: RoomEntry): void {
+    if (this.terrainBaked.has(roomName) && this.statsApplied.has(roomName)) {
+      entry.container.visible = true
+    }
+  }
+
+  setRoomDecoration(roomName: string, colors: TerrainColors | undefined): void {
+    const current = this.roomDecorations.get(roomName)
+    // Only re-bake when something actually changed.
+    const newKey = colors ? JSON.stringify(colors) : ''
+    const oldKey = current ? JSON.stringify(current) : ''
+    if (newKey === oldKey) return
+
+    if (colors) this.roomDecorations.set(roomName, colors)
+    else this.roomDecorations.delete(roomName)
+
+    this.rebakeRoom(roomName)
+  }
+
+  setDecorationsVisible(show: boolean): void {
+    if (this.showDecorations === show) return
+    this.showDecorations = show
+    // Re-bake every room that has a stored decoration.
+    for (const roomName of this.roomDecorations.keys()) {
+      this.rebakeRoom(roomName)
+    }
+  }
+
+  private rebakeRoom(roomName: string): void {
+    const entry = this.activeRooms.get(roomName)
+    if (!entry) return
+
+    // Destroy both LOD textures so ensureCurrentLod re-bakes from scratch.
+    // Colors are looked up internally from roomDecorations.
+    for (const lodKey of ['texLo', 'texHi'] as const) {
+      const tex = entry[lodKey]
+      if (tex && !tex.destroyed) {
+        if ((entry.terrainSprite.texture as unknown) === tex) entry.terrainSprite.texture = Texture.EMPTY
+        tex.destroy(true)
+        entry[lodKey] = null
+      }
+    }
+
+    void this.ensureCurrentLod(roomName, entry)
   }
 
   async setRoomBadge(roomName: string, badge?: Badge, level?: number): Promise<void> {
@@ -730,6 +786,8 @@ export class MapRenderer {
 
     this.terrainBaked.delete(roomName)
     this.terrainData.delete(roomName)
+    this.statsApplied.delete(roomName)
+    this.roomDecorations.delete(roomName)
     this.activeRooms.delete(roomName)
 
     // Return to pool if not too big, else destroy
@@ -778,6 +836,8 @@ export class MapRenderer {
     this.roomPool.length = 0
     this.terrainBaked.clear()
     this.terrainData.clear()
+    this.statsApplied.clear()
+    this.roomDecorations.clear()
     this.worker.terminate()
     this.pendingBakes.clear()
     this.badgeCache.destroy()
@@ -835,7 +895,7 @@ export class MapRenderer {
 
     entry.container.x = coord.x * MAP_ROOM_SIZE
     entry.container.y = coord.y * MAP_ROOM_SIZE
-    entry.container.visible = true
+    entry.container.visible = false
     entry.nameLabel.text = roomName
     entry.nameLabel.visible = this.showRoomNames && this.zoom >= NAME_ZOOM_THRESHOLD && this.nameLabelShouldShow(coord.x, coord.y)
     this.updateNameLabelScale(entry, this.zoom)

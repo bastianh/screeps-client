@@ -110,13 +110,15 @@ function drawRoundedLayer(ctx: OffscreenCanvasRenderingContext2D, raw: Uint8Arra
 }
 
 self.onmessage = async (e: MessageEvent) => {
-  const { id, roomName, lod, raw, shard } = e.data as {
+  const { id, roomName, lod, raw, shard, colors } = e.data as {
     id: number,
     roomName: string,
     lod: number,
     raw: Uint8Array,
-    shard: string
+    shard: string,
+    colors?: { plain?: string; swamp?: string; road?: string }
   }
+  const useCustomColors = !!colors
 
   const size = LOD_SIZES[lod] || 128
   const T    = size / 50
@@ -125,16 +127,16 @@ self.onmessage = async (e: MessageEvent) => {
   const ctx = canvas.getContext('2d', { alpha: false }) as OffscreenCanvasRenderingContext2D
   if (!ctx) return
 
-  ctx.fillStyle = hexToRgb(TERRAIN_PLAIN)
+  ctx.fillStyle = colors?.plain ?? hexToRgb(TERRAIN_PLAIN)
   ctx.fillRect(0, 0, size, size)
 
   if (lod >= 1) {
-    ctx.fillStyle = hexToRgb(TERRAIN_SWAMP)
+    ctx.fillStyle = colors?.swamp ?? hexToRgb(TERRAIN_SWAMP)
     drawRoundedLayer(ctx, raw, TerrainType.Swamp, T)
     ctx.fillStyle = hexToRgb(TERRAIN_WALL)
     drawRoundedLayer(ctx, raw, TerrainType.Wall, T)
   } else {
-    ctx.fillStyle = hexToRgb(TERRAIN_SWAMP)
+    ctx.fillStyle = colors?.swamp ?? hexToRgb(TERRAIN_SWAMP)
     drawFlatLayer(ctx, raw, TerrainType.Swamp, T)
     ctx.fillStyle = hexToRgb(TERRAIN_WALL)
     drawFlatLayer(ctx, raw, TerrainType.Wall, T)
@@ -147,17 +149,19 @@ self.onmessage = async (e: MessageEvent) => {
   const bitmap = await createImageBitmap(canvas)
   self.postMessage({ kind: 'bitmap', id, roomName, lod, bitmap }, { transfer: [bitmap] })
 
-  // Encode the cache copy afterwards, still off the main thread (doing this per
-  // tile on the main thread used to freeze the tab when zooming far out). It no
-  // longer gates the visible tile. Encoding failures just skip caching.
-  try {
-    const blob = await canvas.convertToBlob({ type: 'image/webp' })
-    const cacheBytes = await blob.arrayBuffer()
-    self.postMessage(
-      { kind: 'cache', shard, roomName, lod, cacheBytes, cacheType: blob.type },
-      { transfer: [cacheBytes] },
-    )
-  } catch {
-    // encoding unsupported/failed — skip caching this tile
+  // Encode the cache copy afterwards, still off the main thread. Skip when
+  // custom decoration colors are active — the cached default bitmap must stay
+  // intact so it can be restored when decorations are removed.
+  if (!useCustomColors) {
+    try {
+      const blob = await canvas.convertToBlob({ type: 'image/webp' })
+      const cacheBytes = await blob.arrayBuffer()
+      self.postMessage(
+        { kind: 'cache', shard, roomName, lod, cacheBytes, cacheType: blob.type },
+        { transfer: [cacheBytes] },
+      )
+    } catch {
+      // encoding unsupported/failed — skip caching this tile
+    }
   }
 }

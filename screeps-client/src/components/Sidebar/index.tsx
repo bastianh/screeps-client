@@ -33,6 +33,7 @@ interface SidebarProps {
   shard?: string | null
   mapZoom?: number | null
   mapSubsActive?: boolean | null
+  onShardChange?: (shard: string) => void
 }
 
 export function Sidebar(props: SidebarProps) {
@@ -126,7 +127,7 @@ export function Sidebar(props: SidebarProps) {
         <Show when={props.mapMode} fallback={
           <RoomInfoPanel room={props.room ?? '—'} shard={props.shard ?? null} />
         }>
-          <MapInfoPanel zoom={props.mapZoom} subsActive={props.mapSubsActive} />
+          <MapInfoPanel zoom={props.mapZoom} subsActive={props.mapSubsActive} shard={props.shard} onShardChange={props.onShardChange} />
         </Show>
 
         <Show when={!props.mapMode && historyMode()}>

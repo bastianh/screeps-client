@@ -1,12 +1,13 @@
 import { createEffect, createSignal, onCleanup, onMount } from 'solid-js'
 import { MapRenderer } from '~/renderer/MapRenderer.js'
 import { client, userInfo, worldBounds, setWorldBounds } from '~/stores/clientStore.js'
-import { showMapRoomNames, showUnclaimableRooms, showMapVisuals } from '~/stores/settingsStore.js'
+import { showMapRoomNames, showUnclaimableRooms, showMapVisuals, showRoomDecorations } from '~/stores/settingsStore.js'
 import { mapOverlayMode } from '~/stores/mapOverlayStore.js'
 import { parseRoomName, formatRoomName, isRoomInWorld, isBusRoom, isCenterRoom } from '~/utils/roomName.js'
 import { useRoomNavigationKeys } from '~/utils/useRoomNavigationKeys.js'
 import { createLogger } from '~/utils/log.js'
 import type { Map2Subscription, Badge } from 'screeps-connectivity'
+import { MapStatName } from 'screeps-connectivity'
 
 const { log, error } = createLogger('map')
 
@@ -55,7 +56,7 @@ export function MapViewer(props: MapViewerProps) {
   const roomStats = new Map<string, { own?: { user: string; level: number }; mineral?: string; density?: number; username?: string; safeMode?: boolean; badge?: import('screeps-connectivity').Badge; sign?: { user: string; text: string; datetime: number; username?: string; badge?: import('screeps-connectivity').Badge } }>()
 
   // Precomputed unclaimable state per room — survives the stats-before-terrain race.
-  const roomUnclaimable = new Map<string, 'none' | 'own' | 'other'>()
+  const roomUnclaimable = new Map<string, 'none' | 'own' | 'other' | 'prohibited'>()
 
   // Fast change-detection for badges: roomName → JSON key of last seen badge.
   // If the key hasn't changed we skip re-rendering the badge entirely.
@@ -123,6 +124,8 @@ export function MapViewer(props: MapViewerProps) {
           if (p) bakes.push(p)
           const unclaimable = roomUnclaimable.get(room)
           if (unclaimable !== undefined) renderer?.setRoomOwned(room, unclaimable)
+          const stat = roomStats.get(room)
+          if (stat) renderer?.setRoomMineral(room, stat.mineral, stat.density)
         }
         for (const room of batch) {
           if (!terrainMap.has(room)) renderer?.markRoomFetched(room)
@@ -284,9 +287,8 @@ export function MapViewer(props: MapViewerProps) {
       if (terrainTimer === null) terrainTimer = setTimeout(drainTerrain, 0)
     }
 
-    // Queue all visible rooms for a batched mapStats fetch.
-    // The library debounces for 100 ms, then fires per-room events.
-    c.stores.mapStats.request(rooms, 'owner0', shard ?? undefined)
+    // Always fetch owner stats — needed for prohibited-room detection and the reveal gate.
+    c.stores.mapStats.request(rooms, MapStatName.owner, shard ?? undefined)
 
     // Reconcile map2 subscriptions — drop all when zoomed out.
     // The library (MapStore) handles its own per-server limit via a waitlist.
@@ -339,6 +341,22 @@ export function MapViewer(props: MapViewerProps) {
   // Sync overlay mode (owner / mineral / none)
   createEffect(() => {
     renderer?.setOverlayMode(mapOverlayMode())
+  })
+
+  // Sync decoration visibility — triggers re-bake for all decorated rooms.
+  createEffect(() => {
+    renderer?.setDecorationsVisible(showRoomDecorations())
+  })
+
+  // Request mineral stats only when the mineral overlay is active.
+  // Reacts to both overlay-mode changes and visible-room changes so switching
+  // to mineral view triggers an immediate fetch for all currently visible rooms.
+  createEffect(() => {
+    const c = client()
+    const rooms = visibleRooms()
+    const shard = props.shard
+    if (!c || rooms.length === 0 || mapOverlayMode() !== 'mineral') return
+    c.stores.mapStats.request(rooms, MapStatName.minerals, shard ?? undefined)
   })
 
   // Fetch world bounds with the correct shard whenever client or shard changes.
@@ -417,27 +435,44 @@ export function MapViewer(props: MapViewerProps) {
     const visibleSet = new Set(visibleRooms())
 
     // eslint-disable-next-line solid/reactivity
-    const sub = c.stores.mapStats.on('mapStats:room', ({ room, stat }) => {
-      roomStats.set(room, stat)
-      const coord = parseRoomName(room)
-      const structurallyUnclaimable = coord ? (isBusRoom(coord.x, coord.y) || isCenterRoom(coord.x, coord.y)) : false
-      const prohibited = stat.status === 'out of borders'
-      const ownRoom = !!(stat.own && stat.own.user === me)
-      const enemyOwned = !!(stat.own && stat.own.user !== me)
-      const unclaimableState: 'none' | 'own' | 'other' = ownRoom ? 'own' : (structurallyUnclaimable || prohibited || enemyOwned) ? 'other' : 'none'
-      roomUnclaimable.set(room, unclaimableState)
-      if (visibleSet.has(room)) {
-        renderer?.setRoomOwned(room, unclaimableState)
-        renderer?.setRoomSafeMode(room, !!stat.safeMode)
-      }
+    const sub = c.stores.mapStats.on('mapStats:room', ({ room, stat, statName }) => {
+      const existing = roomStats.get(room)
 
-      renderer?.setRoomMineral(room, stat.mineral, stat.density)
+      if (statName === MapStatName.minerals) {
+        // Only mineral data arrived — merge into existing owner data, don't touch owner state.
+        roomStats.set(room, { ...existing, mineral: stat.mineral, density: stat.density })
+        renderer?.setRoomMineral(room, stat.mineral, stat.density)
+      } else {
+        // owner0 (or any future owner-type stat): full owner update.
+        // Preserve mineral data already fetched from a prior minerals0 response.
+        const merged = { ...stat, mineral: existing?.mineral, density: existing?.density }
+        roomStats.set(room, merged)
 
-      // Badge change-check: cheap string comparison, runs only on event, never per tick.
-      const badgeKey = stat.badge ? JSON.stringify(stat.badge) : ''
-      if (roomBadgeKeys.get(room) !== badgeKey) {
-        roomBadgeKeys.set(room, badgeKey)
-        renderer?.setRoomBadge(room, stat.badge, stat.own?.level)
+        const coord = parseRoomName(room)
+        const structurallyUnclaimable = coord ? (isBusRoom(coord.x, coord.y) || isCenterRoom(coord.x, coord.y)) : false
+        const prohibited = stat.status === 'out of borders'
+        const ownRoom = !!(stat.own && stat.own.user === me)
+        const enemyOwned = !!(stat.own && stat.own.user !== me)
+        const unclaimableState: 'none' | 'own' | 'other' | 'prohibited' = ownRoom ? 'own' : prohibited ? 'prohibited' : (structurallyUnclaimable || enemyOwned) ? 'other' : 'none'
+        roomUnclaimable.set(room, unclaimableState)
+        if (visibleSet.has(room)) {
+          renderer?.setRoomOwned(room, unclaimableState)
+          renderer?.setRoomSafeMode(room, !!stat.safeMode)
+        }
+
+        // If minerals0 already arrived, pass the merged mineral through now.
+        if (existing?.mineral !== undefined) {
+          renderer?.setRoomMineral(room, existing.mineral, existing.density)
+        }
+
+        renderer?.setRoomDecoration(room, stat.terrainColors)
+
+        // Badge change-check: cheap string comparison, runs only on event, never per tick.
+        const badgeKey = stat.badge ? JSON.stringify(stat.badge) : ''
+        if (roomBadgeKeys.get(room) !== badgeKey) {
+          roomBadgeKeys.set(room, badgeKey)
+          renderer?.setRoomBadge(room, stat.badge, stat.own?.level)
+        }
       }
 
       const sel = selectedRoom()

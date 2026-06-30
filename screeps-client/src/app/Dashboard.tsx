@@ -244,6 +244,12 @@ export function Dashboard() {
     client()?.stores.navigation.navigateTo(r, s)
   }
 
+  const handleShardChange = (s: string) => {
+    setShard(s)
+    setStr(LS.shard, s)
+    history.pushState(null, '', buildMapUrl(s))
+  }
+
   const openMap = (originRoom: string) => {
     setMapOriginRoom(originRoom)
     setMapMode(true)
@@ -422,6 +428,7 @@ export function Dashboard() {
         shard={shard()}
         mapZoom={mapZoom()}
         mapSubsActive={mapSubsActive()}
+        onShardChange={handleShardChange}
       />
     </div>
   )
