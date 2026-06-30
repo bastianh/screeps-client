@@ -1,5 +1,6 @@
 import { Switch, Match, Show, For, type JSX } from 'solid-js'
-import { ChevronLeft } from 'lucide-solid'
+import { X } from 'lucide-solid'
+import { OverlayPage } from '~/components/OverlayPage.js'
 import {
   goToGame,
   goToMarket,
@@ -9,7 +10,7 @@ import {
   marketView,
   marketResourceType,
 } from '~/stores/routeStore.js'
-import { BG, PANEL, BORDER, TEXT, MUTED, ACCENT } from './theme.js'
+import { PANEL, BORDER, TEXT, MUTED, ACCENT } from './theme.js'
 import { marketShards, effectiveMarketShard, isMultiShard } from './shardState.js'
 import { MarketAllOrders } from './MarketAllOrders.js'
 import { MarketResource } from './MarketResource.js'
@@ -29,17 +30,9 @@ export function Market() {
   }
 
   return (
-    <div style={{ width: '100%', height: '100%', overflow: 'auto', background: BG, color: TEXT }}>
-      <div style={{ 'max-width': '1040px', margin: '0 auto', padding: '24px 16px 48px' }}>
+    <OverlayPage>
         {/* Section header */}
         <div style={{ display: 'flex', 'align-items': 'center', gap: '12px', padding: '0 0 14px', 'border-bottom': `1px solid ${BORDER}`, 'margin-bottom': '8px' }}>
-          <button
-            onClick={goToGame}
-            title="Back to the world"
-            style={{ display: 'flex', 'align-items': 'center', gap: '4px', padding: '7px 12px', 'border-radius': '4px', border: `1px solid ${BORDER}`, background: '#21262d', color: TEXT, cursor: 'pointer' }}
-          >
-            <ChevronLeft size={16} /> World
-          </button>
           <h1 style={{ margin: 0, 'font-size': '22px', 'font-weight': 600, color: TEXT }}>Market</h1>
           <div style={{ flex: 1 }} />
           <Show when={onAllOrders() && isMultiShard()}>
@@ -54,6 +47,13 @@ export function Market() {
               </select>
             </label>
           </Show>
+          <button
+            onClick={goToGame}
+            title="Close"
+            style={{ display: 'flex', 'align-items': 'center', padding: '7px', 'border-radius': '4px', border: `1px solid ${BORDER}`, background: '#21262d', color: TEXT, cursor: 'pointer' }}
+          >
+            <X size={16} />
+          </button>
         </div>
 
         {/* Tabs */}
@@ -77,8 +77,7 @@ export function Market() {
             <MarketAllOrders shard={effectiveMarketShard()} />
           </Match>
         </Switch>
-      </div>
-    </div>
+    </OverlayPage>
   )
 }
 

@@ -1,10 +1,10 @@
 import { createSignal, createMemo, createEffect, onCleanup, Show, type JSX } from 'solid-js'
-import { ChevronDown, KeyRound, LogOut, RotateCcw, Settings } from 'lucide-solid'
+import { ChevronDown, KeyRound, LogOut, RotateCcw, Settings, Shield } from 'lucide-solid'
 import { badgeToSvg } from 'screeps-connectivity'
 import { authMethod, client, disconnect, expectWorldStatusChange, userInfo } from '~/stores/clientStore.js'
 import { addToast } from '~/stores/toastStore.js'
 
-export function UserMenu(props: { onOpenSettings: () => void }) {
+export function UserMenu(props: { onOpenSettings: () => void; onOpenBadgePicker: () => void }) {
   const [open, setOpen] = createSignal(false)
   const [showRespawnConfirm, setShowRespawnConfirm] = createSignal(false)
   const [respawning, setRespawning] = createSignal(false)
@@ -134,6 +134,17 @@ export function UserMenu(props: { onOpenSettings: () => void }) {
             padding: '4px',
           }}
         >
+          <MenuItem
+            onClick={() => {
+              setOpen(false)
+              props.onOpenBadgePicker()
+            }}
+          >
+            <Show when={badgeSrc()} fallback={<Shield size={15} />}>
+              <img src={badgeSrc()!} width={15} height={15} style={{ display: 'block', 'border-radius': '2px' }} />
+            </Show>
+            <span>{userInfo()?.badge ? 'Edit Badge' : 'Create Badge'}</span>
+          </MenuItem>
           <MenuItem
             onClick={() => {
               setOpen(false)

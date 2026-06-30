@@ -1,5 +1,6 @@
 import { createResource, For, Show } from 'solid-js'
-import { ChevronLeft } from 'lucide-solid'
+import { X } from 'lucide-solid'
+import { OverlayPage } from '~/components/OverlayPage.js'
 import type { ApiLeaderboardFindResponse } from 'screeps-connectivity'
 import { client } from '~/stores/clientStore.js'
 import { profileUsername, goToGame, goToRoom, goToOverview } from '~/stores/routeStore.js'
@@ -14,7 +15,6 @@ import { gclProgress, gplProgress, type LevelProgress } from '~/utils/levels.js'
 // as the self Overview (GCL/GPL rings, stat tiles, owned-room minimaps) plus the
 // leaderboard "current month" ranks, fed from the public endpoints:
 //   find(username) → {_id, gcl, power, badge}; rooms(_id); stats(_id); leaderboard.
-const BG = '#0d1117'
 const PANEL = '#161b22'
 const BORDER = '#30363d'
 const TEXT = '#c9d1d9'
@@ -118,8 +118,7 @@ export function Profile() {
   const tooltip = (p: LevelProgress) => `Next level: ${Math.floor(p.current).toLocaleString()} / ${Math.floor(p.total).toLocaleString()}`
 
   return (
-    <div style={{ width: '100%', height: '100%', overflow: 'auto', background: BG, color: TEXT }}>
-      <div style={{ 'max-width': '900px', margin: '0 auto', padding: '24px 16px 40px' }}>
+    <OverlayPage>
         <Show when={!user.loading} fallback={<div style={{ color: MUTED, 'text-align': 'center', padding: '60px' }}>Loading…</div>}>
           <Show
             when={user()}
@@ -150,10 +149,10 @@ export function Profile() {
                   <RankRing value={gplProg().level} label="GPL" ring={GPL_RING} text={GPL_TEXT} fraction={fraction(gplProg())} tooltip={tooltip(gplProg())} />
                   <button
                     onClick={goToGame}
-                    title="Back to the world"
-                    style={{ display: 'flex', 'align-items': 'center', gap: '4px', padding: '7px 12px', 'border-radius': '4px', border: `1px solid ${BORDER}`, background: '#21262d', color: TEXT, cursor: 'pointer' }}
+                    title="Close"
+                    style={{ display: 'flex', 'align-items': 'center', padding: '7px', 'border-radius': '4px', border: `1px solid ${BORDER}`, background: '#21262d', color: TEXT, cursor: 'pointer' }}
                   >
-                    <ChevronLeft size={16} /> World
+                    <X size={16} />
                   </button>
                 </div>
 
@@ -185,7 +184,6 @@ export function Profile() {
             )}
           </Show>
         </Show>
-      </div>
-    </div>
+    </OverlayPage>
   )
 }

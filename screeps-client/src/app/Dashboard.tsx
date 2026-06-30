@@ -1,5 +1,5 @@
 import { createEffect, createSignal, lazy, onCleanup, onMount, Show, untrack, type JSX } from 'solid-js'
-import { Map, LayoutGrid, Code2, Settings, LogIn, ChevronLeft, ChevronRight, LayoutDashboard, Store } from 'lucide-solid'
+import { Map, Code2, Settings, LogIn, LayoutDashboard, Store } from 'lucide-solid'
 import { ConnectionStatus } from '~/components/ConnectionStatus.js'
 import { RoomViewer } from '~/components/RoomViewer.js'
 import { ToastContainer } from '~/components/ToastContainer.js'
@@ -22,7 +22,14 @@ import { historyMode, historyTick, enterHistoryMode, exitHistoryMode, seekToTick
 import { widescreenMode } from '~/stores/settingsStore.js'
 import { toggleShowLog, toggleShowConsole, toggleShowMemory } from '~/stores/consoleStore.js'
 import { setRoomViewMode } from '~/stores/roomViewStore.js'
-import { goToOverview, goToMarket } from '~/stores/routeStore.js'
+import { route, goToOverview, goToGame, goToMarket } from '~/stores/routeStore.js'
+import { Overview } from '~/components/Overview.js'
+import { Profile } from '~/components/Profile.js'
+import { Market } from '~/components/market/Market.js'
+import { BadgePickerModal } from '~/components/BadgePickerModal.js'
+import type { Badge } from 'screeps-connectivity'
+
+const DEFAULT_BADGE: Badge = { type: 1, color1: '#4a5060', color2: '#7a9ec0', color3: '#c0daf0', param: 0, flip: false }
 
 import { parseRoomName } from '~/utils/roomName.js'
 import { basePath } from '~/utils/embedded.js'
@@ -57,6 +64,7 @@ function parseMapUrl(): { shard: string | null } | null {
 
 function HeaderButton(props: {
   active?: boolean
+  disabled?: boolean
   onClick: () => void
   title: string
   children: JSX.Element
@@ -64,14 +72,15 @@ function HeaderButton(props: {
   return (
     <button
       title={props.title}
+      disabled={props.disabled}
       onClick={() => props.onClick()}
       style={{
         padding: '7px',
         'border-radius': '4px',
         border: `1px solid ${props.active ? '#388bfd' : '#30363d'}`,
         background: props.active ? '#1f3158' : '#21262d',
-        color: props.active ? '#58a6ff' : '#c9d1d9',
-        cursor: 'pointer',
+        color: props.disabled ? '#484f58' : props.active ? '#58a6ff' : '#c9d1d9',
+        cursor: props.disabled ? 'default' : 'pointer',
         margin: '0 4px',
         display: 'flex',
         'align-items': 'center',
@@ -82,28 +91,6 @@ function HeaderButton(props: {
   )
 }
 
-function NavArrowButton(props: { disabled: boolean; onClick: () => void; title: string; children: JSX.Element }) {
-  return (
-    <button
-      title={props.title}
-      disabled={props.disabled}
-      onClick={() => props.onClick()}
-      style={{
-        padding: '7px',
-        'border-radius': '4px',
-        border: '1px solid #30363d',
-        background: '#21262d',
-        color: props.disabled ? '#484f58' : '#c9d1d9',
-        cursor: props.disabled ? 'default' : 'pointer',
-        margin: '0 2px',
-        display: 'flex',
-        'align-items': 'center',
-      }}
-    >
-      {props.children}
-    </button>
-  )
-}
 
 export function Dashboard() {
   const urlState = parseRoomUrl()
@@ -117,7 +104,8 @@ export function Dashboard() {
   const [motdDismissed, setMotdDismissed] = createSignal(false)
   const showMotd = () => isGuest() && mapMode() && !motdDismissed() && motdText() !== null
 
-  const [showSettings, setShowSettings] = createSignal(!isGuest() && !userInfo()?.badge)
+  const [showSettings, setShowSettings] = createSignal(false)
+  const [showBadgePicker, setShowBadgePicker] = createSignal(!isGuest() && !userInfo()?.badge)
   const [showCode, setShowCode] = createSignal(false)
   // Suppresses sidebar transition for one render cycle whenever showCode toggles,
   // so both open and close are instant with no CSS animation.
@@ -147,9 +135,6 @@ export function Dashboard() {
   const savedMapZoom = getStr(LS.mapZoom)
   const [mapZoom, setMapZoom] = createSignal<number | null>(urlState.room && savedMapZoom ? Number(savedMapZoom) : null)
   const [mapSubsActive, setMapSubsActive] = createSignal<boolean | null>(null)
-  const [canBack, setCanBack] = createSignal(false)
-  const [canForward, setCanForward] = createSignal(false)
-
   // Consumed once when gameTime first becomes available
   let pendingHistoryTick: number | null = urlState.tick
   createEffect(() => {
@@ -159,6 +144,14 @@ export function Dashboard() {
     pendingHistoryTick = null
     enterHistoryMode(t)
     seekToTick(targetTick)
+  })
+
+  // Close code editor and settings panel when any overlay route becomes active (mutual exclusion).
+  createEffect(() => {
+    if (route() !== 'game') {
+      setShowCode(false)
+      setShowSettings(false)
+    }
   })
 
   // Sync room URL / history-tick hash while in room view.
@@ -257,17 +250,6 @@ export function Dashboard() {
     history.pushState(null, '', buildMapUrl(shard()))
   }
 
-  const toggleMap = () => {
-    if (mapMode()) {
-      setMapMode(false)
-      setHoveredRoomInfo(null)
-      setSelectedRoomInfo(null)
-      history.pushState(null, '', buildRoomUrl(room(), shard()))
-    } else {
-      openMap(room())
-    }
-  }
-
   onMount(() => {
     // Ensure URL reflects the active view even when loaded without a path
     if (!parseRoomUrl().room && !parseMapUrl()) {
@@ -306,8 +288,6 @@ export function Dashboard() {
         setMapMode(false)
         setHoveredRoomInfo(null)
         setSelectedRoomInfo(null)
-        setCanBack(nav.canBack())
-        setCanForward(nav.canForward())
         setStr(LS.room, state.room)
         if (state.shard) setStr(LS.shard, state.shard)
         else removeLocal(LS.shard)
@@ -347,9 +327,6 @@ export function Dashboard() {
 
   const canvasArea = () => (
     <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-      <Show when={showSettings()}>
-        <SettingsPanel onClose={() => setShowSettings(false)} />
-      </Show>
       <Show when={showCode()}>
         <CodePanel onClose={() => setShowCode(false)} />
       </Show>
@@ -372,6 +349,26 @@ export function Dashboard() {
         }
       >
         <RoomViewer room={room()} shard={shard()} onNavigate={handleNavigate} />
+        <button
+          onClick={() => openMap(room())}
+          title="World Map"
+          style={{
+            position: 'absolute',
+            top: '8px',
+            left: '8px',
+            'z-index': 5,
+            padding: '12px',
+            'border-radius': '6px',
+            border: '1px solid #30363d',
+            background: 'rgba(33,38,45,0.85)',
+            color: '#c9d1d9',
+            cursor: 'pointer',
+            display: 'flex',
+            'align-items': 'center',
+          }}
+        >
+          <Map size={24} />
+        </button>
       </Show>
       <Show when={showMotd()}>
         <MotdOverlay text={motdText()!} onClose={() => setMotdDismissed(true)} />
@@ -450,23 +447,25 @@ export function Dashboard() {
           />
         </Show>
         <div style={{ flex: 1 }} />
-        <NavArrowButton title="Back" disabled={!canBack()} onClick={() => client()?.stores.navigation.back()}><ChevronLeft size={16} /></NavArrowButton>
-        <NavArrowButton title="Forward" disabled={!canForward()} onClick={() => client()?.stores.navigation.forward()}><ChevronRight size={16} /></NavArrowButton>
-        <HeaderButton title={mapMode() ? 'Room View' : 'Map'} active={mapMode()} onClick={toggleMap}>
-          {mapMode() ? <LayoutGrid size={16} /> : <Map size={16} />}
+        <HeaderButton
+          title={route() === 'overview' || route() === 'profile' ? 'Close overview' : 'Overview'}
+          active={route() === 'overview' || route() === 'profile'}
+          disabled={isGuest() && route() !== 'overview' && route() !== 'profile'}
+          onClick={() => (route() === 'overview' || route() === 'profile') ? goToGame() : goToOverview()}
+        >
+          <LayoutDashboard size={16} />
         </HeaderButton>
         <Show when={!isGuest()}>
-          <HeaderButton title="Overview" onClick={goToOverview}>
-            <LayoutDashboard size={16} />
-          </HeaderButton>
-        </Show>
-        <Show when={!isGuest()}>
-          <HeaderButton title="Market" onClick={() => goToMarket(shard())}>
+          <HeaderButton
+            title={route() === 'market' ? 'Close Market' : 'Market'}
+            active={route() === 'market'}
+            onClick={() => route() === 'market' ? goToGame() : goToMarket(shard())}
+          >
             <Store size={16} />
           </HeaderButton>
         </Show>
         <Show when={!isGuest()}>
-          <HeaderButton title="Code Editor" active={showCode()} onClick={() => { setShowCode((v) => !v); setShowSettings(false) }}>
+          <HeaderButton title="Code Editor" active={showCode()} onClick={() => { if (route() !== 'game') goToGame(); setShowCode((v) => !v); setShowSettings(false) }}>
             <Code2 size={16} />
           </HeaderButton>
         </Show>
@@ -474,7 +473,7 @@ export function Dashboard() {
           when={!isGuest()}
           fallback={
             <>
-              <HeaderButton title="Settings" active={showSettings()} onClick={() => { setShowSettings((v) => !v); setShowCode(false) }}>
+              <HeaderButton title="Settings" active={showSettings()} onClick={() => { if (route() !== 'game') goToGame(); setShowSettings((v) => !v); setShowCode(false) }}>
                 <Settings size={16} />
               </HeaderButton>
               <button
@@ -497,34 +496,53 @@ export function Dashboard() {
             </>
           }
         >
-          <UserMenu onOpenSettings={() => { setShowSettings(true); setShowCode(false) }} />
+          <UserMenu
+            onOpenSettings={() => { if (route() !== 'game') goToGame(); setShowSettings(true); setShowCode(false) }}
+            onOpenBadgePicker={() => setShowBadgePicker(true)}
+          />
         </Show>
       </div>
 
-      {/* Main body — layout depends on widescreenMode setting */}
-      <Show
-        when={widescreenMode()}
-        fallback={
-          /* Normal mode: console spans full width below canvas+sidebar */
-          <div style={{ display: 'flex', 'flex-direction': 'column', flex: 1, overflow: 'hidden' }}>
-            <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-              {canvasArea()}
-              {sidebarArea(true)}
+      {/* Main body — game canvas stays mounted; overview/profile appear as an absolute overlay */}
+      <div style={{ flex: 1, position: 'relative', overflow: 'hidden', display: 'flex', 'flex-direction': 'column' }}>
+        <Show
+          when={widescreenMode()}
+          fallback={
+            /* Normal mode: console spans full width below canvas+sidebar */
+            <div style={{ display: 'flex', 'flex-direction': 'column', flex: 1, overflow: 'hidden' }}>
+              <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+                {canvasArea()}
+                {sidebarArea(true)}
+              </div>
+              {consoleArea()}
             </div>
-            {consoleArea()}
+          }
+        >
+          {/* Widescreen mode: sidebar spans full height, console below canvas only */}
+          <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+            <div style={{ display: 'flex', 'flex-direction': 'column', flex: 1, overflow: 'hidden' }}>
+              {canvasArea()}
+              {consoleArea()}
+            </div>
+            {sidebarArea(false)}
           </div>
-        }
-      >
-        {/* Widescreen mode: sidebar spans full height, console below canvas only */}
-        <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-          <div style={{ display: 'flex', 'flex-direction': 'column', flex: 1, overflow: 'hidden' }}>
-            {canvasArea()}
-            {consoleArea()}
+        </Show>
+        <Show when={route() === 'overview' || route() === 'profile' || route() === 'market' || showSettings()}>
+          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, 'z-index': 10, overflow: 'hidden' }}>
+            <Show when={route() === 'overview'}><Overview /></Show>
+            <Show when={route() === 'profile'}><Profile /></Show>
+            <Show when={route() === 'market'}><Market /></Show>
+            <Show when={showSettings()}><SettingsPanel onClose={() => setShowSettings(false)} /></Show>
           </div>
-          {sidebarArea(false)}
-        </div>
-      </Show>
+        </Show>
+      </div>
       <ToastContainer />
+      <Show when={showBadgePicker()}>
+        <BadgePickerModal
+          badge={userInfo()?.badge ?? DEFAULT_BADGE}
+          onClose={() => setShowBadgePicker(false)}
+        />
+      </Show>
     </div>
   )
 }

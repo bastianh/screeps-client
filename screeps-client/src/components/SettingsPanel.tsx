@@ -1,5 +1,6 @@
-import { JSX, createSignal, Show, createMemo, For } from 'solid-js'
+import { JSX, createSignal, Show, For } from 'solid-js'
 import { X } from 'lucide-solid'
+import { OverlayPage } from '~/components/OverlayPage.js'
 import {
   widescreenMode, setWidescreenMode,
   terrainEffects, setTerrainEffects,
@@ -9,13 +10,9 @@ import {
 } from '~/stores/settingsStore.js'
 import { clientVersion, embeddedModInfo } from '~/utils/embedded.js'
 import { userInfo, isGuest, client } from '~/stores/clientStore.js'
-import { badgeToSvg } from 'screeps-connectivity'
-import type { Badge, NotifyPrefs } from 'screeps-connectivity'
-import { BadgePickerModal } from '~/components/BadgePickerModal.js'
+import type { NotifyPrefs } from 'screeps-connectivity'
 import { clearAllCaches } from '~/utils/storage.js'
 import { addToast } from '~/stores/toastStore.js'
-
-const DEFAULT_BADGE: Badge = { type: 1, color1: '#4a5060', color2: '#7a9ec0', color3: '#c0daf0', param: 0, flip: false }
 
 interface ToggleProps {
   label: string
@@ -182,8 +179,6 @@ const ERRORS_INTERVAL_OPTIONS = [
 
 export function SettingsPanel(props: { onClose: () => void }) {
   const modInfo = embeddedModInfo()
-  const openedForBadgeCreation = !isGuest() && !userInfo()?.badge
-  const [showBadgePicker, setShowBadgePicker] = createSignal(openedForBadgeCreation)
   const [clearing, setClearing] = createSignal(false)
 
   async function saveNotifyPref(pref: Partial<NotifyPrefs>) {
@@ -196,13 +191,6 @@ export function SettingsPanel(props: { onClose: () => void }) {
       addToast(`Failed to save notification preference: ${(err as Error).message}`, 'error')
     }
   }
-
-  const badgePreviewSrc = createMemo(() => {
-    const badge = userInfo()?.badge
-    if (!badge) return null
-    const svg = badgeToSvg(badge)
-    return `data:image/svg+xml,${encodeURIComponent(svg)}`
-  })
 
   async function handleClearCaches() {
     setClearing(true)
@@ -217,56 +205,29 @@ export function SettingsPanel(props: { onClose: () => void }) {
   }
 
   return (
-    <div
-      style={{
-        position: 'absolute',
-        inset: '0px',
-        background: 'rgba(13, 17, 23, 0.96)',
-        'z-index': 100,
-        display: 'flex',
-        'flex-direction': 'column',
-        overflow: 'hidden',
-      }}
-    >
+    <OverlayPage maxWidth="600px">
       {/* Header */}
       <div
         style={{
           display: 'flex',
           'align-items': 'center',
-          'justify-content': 'space-between',
-          padding: '14px 24px',
+          padding: '0 0 14px',
           'border-bottom': '1px solid #30363d',
-          'flex-shrink': 0,
+          'margin-bottom': '24px',
         }}
       >
-        <span style={{ 'font-size': '15px', 'font-weight': 600, color: '#c9d1d9' }}>Settings</span>
+        <h1 style={{ margin: 0, 'font-size': '22px', 'font-weight': 600, color: '#c9d1d9' }}>Settings</h1>
+        <div style={{ flex: 1 }} />
         <button
           onClick={() => props.onClose()}
-          style={{
-            background: 'transparent',
-            border: 'none',
-            color: '#8b949e',
-            cursor: 'pointer',
-            'line-height': '1',
-            padding: '2px 6px',
-          }}
+          title="Close"
+          style={{ display: 'flex', 'align-items': 'center', padding: '7px', 'border-radius': '4px', border: '1px solid #30363d', background: '#21262d', color: '#c9d1d9', cursor: 'pointer' }}
         >
-          <X size={18} />
+          <X size={16} />
         </button>
       </div>
 
-      {/* Badge picker modal */}
-      <Show when={showBadgePicker()}>
-        <BadgePickerModal
-          badge={userInfo()?.badge ?? DEFAULT_BADGE}
-          onClose={() => setShowBadgePicker(false)}
-          onSaved={openedForBadgeCreation ? () => props.onClose() : undefined}
-        />
-      </Show>
-
-      {/* Body */}
-      <div style={{ overflow: 'auto', flex: 1, padding: '20px 24px' }}>
-        <div style={{ 'max-width': '480px' }}>
+      <div style={{ 'max-width': '480px' }}>
 
           <Section title="Layout">
             <Toggle
@@ -308,42 +269,6 @@ export function SettingsPanel(props: { onClose: () => void }) {
               </select>
             </div>
           </Section>
-
-          <Show when={!isGuest()}>
-            <Section title="Player Badge">
-              <div
-                style={{
-                  display: 'flex',
-                  'align-items': 'center',
-                  'justify-content': 'space-between',
-                  padding: '10px 0',
-                  'border-bottom': '1px solid #21262d',
-                }}
-              >
-                <div style={{ display: 'flex', 'align-items': 'center', gap: '12px' }}>
-                  <Show when={badgePreviewSrc()}>
-                    <img src={badgePreviewSrc()!} width={40} height={40} style={{ display: 'block' }} />
-                  </Show>
-                  <span style={{ 'font-size': '13px', color: '#c9d1d9' }}>{userInfo()?.username ?? ''}</span>
-                </div>
-                <button
-                  onClick={() => setShowBadgePicker(true)}
-                  style={{
-                    padding: '6px 14px',
-                    'border-radius': '6px',
-                    border: '1px solid #30363d',
-                    background: 'transparent',
-                    color: '#c9d1d9',
-                    'font-size': '12px',
-                    cursor: 'pointer',
-                    'flex-shrink': 0,
-                  }}
-                >
-                  {badgePreviewSrc() ? 'Edit Badge' : 'Create Badge'}
-                </button>
-              </div>
-            </Section>
-          </Show>
 
           <Show when={!isGuest()}>
             <Section title="Notifications">
@@ -440,7 +365,6 @@ export function SettingsPanel(props: { onClose: () => void }) {
           </Section>
 
         </div>
-      </div>
-    </div>
+    </OverlayPage>
   )
 }

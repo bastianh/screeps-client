@@ -1,5 +1,5 @@
 import { createEffect, createSignal, onCleanup, onMount, For, Show } from 'solid-js'
-import { ChevronLeft } from 'lucide-solid'
+import { X } from 'lucide-solid'
 import type { ApiUserOverviewTotals } from 'screeps-connectivity'
 import { client, userInfo } from '~/stores/clientStore.js'
 import { goToGame, goToRoom, goToPower } from '~/stores/routeStore.js'
@@ -7,6 +7,7 @@ import { RankRing, GCL_RING, GCL_TEXT, GPL_RING, GPL_TEXT } from '~/components/R
 import { PlayerBadge } from '~/components/PlayerBadge.js'
 import { RoomPreviewTile } from '~/components/RoomPreviewTile.js'
 import { StatTileRow } from '~/components/AccountStatTiles.js'
+import { OverlayPage } from '~/components/OverlayPage.js'
 import { extractOwnedRooms, type OwnedRoom } from '~/utils/ownedRooms.js'
 import { gclProgress, gplProgress, type LevelProgress } from '~/utils/levels.js'
 
@@ -18,7 +19,6 @@ const REFRESH_MS = 60_000
 const STAT_INTERVAL = 8
 
 // App chrome (matches the Dashboard / GitHub-dark palette used across the site).
-const BG = '#0d1117'
 const PANEL = '#161b22'
 const BORDER = '#30363d'
 const TEXT = '#c9d1d9'
@@ -84,8 +84,7 @@ export function Overview() {
   }
 
   return (
-    <div style={{ width: '100%', height: '100%', overflow: 'auto', background: BG, color: TEXT }}>
-      <div style={{ 'max-width': '900px', margin: '0 auto', padding: '24px 16px 40px' }}>
+    <OverlayPage>
         {/* Header — this is the player's own account page, so it carries their identity. */}
         <div style={{ display: 'flex', 'align-items': 'center', gap: '10px', padding: '0 0 14px', 'border-bottom': `1px solid ${BORDER}`, 'margin-bottom': '24px' }}>
           <PlayerBadge badge={userInfo()?.badge} size={28} />
@@ -94,10 +93,10 @@ export function Overview() {
           <div style={{ flex: 1 }} />
           <button
             onClick={goToGame}
-            title="Back to the world"
-            style={{ display: 'flex', 'align-items': 'center', gap: '4px', padding: '7px 12px', 'border-radius': '4px', border: `1px solid ${BORDER}`, background: '#21262d', color: TEXT, cursor: 'pointer' }}
+            title="Close"
+            style={{ display: 'flex', 'align-items': 'center', padding: '7px', 'border-radius': '4px', border: `1px solid ${BORDER}`, background: '#21262d', color: TEXT, cursor: 'pointer' }}
           >
-            <ChevronLeft size={16} /> World
+            <X size={16} />
           </button>
         </div>
 
@@ -144,7 +143,6 @@ export function Overview() {
             </div>
           </div>
         </Show>
-      </div>
-    </div>
+    </OverlayPage>
   )
 }
