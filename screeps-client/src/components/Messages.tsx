@@ -132,7 +132,7 @@ function Thread(props: { respondent: Respondent; onBack: () => void }) {
     <div style={{ display: 'flex', 'flex-direction': 'column', gap: '0' }}>
       <div style={{ display: 'flex', 'align-items': 'center', gap: '8px', 'margin-bottom': '16px' }}>
         <button
-          onClick={props.onBack}
+          onClick={() => props.onBack()}
           title="Back to inbox"
           style={{ display: 'flex', 'align-items': 'center', gap: '4px', padding: '5px 10px', 'border-radius': '4px', border: `1px solid ${BORDER}`, background: '#21262d', color: TEXT, cursor: 'pointer', 'font-size': '13px' }}
         >
