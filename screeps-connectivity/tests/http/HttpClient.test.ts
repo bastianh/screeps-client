@@ -81,10 +81,21 @@ describe('HttpClient', () => {
     fetchMock.mockResolvedValue(mockResponse({ ok: 1 }, {
       headers: { 'content-type': 'application/json', 'x-token': 'refreshed' },
     }))
-    const http = new HttpClient({ url: 'http://test.local', auth: new TokenAuth({ token: 'old' }) })
+    // Use a plain object (supportsTokenRefresh defaults to true) to verify rotation works for dynamic-token strategies
+    const http = new HttpClient({ url: 'http://test.local', auth: { authenticate: async () => 'old' } })
     http.token = 'old'
     await http.request('GET', '/api/version')
     expect(http.token).toBe('refreshed')
+  })
+
+  it('does NOT update token from x-token header when using TokenAuth (static token)', async () => {
+    fetchMock.mockResolvedValue(mockResponse({ ok: 1 }, {
+      headers: { 'content-type': 'application/json', 'x-token': 'server-issued' },
+    }))
+    const http = new HttpClient({ url: 'http://test.local', auth: new TokenAuth({ token: 'my-static-token' }) })
+    http.token = 'my-static-token'
+    await http.request('GET', '/api/version')
+    expect(http.token).toBe('my-static-token')
   })
 
   it('retries once on 401 after re-authenticating', async () => {
@@ -136,11 +147,23 @@ describe('HttpClient', () => {
     fetchMock.mockResolvedValue(mockResponse({ ok: 1 }, {
       headers: { 'content-type': 'application/json', 'x-token': 'new-tok' },
     }))
-    const http = new HttpClient({ url: 'http://test.local', auth: new TokenAuth({ token: 'old' }) })
+    // Use a plain object (supportsTokenRefresh defaults to true) to verify the event fires for dynamic-token strategies
+    const http = new HttpClient({ url: 'http://test.local', auth: { authenticate: async () => 'old' } })
     const handler = vi.fn()
     http.on('http:tokenRefresh', handler)
     await http.request('GET', '/api/version')
     expect(handler).toHaveBeenCalledWith({ token: 'new-tok' })
+  })
+
+  it('does NOT emit http:tokenRefresh when using TokenAuth (static token)', async () => {
+    fetchMock.mockResolvedValue(mockResponse({ ok: 1 }, {
+      headers: { 'content-type': 'application/json', 'x-token': 'server-issued' },
+    }))
+    const http = new HttpClient({ url: 'http://test.local', auth: new TokenAuth({ token: 'my-static-token' }) })
+    const handler = vi.fn()
+    http.on('http:tokenRefresh', handler)
+    await http.request('GET', '/api/version')
+    expect(handler).not.toHaveBeenCalled()
   })
 
   it('emits http:success on 200 response', async () => {

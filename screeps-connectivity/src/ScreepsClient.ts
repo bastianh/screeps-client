@@ -89,27 +89,30 @@ export class ScreepsClient {
       navigation: new NavigationStore(50, this.logger.child('navigation')),
     }
 
-    this.tokenRefreshIntervalMs = opts.tokenRefresh === false
+    const supportsRefresh = opts.auth.supportsTokenRefresh ?? true
+    this.tokenRefreshIntervalMs = opts.tokenRefresh === false || !supportsRefresh
       ? null
       : (opts.tokenRefresh?.intervalMs ?? 30_000)
 
-    this.wireTokenSync()
+    this.wireTokenSync(supportsRefresh)
   }
 
-  private wireTokenSync(): void {
-    // HTTP rotates token via X-Token → propagate to WS so a later reconnect uses the fresh one.
-    this.tokenSyncSubs.push(this.http.on('http:tokenRefresh', ({ token }) => {
-      this.socket.setToken(token)
-    }))
-    // WS issues a new token on auth → keep HTTP side in sync.
-    this.tokenSyncSubs.push(this.socket.on('socket:tokenRefresh', (data) => {
-      const detail = data as { token: string }
-      this.http.setToken(detail.token)
-    }))
-    // Any successful HTTP response counts as activity — defers the next idle refresh.
-    this.tokenSyncSubs.push(this.http.on('http:success', () => {
-      this.lastHttpActivity = Date.now()
-    }))
+  private wireTokenSync(supportsRefresh: boolean): void {
+    if (supportsRefresh) {
+      // HTTP rotates token via X-Token → propagate to WS so a later reconnect uses the fresh one.
+      this.tokenSyncSubs.push(this.http.on('http:tokenRefresh', ({ token }) => {
+        this.socket.setToken(token)
+      }))
+      // WS issues a new token on auth → keep HTTP side in sync.
+      this.tokenSyncSubs.push(this.socket.on('socket:tokenRefresh', (data) => {
+        const detail = data as { token: string }
+        this.http.setToken(detail.token)
+      }))
+      // Any successful HTTP response counts as activity — defers the next idle refresh.
+      this.tokenSyncSubs.push(this.http.on('http:success', () => {
+        this.lastHttpActivity = Date.now()
+      }))
+    }
   }
 
   get isConnected(): boolean {

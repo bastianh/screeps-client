@@ -117,7 +117,7 @@ export class HttpClient extends EventTarget {
     const res = await getFetch()(url.toString(), init)
 
     const newToken = res.headers.get('x-token')
-    if (newToken) {
+    if (newToken && (this.authStrategy.supportsTokenRefresh ?? true)) {
       this.token = newToken
       this.emit('http:tokenRefresh', { token: newToken })
     }
