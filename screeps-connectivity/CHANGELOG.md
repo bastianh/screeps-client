@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.10.0
+
+### Minor Changes
+
+- 1539f52: Add NotifyPrefs type and notifyPrefs field on UserInfo for email notification preference support.
+- de39cf0: Expose public-profile data through the API: `power` on the `user.find` response, an optional `id` argument on `user.stats`, and a typed `leaderboard.find` response.
+- 4b8f9d9: Add `setFetch()` to `screeps-connectivity` so consumers can supply a custom fetch implementation (e.g. Tauri's HTTP plugin) without patching `window.fetch`. `screeps-client` uses this to enable CORS-free HTTP in the standalone Tauri desktop app without affecting the browser runtime.
+
+### Patch Changes
+
+- 882bea5: Fix `TokenAuth` always using its static token — server-issued `X-Token` headers, WebSocket token rotation, and the idle keep-alive timer are now skipped when the auth strategy sets `supportsTokenRefresh: false`.
+
 ## 0.9.0
 
 ### Minor Changes

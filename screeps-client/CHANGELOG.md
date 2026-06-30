@@ -1,5 +1,18 @@
 # screeps-client
 
+## 0.13.0
+
+### Minor Changes
+
+- 1539f52: Add Notifications section to Settings panel with email notification preferences: master enable/disable toggle, send interval, send-when-online, error notification interval, and new-message notification controls.
+- e5b16a1: Refactor top-level navigation to use an overlay system: overview, profile, market, and settings now slide over the game canvas (preserving map position/zoom) instead of replacing the full page. Adds a shared `OverlayPage` template component. The map button moves into the room view as a floating corner button. Badge picker is accessible directly from the user menu dropdown.
+- de39cf0: Make player usernames clickable everywhere they're shown (room selection panel, map room-info box, room-info panel) and rebuild the public profile into a full account dashboard: GCL/GPL rings, current-month leaderboard ranks, last-7-days stat tiles, and owned-room minimaps.
+- abe0e3d: Spawn shows owner-badge background, energy-scaled core, and layers spawning creeps behind it.
+
+### Patch Changes
+
+- 4b8f9d9: Add `setFetch()` to `screeps-connectivity` so consumers can supply a custom fetch implementation (e.g. Tauri's HTTP plugin) without patching `window.fetch`. `screeps-client` uses this to enable CORS-free HTTP in the standalone Tauri desktop app without affecting the browser runtime.
+
 ## 0.12.2
 
 ### Patch Changes
