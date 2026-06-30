@@ -172,7 +172,7 @@ describe('ScreepsClient — token sync', () => {
   })
 })
 
-describe('ScreepsClient — idle token refresh', () => {
+describe('ScreepsClient — world status polling', () => {
   beforeEach(() => { vi.useFakeTimers() })
   afterEach(() => { vi.useRealTimers() })
 
@@ -193,13 +193,12 @@ describe('ScreepsClient — idle token refresh', () => {
     return client
   }
 
-  it('issues a world-status call after intervalMs of HTTP idleness', async () => {
+  it('polls world-status on a fixed interval', async () => {
     const client = await buildConnected({ tokenRefresh: { intervalMs: 1_000 } })
     const fetchMock = fetch as unknown as ReturnType<typeof vi.fn>
     fetchMock.mockClear()
 
-    // Idle for 1.5s — exceeds 1s interval, refresh should fire on next tick (every 500ms).
-    await vi.advanceTimersByTimeAsync(1_500)
+    await vi.advanceTimersByTimeAsync(1_000)
 
     const paths = fetchMock.mock.calls.map(([url]) => new URL(url as string).pathname)
     expect(paths).toContain('/api/user/world-status')
@@ -207,19 +206,19 @@ describe('ScreepsClient — idle token refresh', () => {
     client.disconnect()
   })
 
-  it('does NOT issue an auth/me call while HTTP traffic resets the idle clock', async () => {
+  it('polls world-status even while other HTTP traffic is ongoing', async () => {
     const client = await buildConnected({ tokenRefresh: { intervalMs: 1_000 } })
     const fetchMock = fetch as unknown as ReturnType<typeof vi.fn>
     fetchMock.mockClear()
 
-    // Make a request every 400ms, well below the 1s threshold.
-    for (let i = 0; i < 5; i++) {
+    // Continuous HTTP traffic every 200ms should not suppress the fixed poll.
+    for (let i = 0; i < 6; i++) {
       await client.http.request('GET', '/api/version')
-      await vi.advanceTimersByTimeAsync(400)
+      await vi.advanceTimersByTimeAsync(200)
     }
 
     const paths = fetchMock.mock.calls.map(([url]) => new URL(url as string).pathname)
-    expect(paths).not.toContain('/api/auth/me')
+    expect(paths).toContain('/api/user/world-status')
 
     client.disconnect()
   })
@@ -232,7 +231,7 @@ describe('ScreepsClient — idle token refresh', () => {
     await vi.advanceTimersByTimeAsync(60_000)
 
     const paths = fetchMock.mock.calls.map(([url]) => new URL(url as string).pathname)
-    expect(paths).not.toContain('/api/auth/me')
+    expect(paths).not.toContain('/api/user/world-status')
 
     client.disconnect()
   })
@@ -273,6 +272,6 @@ describe('ScreepsClient — idle token refresh', () => {
     await vi.advanceTimersByTimeAsync(5_000)
 
     const paths = fetchMock.mock.calls.map(([url]) => new URL(url as string).pathname)
-    expect(paths).not.toContain('/api/auth/me')
+    expect(paths).not.toContain('/api/user/world-status')
   })
 })

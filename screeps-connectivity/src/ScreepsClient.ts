@@ -18,7 +18,7 @@ import type { ApiRoomDecorationsResponse } from './types/api.js'
 type WsConstructor = typeof globalThis.WebSocket
 
 export interface TokenRefreshOptions {
-  /** Milliseconds of idleness before issuing a keep-alive request. Default 30_000. */
+  /** Interval in milliseconds between world-status polls. Default 30_000. */
   intervalMs?: number
 }
 
@@ -35,9 +35,8 @@ export interface ScreepsClientOptions {
     maxCacheEntries?: number
   }
   /**
-   * Idle keep-alive that refreshes the auth token via a lightweight `auth/me` call when no
-   * authenticated traffic has happened for `intervalMs`. Default `{ intervalMs: 30_000 }`.
-   * Pass `false` to disable.
+   * Polls `/api/user/world-status` on a fixed interval to keep world status current.
+   * Default `{ intervalMs: 30_000 }`. Pass `false` to disable.
    */
   tokenRefresh?: TokenRefreshOptions | false
   /** Override the /api/game/room-decorations response with static data (useful for dev/testing when the server doesn't support the endpoint). */
@@ -60,7 +59,6 @@ export class ScreepsClient {
   private readonly tokenRefreshIntervalMs: number | null
   private readonly tokenSyncSubs: Subscription[] = []
   private tokenRefreshTimer: ReturnType<typeof setInterval> | null = null
-  private lastHttpActivity = 0
   private refreshInFlight = false
 
   constructor(opts: ScreepsClientOptions) {
@@ -108,10 +106,6 @@ export class ScreepsClient {
         this.http.setToken(detail.token)
       }))
     }
-    // Any successful HTTP response counts as activity — defers the next idle world-status refresh.
-    this.tokenSyncSubs.push(this.http.on('http:success', () => {
-      this.lastHttpActivity = Date.now()
-    }))
   }
 
   get isConnected(): boolean {
@@ -139,15 +133,9 @@ export class ScreepsClient {
   private startTokenRefresh(): void {
     if (this.tokenRefreshIntervalMs === null) return
     if (this.tokenRefreshTimer !== null) return
-    const intervalMs = this.tokenRefreshIntervalMs
-    this.lastHttpActivity = Date.now()
-    // Tick at half the interval so we react within intervalMs of idleness.
-    const tickMs = Math.max(1_000, Math.floor(intervalMs / 2))
     this.tokenRefreshTimer = setInterval(() => {
-      const idleFor = Date.now() - this.lastHttpActivity
-      if (idleFor < intervalMs) return
       void this.refreshTokenNow()
-    }, tickMs)
+    }, this.tokenRefreshIntervalMs)
   }
 
   private stopTokenRefresh(): void {
@@ -161,10 +149,10 @@ export class ScreepsClient {
     if (this.refreshInFlight) return
     this.refreshInFlight = true
     try {
-      this.logger.log('[screeps:client] token refresh (idle)')
+      this.logger.log('[screeps:client] world status refresh')
       await this.stores.user.refreshWorldStatus()
     } catch (err) {
-      this.logger.log('[screeps:client] token refresh failed', err)
+      this.logger.log('[screeps:client] world status refresh failed', err)
     } finally {
       this.refreshInFlight = false
     }
