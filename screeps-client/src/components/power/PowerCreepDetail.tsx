@@ -7,15 +7,16 @@ import {
   POWER_CLASS_INFO, POWER_CREEP_MAX_LEVEL, powersForClass,
   type PowerCreepClass, type PowerDef,
 } from '~/data/powerCreeps.js'
-import type { PowerContext } from './PowerCreeps.js'
+import type { PowerContext, PowerNav } from './PowerCreeps.js'
 import { PowerClassIcon } from './PowerClassIcon.js'
 import { PowerTile } from './PowerTile.js'
 import { ConfirmDialog } from './ConfirmDialog.js'
 import { PANEL, BORDER, TEXT, MUTED, ACCENT, GREEN, GPL_TEXT, POWER_RED } from './theme.js'
 
-export function PowerCreepDetail(props: { ctx: PowerContext; id: string | null }) {
+export function PowerCreepDetail(props: { ctx: PowerContext; id: string | null; nav?: PowerNav }) {
   const creep = () => props.ctx.creeps().find((c) => c._id === props.id) ?? null
   const className = () => (creep()?.className ?? 'operator') as PowerCreepClass
+  const backToList = () => (props.nav?.goToList ?? goToPower)()
   const powers = () => powersForClass(className())
 
   const [staged, setStaged] = createSignal<Record<number, number>>({})
@@ -101,7 +102,7 @@ export function PowerCreepDetail(props: { ctx: PowerContext; id: string | null }
       await c.http.game.powerCreeps.delete(cr._id)
       await props.ctx.reload()
       addToast(`Power creep "${cr.name}" deleted`, 'success', 3000)
-      goToPower()
+      backToList()
     } catch (err) {
       addToast(`Delete failed: ${err instanceof Error ? err.message : String(err)}`, 'error', 5000)
     }
@@ -122,13 +123,13 @@ export function PowerCreepDetail(props: { ctx: PowerContext; id: string | null }
   return (
     <Show when={creep()} fallback={
       <div style={{ background: PANEL, border: `1px solid ${BORDER}`, 'border-radius': '8px', padding: '32px', 'text-align': 'center', color: MUTED }}>
-        Power creep not found. <a onClick={goToPower} style={{ color: ACCENT, cursor: 'pointer' }}>Back to list</a>
+        Power creep not found. <a onClick={backToList} style={{ color: ACCENT, cursor: 'pointer' }}>Back to list</a>
       </div>
     }>
       {(cr) => (
         <div>
           <button
-            onClick={goToPower}
+            onClick={backToList}
             style={{ display: 'inline-flex', 'align-items': 'center', gap: '4px', padding: '6px 10px', 'border-radius': '4px', border: `1px solid ${BORDER}`, background: 'transparent', color: MUTED, 'font-size': '13px', cursor: 'pointer', 'margin-bottom': '16px' }}
           >
             <ChevronLeft size={16} /> Back

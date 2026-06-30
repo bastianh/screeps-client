@@ -20,6 +20,14 @@ export interface PowerContext {
   reload: () => Promise<void>
 }
 
+// Optional navigation overrides — when provided, sub-components use these
+// instead of the global routeStore functions, enabling embedding in Overview.
+export interface PowerNav {
+  goToList: () => void
+  goToNew: () => void
+  goToCreep: (id: string) => void
+}
+
 export function PowerCreeps() {
   const [creeps, setCreeps] = createSignal<ApiPowerCreep[]>([])
   const [loading, setLoading] = createSignal(true)

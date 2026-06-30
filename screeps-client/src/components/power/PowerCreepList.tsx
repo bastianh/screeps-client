@@ -4,17 +4,17 @@ import { Plus } from 'lucide-solid'
 import type { ApiPowerCreep } from 'screeps-connectivity'
 import { goToPowerNew, goToPowerCreep } from '~/stores/routeStore.js'
 import { POWER_CLASS_INFO, POWER_DEFS_BY_ID, POWER_CREEP_CLASSES, type PowerCreepClass } from '~/data/powerCreeps.js'
-import type { PowerContext } from './PowerCreeps.js'
+import type { PowerContext, PowerNav } from './PowerCreeps.js'
 import { PowerClassIcon } from './PowerClassIcon.js'
 import { PANEL, PANEL_RAISED, BORDER, TEXT, MUTED, GREEN, POWER_RED, GPL_TEXT } from './theme.js'
 
 const POWER_DOCS = 'https://docs.screeps.com/power.html'
 
-function CreateButton(props: { free: number }) {
+function CreateButton(props: { free: number; onNew: () => void }) {
   const enabled = () => props.free >= 1
   return (
     <button
-      onClick={() => enabled() && goToPowerNew()}
+      onClick={() => enabled() && props.onNew()}
       disabled={!enabled()}
       title={enabled() ? 'Create a new power creep' : 'You need 1 free Power Level to create a power creep'}
       style={{
@@ -28,7 +28,7 @@ function CreateButton(props: { free: number }) {
   )
 }
 
-function CreepCard(props: { creep: ApiPowerCreep }) {
+function CreepCard(props: { creep: ApiPowerCreep; onSelect: (id: string) => void }) {
   const className = () => props.creep.className as PowerCreepClass
   const info = () => POWER_CLASS_INFO[className()] ?? POWER_CLASS_INFO.operator
   const assigned = () => {
@@ -41,7 +41,7 @@ function CreepCard(props: { creep: ApiPowerCreep }) {
 
   return (
     <button
-      onClick={() => goToPowerCreep(props.creep._id)}
+      onClick={() => props.onSelect(props.creep._id)}
       style={{
         'text-align': 'left', display: 'flex', 'flex-direction': 'column', gap: '12px', width: '220px',
         background: PANEL, border: `1px solid ${BORDER}`, 'border-radius': '8px', padding: '16px', cursor: 'pointer', color: TEXT,
@@ -74,8 +74,10 @@ function CreepCard(props: { creep: ApiPowerCreep }) {
   )
 }
 
-export function PowerCreepList(props: { ctx: PowerContext; loading: boolean }) {
+export function PowerCreepList(props: { ctx: PowerContext; loading: boolean; nav?: PowerNav }) {
   const creeps = () => props.ctx.creeps()
+  const onNew = () => (props.nav?.goToNew ?? goToPowerNew)()
+  const onSelect = (id: string) => (props.nav?.goToCreep ?? goToPowerCreep)(id)
 
   return (
     <Show when={!props.loading} fallback={<div style={{ color: MUTED, padding: '32px', 'text-align': 'center' }}>Loading…</div>}>
@@ -94,19 +96,19 @@ export function PowerCreepList(props: { ctx: PowerContext; loading: boolean }) {
               You need 1 free Power Level in your account to create a new Power Creep.
             </p>
             <div style={{ display: 'flex', 'align-items': 'center', 'justify-content': 'center', gap: '16px' }}>
-              <CreateButton free={props.ctx.free()} />
+              <CreateButton free={props.ctx.free()} onNew={onNew} />
               <a href={POWER_DOCS} target="_blank" rel="noopener" style={{ color: '#58a6ff', 'font-size': '13px', 'text-decoration': 'none' }}>Learn more</a>
             </div>
           </div>
         }
       >
         <div style={{ display: 'flex', 'align-items': 'center', 'margin-bottom': '16px' }}>
-          <CreateButton free={props.ctx.free()} />
+          <CreateButton free={props.ctx.free()} onNew={onNew} />
           <div style={{ flex: 1 }} />
           <a href={POWER_DOCS} target="_blank" rel="noopener" style={{ color: '#58a6ff', 'font-size': '13px', 'text-decoration': 'none' }}>Learn more</a>
         </div>
         <div style={{ display: 'flex', 'flex-wrap': 'wrap', gap: '16px' }}>
-          <For each={creeps()}>{(creep) => <CreepCard creep={creep} />}</For>
+          <For each={creeps()}>{(creep) => <CreepCard creep={creep} onSelect={onSelect} />}</For>
         </div>
       </Show>
     </Show>

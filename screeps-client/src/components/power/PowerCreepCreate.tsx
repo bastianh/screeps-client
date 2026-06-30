@@ -4,12 +4,12 @@ import { client } from '~/stores/clientStore.js'
 import { goToPower, goToPowerCreep } from '~/stores/routeStore.js'
 import { addToast } from '~/stores/toastStore.js'
 import { POWER_CLASS_INFO, POWER_CREEP_CLASSES, powersForClass, type PowerCreepClass } from '~/data/powerCreeps.js'
-import type { PowerContext } from './PowerCreeps.js'
+import type { PowerContext, PowerNav } from './PowerCreeps.js'
 import { PowerClassIcon } from './PowerClassIcon.js'
 import { PowerTile } from './PowerTile.js'
 import { PANEL, PANEL_RAISED, BORDER, TEXT, MUTED, ACCENT, GREEN, GPL_TEXT } from './theme.js'
 
-export function PowerCreepCreate(props: { ctx: PowerContext }) {
+export function PowerCreepCreate(props: { ctx: PowerContext; nav?: PowerNav }) {
   const [name, setName] = createSignal('')
   const [selected, setSelected] = createSignal<PowerCreepClass>('operator')
   const [saving, setSaving] = createSignal(false)
@@ -17,6 +17,8 @@ export function PowerCreepCreate(props: { ctx: PowerContext }) {
   const info = () => POWER_CLASS_INFO[selected()]
   const canCreate = () =>
     !saving() && props.ctx.free() >= 1 && name().trim().length > 0 && !info().underDevelopment
+
+  const backToList = () => (props.nav?.goToList ?? goToPower)()
 
   const handleCreate = async () => {
     const c = client()
@@ -29,8 +31,8 @@ export function PowerCreepCreate(props: { ctx: PowerContext }) {
       // Jump straight into the new creep's editor to assign powers.
       const created = props.ctx.creeps().find((cr) => cr.name === creepName)
       addToast(`Power creep "${creepName}" created`, 'success', 3000)
-      if (created) goToPowerCreep(created._id)
-      else goToPower()
+      if (created) (props.nav?.goToCreep ?? goToPowerCreep)(created._id)
+      else backToList()
     } catch (err) {
       addToast(`Failed to create power creep: ${err instanceof Error ? err.message : String(err)}`, 'error', 5000)
     } finally {
@@ -42,7 +44,7 @@ export function PowerCreepCreate(props: { ctx: PowerContext }) {
     <div>
       <div style={{ display: 'flex', 'align-items': 'center', 'justify-content': 'space-between', 'margin-bottom': '20px' }}>
         <button
-          onClick={goToPower}
+          onClick={backToList}
           style={{ display: 'inline-flex', 'align-items': 'center', gap: '4px', padding: '6px 10px', 'border-radius': '4px', border: `1px solid ${BORDER}`, background: 'transparent', color: MUTED, 'font-size': '13px', cursor: 'pointer' }}
         >
           <ChevronLeft size={16} /> Back
