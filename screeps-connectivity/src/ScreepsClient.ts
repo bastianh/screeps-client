@@ -89,12 +89,11 @@ export class ScreepsClient {
       navigation: new NavigationStore(50, this.logger.child('navigation')),
     }
 
-    const supportsRefresh = opts.auth.supportsTokenRefresh ?? true
-    this.tokenRefreshIntervalMs = opts.tokenRefresh === false || !supportsRefresh
+    this.tokenRefreshIntervalMs = opts.tokenRefresh === false
       ? null
       : (opts.tokenRefresh?.intervalMs ?? 30_000)
 
-    this.wireTokenSync(supportsRefresh)
+    this.wireTokenSync(opts.auth.supportsTokenRefresh ?? true)
   }
 
   private wireTokenSync(supportsRefresh: boolean): void {
@@ -108,11 +107,11 @@ export class ScreepsClient {
         const detail = data as { token: string }
         this.http.setToken(detail.token)
       }))
-      // Any successful HTTP response counts as activity — defers the next idle refresh.
-      this.tokenSyncSubs.push(this.http.on('http:success', () => {
-        this.lastHttpActivity = Date.now()
-      }))
     }
+    // Any successful HTTP response counts as activity — defers the next idle world-status refresh.
+    this.tokenSyncSubs.push(this.http.on('http:success', () => {
+      this.lastHttpActivity = Date.now()
+    }))
   }
 
   get isConnected(): boolean {

@@ -237,13 +237,13 @@ describe('ScreepsClient — idle token refresh', () => {
     client.disconnect()
   })
 
-  it('does not start the refresh timer when using TokenAuth (static token)', async () => {
+  it('still polls world-status when using TokenAuth (token is never replaced)', async () => {
     const client = new ScreepsClient({
       url: 'http://test.local',
       auth: new TokenAuth({ token: 'tok' }),
       storage: null,
       WebSocket: MockWS as unknown as typeof WebSocket,
-      tokenRefresh: { intervalMs: 100 },
+      tokenRefresh: { intervalMs: 1_000 },
     })
     const connectPromise = client.connect()
     await vi.advanceTimersByTimeAsync(0)
@@ -254,10 +254,12 @@ describe('ScreepsClient — idle token refresh', () => {
 
     const fetchMock = fetch as unknown as ReturnType<typeof vi.fn>
     fetchMock.mockClear()
-    await vi.advanceTimersByTimeAsync(5_000)
+    await vi.advanceTimersByTimeAsync(1_500)
 
     const paths = fetchMock.mock.calls.map(([url]) => new URL(url as string).pathname)
-    expect(paths).not.toContain('/api/user/world-status')
+    expect(paths).toContain('/api/user/world-status')
+    // Token must not have changed despite the response
+    expect(client.http.token).toBe('tok')
     client.disconnect()
   })
 
