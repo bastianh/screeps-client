@@ -2,7 +2,7 @@ import { createSignal, onMount, Switch, Match, Show } from 'solid-js'
 import { ChevronLeft } from 'lucide-solid'
 import type { ApiPowerCreep } from 'screeps-connectivity'
 import { client, userInfo } from '~/stores/clientStore.js'
-import { goToOverview, powerView, powerCreepId } from '~/stores/routeStore.js'
+import { goToUser, powerView, powerCreepId } from '~/stores/routeStore.js'
 import { gplLevel } from '~/utils/levels.js'
 import { freePowerLevels } from '~/data/powerCreeps.js'
 import { PowerCreepList } from './PowerCreepList.js'
@@ -63,7 +63,7 @@ export function PowerCreeps() {
         {/* Section header */}
         <div style={{ display: 'flex', 'align-items': 'center', gap: '12px', padding: '0 0 14px', 'border-bottom': `1px solid ${BORDER}`, 'margin-bottom': '24px' }}>
           <button
-            onClick={goToOverview}
+            onClick={goToUser}
             title="Back to Overview"
             style={{ display: 'flex', 'align-items': 'center', gap: '4px', padding: '7px 12px', 'border-radius': '4px', border: `1px solid ${BORDER}`, background: '#21262d', color: TEXT, cursor: 'pointer' }}
           >

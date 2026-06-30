@@ -1,7 +1,7 @@
 import { createSignal, Show, For } from 'solid-js'
 import { ChevronLeft } from 'lucide-solid'
 import { client } from '~/stores/clientStore.js'
-import { goToPower, goToPowerCreep } from '~/stores/routeStore.js'
+import { goToUserPower, goToUserPowerCreep } from '~/stores/routeStore.js'
 import { addToast } from '~/stores/toastStore.js'
 import { POWER_CLASS_INFO, POWER_CREEP_CLASSES, powersForClass, type PowerCreepClass } from '~/data/powerCreeps.js'
 import type { PowerContext, PowerNav } from './PowerCreeps.js'
@@ -18,7 +18,7 @@ export function PowerCreepCreate(props: { ctx: PowerContext; nav?: PowerNav }) {
   const canCreate = () =>
     !saving() && props.ctx.free() >= 1 && name().trim().length > 0 && !info().underDevelopment
 
-  const backToList = () => (props.nav?.goToList ?? goToPower)()
+  const backToList = () => (props.nav?.goToList ?? goToUserPower)()
 
   const handleCreate = async () => {
     const c = client()
@@ -31,7 +31,7 @@ export function PowerCreepCreate(props: { ctx: PowerContext; nav?: PowerNav }) {
       // Jump straight into the new creep's editor to assign powers.
       const created = props.ctx.creeps().find((cr) => cr.name === creepName)
       addToast(`Power creep "${creepName}" created`, 'success', 3000)
-      if (created) (props.nav?.goToCreep ?? goToPowerCreep)(created._id)
+      if (created) (props.nav?.goToCreep ?? goToUserPowerCreep)(created._id)
       else backToList()
     } catch (err) {
       addToast(`Failed to create power creep: ${err instanceof Error ? err.message : String(err)}`, 'error', 5000)

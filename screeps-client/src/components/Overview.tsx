@@ -2,7 +2,7 @@ import { createEffect, createSignal, onCleanup, onMount, For, Show, Switch, Matc
 import { X, Zap } from 'lucide-solid'
 import type { ApiUserOverviewTotals, ApiPowerCreep } from 'screeps-connectivity'
 import { client, userInfo } from '~/stores/clientStore.js'
-import { goToGame, goToRoom } from '~/stores/routeStore.js'
+import { goToGame, goToRoom, goToUser, goToUserPower, goToUserPowerNew, goToUserPowerCreep, userView, powerView, powerCreepId } from '~/stores/routeStore.js'
 import { RankRing, GCL_RING, GCL_TEXT, GPL_RING, GPL_TEXT } from '~/components/RankRing.js'
 import { PlayerBadge } from '~/components/PlayerBadge.js'
 import { RoomPreviewTile } from '~/components/RoomPreviewTile.js'
@@ -88,10 +88,8 @@ export function Overview() {
     padding: '16px',
   }
 
-  // Power creeps inline toggle
-  const [showPower, setShowPower] = createSignal(false)
-  const [powerSubView, setPowerSubView] = createSignal<'list' | 'new' | 'detail'>('list')
-  const [activePowerCreepId, setActivePowerCreepId] = createSignal<string | null>(null)
+  // Power creeps inline toggle — sub-view state is owned by the route store so
+  // /user/power deep links and browser back/forward work correctly.
   const [creeps, setCreeps] = createSignal<ApiPowerCreep[]>([])
   const [powerLoading, setPowerLoading] = createSignal(false)
 
@@ -102,17 +100,15 @@ export function Overview() {
     setCreeps(res.list ?? [])
   }
 
-  const togglePower = () => {
-    const next = !showPower()
-    setShowPower(next)
-    if (next) {
-      setPowerSubView('list')
-      setActivePowerCreepId(null)
-      setPowerLoading(true)
-      void reloadCreeps().finally(() => setPowerLoading(false))
-      void client()?.stores.user.refreshMe().catch(() => {})
-    }
-  }
+  // Fetch creep data whenever the power view becomes active.
+  createEffect(() => {
+    if (userView() !== 'power') return
+    setPowerLoading(true)
+    void reloadCreeps().finally(() => setPowerLoading(false))
+    void client()?.stores.user.refreshMe().catch(() => {})
+  })
+
+  const togglePower = () => userView() === 'power' ? goToUser() : goToUserPower()
 
   const powerCtx: PowerContext = {
     creeps,
@@ -122,9 +118,9 @@ export function Overview() {
   }
 
   const powerNav: PowerNav = {
-    goToList: () => { setPowerSubView('list'); setActivePowerCreepId(null) },
-    goToNew: () => setPowerSubView('new'),
-    goToCreep: (id) => { setPowerSubView('detail'); setActivePowerCreepId(id) },
+    goToList: goToUserPower,
+    goToNew: goToUserPowerNew,
+    goToCreep: goToUserPowerCreep,
   }
 
   return (
@@ -133,18 +129,18 @@ export function Overview() {
         <div style={{ display: 'flex', 'align-items': 'center', gap: '10px', padding: '0 0 14px', 'border-bottom': `1px solid ${BORDER}`, 'margin-bottom': '24px' }}>
           <PlayerBadge badge={userInfo()?.badge} size={28} />
           <h1 style={{ margin: 0, 'font-size': '22px', 'font-weight': 600, color: TEXT }}>
-            {showPower() ? 'Power Creeps' : 'Overview'}
+            {userView() === 'power' ? 'Power Creeps' : 'Overview'}
           </h1>
           <span style={{ color: MUTED, 'font-size': '14px' }}>{userInfo()?.username}</span>
           <div style={{ flex: 1 }} />
           <button
             onClick={togglePower}
-            title={showPower() ? 'Back to Overview' : 'Manage Power Creeps'}
+            title={userView() === 'power' ? 'Back to Overview' : 'Manage Power Creeps'}
             style={{
               display: 'flex', 'align-items': 'center', padding: '7px', 'border-radius': '4px', cursor: 'pointer',
-              border: showPower() ? '1px solid #C54444' : `1px solid ${BORDER}`,
-              background: showPower() ? '#2d1a1a' : '#21262d',
-              color: showPower() ? '#ffb7ba' : TEXT,
+              border: userView() === 'power' ? '1px solid #C54444' : `1px solid ${BORDER}`,
+              background: userView() === 'power' ? '#2d1a1a' : '#21262d',
+              color: userView() === 'power' ? '#ffb7ba' : TEXT,
             }}
           >
             <Zap size={16} />
@@ -159,7 +155,7 @@ export function Overview() {
         </div>
 
         <Show
-          when={showPower()}
+          when={userView() === 'power'}
           fallback={
             <>
               {/* GCL / GPL cards */}
@@ -209,14 +205,14 @@ export function Overview() {
           }
         >
           <Switch>
-            <Match when={powerSubView() === 'list'}>
+            <Match when={powerView() === 'list'}>
               <PowerCreepList ctx={powerCtx} loading={powerLoading()} nav={powerNav} />
             </Match>
-            <Match when={powerSubView() === 'new'}>
+            <Match when={powerView() === 'new'}>
               <PowerCreepCreate ctx={powerCtx} nav={powerNav} />
             </Match>
-            <Match when={powerSubView() === 'detail'}>
-              <PowerCreepDetail ctx={powerCtx} id={activePowerCreepId()} nav={powerNav} />
+            <Match when={powerView() === 'detail'}>
+              <PowerCreepDetail ctx={powerCtx} id={powerCreepId()} nav={powerNav} />
             </Match>
           </Switch>
         </Show>

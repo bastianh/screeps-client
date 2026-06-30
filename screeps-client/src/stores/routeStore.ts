@@ -2,9 +2,12 @@ import { createSignal } from 'solid-js'
 import { basePath } from '~/utils/embedded.js'
 
 // Top-level screen the connected app shows. The in-game Dashboard owns its own
-// /room and /map sub-routing; this store decides Overview (self) vs. Profile
-// (public, any user) vs. Market vs. Power Creeps vs. the game view.
-export type Route = 'overview' | 'profile' | 'game' | 'market' | 'power'
+// /room and /map sub-routing; this store decides the User hub (/user) vs.
+// Profile (public, any user) vs. Market vs. the game view.
+export type Route = 'user' | 'profile' | 'game' | 'market'
+
+// Sub-view within the User hub: the overview stats page or the power creeps manager.
+export type UserView = 'overview' | 'power'
 
 // Sub-view within the Market section: the resource index (all-orders), a single
 // resource's order book (resource), your own orders, or the credit history.
@@ -13,8 +16,20 @@ export type MarketView = 'all-orders' | 'resource' | 'my-orders' | 'history'
 // Sub-view within the Power Creeps section (list / create / per-creep detail).
 export type PowerView = 'list' | 'new' | 'detail'
 
-function overviewPath(): string {
-  return `${basePath()}/overview`
+function userPath(): string {
+  return `${basePath()}/user`
+}
+
+function userPrefix(): string {
+  return `${basePath()}/user/`
+}
+
+function userPowerPath(): string {
+  return `${basePath()}/user/power`
+}
+
+function userPowerPrefix(): string {
+  return `${basePath()}/user/power/`
 }
 
 function profilePrefix(): string {
@@ -29,25 +44,22 @@ function marketPrefix(): string {
   return `${basePath()}/market/`
 }
 
-function powerPath(): string {
-  return `${basePath()}/power`
-}
-
-function powerPrefix(): string {
-  return `${basePath()}/power/`
-}
-
 function currentPath(): string {
   return window.location.pathname + window.location.search + window.location.hash
 }
 
 function parseRoute(): Route {
   const p = window.location.pathname
-  if (p === overviewPath()) return 'overview'
+  if (p === userPath() || p.startsWith(userPrefix())) return 'user'
   if (p.startsWith(profilePrefix())) return 'profile'
   if (p === marketPath() || p.startsWith(marketPrefix())) return 'market'
-  if (p === powerPath() || p.startsWith(powerPrefix())) return 'power'
   return 'game'
+}
+
+function parseUserView(): UserView {
+  const p = window.location.pathname
+  if (p === userPowerPath() || p.startsWith(userPowerPrefix())) return 'power'
+  return 'overview'
 }
 
 function parseProfileUsername(): string | null {
@@ -77,22 +89,23 @@ function parseMarketShard(): string | null {
 
 function parsePower(): { view: PowerView; id: string | null } {
   const p = window.location.pathname
-  if (p === `${powerPath()}/new`) return { view: 'new', id: null }
-  if (p.startsWith(powerPrefix())) {
-    const id = decodeURIComponent(p.slice(powerPrefix().length))
+  if (p === `${userPowerPath()}/new`) return { view: 'new', id: null }
+  if (p.startsWith(userPowerPrefix())) {
+    const id = decodeURIComponent(p.slice(userPowerPrefix().length))
     if (id) return { view: 'detail', id }
   }
   return { view: 'list', id: null }
 }
 
 const [route, setRoute] = createSignal<Route>(parseRoute())
+const [userView, setUserView] = createSignal<UserView>(parseUserView())
 const [profileUsername, setProfileUsername] = createSignal<string | null>(parseProfileUsername())
 const [marketView, setMarketView] = createSignal<MarketView>(parseMarket().view)
 const [marketResourceType, setMarketResourceType] = createSignal<string | null>(parseMarket().resourceType)
 const [marketShard, setMarketShard] = createSignal<string | null>(parseMarketShard())
 const [powerView, setPowerView] = createSignal<PowerView>(parsePower().view)
 const [powerCreepId, setPowerCreepId] = createSignal<string | null>(parsePower().id)
-export { route, profileUsername, marketView, marketResourceType, marketShard, powerView, powerCreepId }
+export { route, userView, profileUsername, marketView, marketResourceType, marketShard, powerView, powerCreepId }
 
 // Remembered so returning to the world restores the exact game view (room +
 // shard + history tick) rather than dropping back to the default map.
@@ -102,10 +115,40 @@ function rememberGamePath(): void {
   if (parseRoute() === 'game') lastGamePath = currentPath()
 }
 
-export function goToOverview(): void {
+export function goToUser(): void {
   rememberGamePath()
-  history.pushState(null, '', overviewPath())
-  setRoute('overview')
+  history.pushState(null, '', userPath())
+  setUserView('overview')
+  setPowerView('list')
+  setPowerCreepId(null)
+  setRoute('user')
+}
+
+export function goToUserPower(): void {
+  rememberGamePath()
+  history.pushState(null, '', userPowerPath())
+  setUserView('power')
+  setPowerCreepId(null)
+  setPowerView('list')
+  setRoute('user')
+}
+
+export function goToUserPowerNew(): void {
+  rememberGamePath()
+  history.pushState(null, '', `${userPowerPath()}/new`)
+  setUserView('power')
+  setPowerCreepId(null)
+  setPowerView('new')
+  setRoute('user')
+}
+
+export function goToUserPowerCreep(id: string): void {
+  rememberGamePath()
+  history.pushState(null, '', `${userPowerPrefix()}${encodeURIComponent(id)}`)
+  setUserView('power')
+  setPowerCreepId(id)
+  setPowerView('detail')
+  setRoute('user')
 }
 
 export function goToProfile(username: string): void {
@@ -153,30 +196,6 @@ export function goToMarketHistory(): void {
   setRoute('market')
 }
 
-export function goToPower(): void {
-  rememberGamePath()
-  history.pushState(null, '', powerPath())
-  setPowerCreepId(null)
-  setPowerView('list')
-  setRoute('power')
-}
-
-export function goToPowerNew(): void {
-  rememberGamePath()
-  history.pushState(null, '', `${powerPath()}/new`)
-  setPowerCreepId(null)
-  setPowerView('new')
-  setRoute('power')
-}
-
-export function goToPowerCreep(id: string): void {
-  rememberGamePath()
-  history.pushState(null, '', `${powerPrefix()}${encodeURIComponent(id)}`)
-  setPowerCreepId(id)
-  setPowerView('detail')
-  setRoute('power')
-}
-
 export function goToGame(): void {
   history.pushState(null, '', lastGamePath)
   setRoute('game')
@@ -194,6 +213,7 @@ export function goToRoom(room: string, shard: string | null): void {
 if (typeof window !== 'undefined') {
   window.addEventListener('popstate', () => {
     setRoute(parseRoute())
+    setUserView(parseUserView())
     setProfileUsername(parseProfileUsername())
     const market = parseMarket()
     setMarketView(market.view)

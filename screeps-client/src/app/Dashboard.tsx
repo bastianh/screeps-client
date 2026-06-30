@@ -22,7 +22,7 @@ import { historyMode, historyTick, enterHistoryMode, exitHistoryMode, seekToTick
 import { widescreenMode } from '~/stores/settingsStore.js'
 import { toggleShowLog, toggleShowConsole, toggleShowMemory } from '~/stores/consoleStore.js'
 import { setRoomViewMode } from '~/stores/roomViewStore.js'
-import { route, goToOverview, goToGame, goToMarket } from '~/stores/routeStore.js'
+import { route, goToUser, goToGame, goToMarket } from '~/stores/routeStore.js'
 import { Overview } from '~/components/Overview.js'
 import { Profile } from '~/components/Profile.js'
 import { Market } from '~/components/market/Market.js'
@@ -448,10 +448,10 @@ export function Dashboard() {
         </Show>
         <div style={{ flex: 1 }} />
         <HeaderButton
-          title={route() === 'overview' || route() === 'profile' ? 'Close overview' : 'Overview'}
-          active={route() === 'overview' || route() === 'profile'}
-          disabled={isGuest() && route() !== 'overview' && route() !== 'profile'}
-          onClick={() => (route() === 'overview' || route() === 'profile') ? goToGame() : goToOverview()}
+          title={route() === 'user' || route() === 'profile' ? 'Close overview' : 'Overview'}
+          active={route() === 'user' || route() === 'profile'}
+          disabled={isGuest() && route() !== 'user' && route() !== 'profile'}
+          onClick={() => (route() === 'user' || route() === 'profile') ? goToGame() : goToUser()}
         >
           <LayoutDashboard size={16} />
         </HeaderButton>
@@ -527,9 +527,9 @@ export function Dashboard() {
             {sidebarArea(false)}
           </div>
         </Show>
-        <Show when={route() === 'overview' || route() === 'profile' || route() === 'market' || showSettings()}>
+        <Show when={route() === 'user' || route() === 'profile' || route() === 'market' || showSettings()}>
           <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, 'z-index': 10, overflow: 'hidden' }}>
-            <Show when={route() === 'overview'}><Overview /></Show>
+            <Show when={route() === 'user'}><Overview /></Show>
             <Show when={route() === 'profile'}><Profile /></Show>
             <Show when={route() === 'market'}><Market /></Show>
             <Show when={showSettings()}><SettingsPanel onClose={() => setShowSettings(false)} /></Show>

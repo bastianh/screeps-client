@@ -2,7 +2,7 @@ import { Show, For } from 'solid-js'
 import { Dynamic } from 'solid-js/web'
 import { Plus } from 'lucide-solid'
 import type { ApiPowerCreep } from 'screeps-connectivity'
-import { goToPowerNew, goToPowerCreep } from '~/stores/routeStore.js'
+import { goToUserPowerNew, goToUserPowerCreep } from '~/stores/routeStore.js'
 import { POWER_CLASS_INFO, POWER_DEFS_BY_ID, POWER_CREEP_CLASSES, type PowerCreepClass } from '~/data/powerCreeps.js'
 import type { PowerContext, PowerNav } from './PowerCreeps.js'
 import { PowerClassIcon } from './PowerClassIcon.js'
@@ -76,8 +76,8 @@ function CreepCard(props: { creep: ApiPowerCreep; onSelect: (id: string) => void
 
 export function PowerCreepList(props: { ctx: PowerContext; loading: boolean; nav?: PowerNav }) {
   const creeps = () => props.ctx.creeps()
-  const onNew = () => (props.nav?.goToNew ?? goToPowerNew)()
-  const onSelect = (id: string) => (props.nav?.goToCreep ?? goToPowerCreep)(id)
+  const onNew = () => (props.nav?.goToNew ?? goToUserPowerNew)()
+  const onSelect = (id: string) => (props.nav?.goToCreep ?? goToUserPowerCreep)(id)
 
   return (
     <Show when={!props.loading} fallback={<div style={{ color: MUTED, padding: '32px', 'text-align': 'center' }}>Loading…</div>}>

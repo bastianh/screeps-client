@@ -3,7 +3,7 @@ import { X } from 'lucide-solid'
 import { OverlayPage } from '~/components/OverlayPage.js'
 import type { ApiLeaderboardFindResponse } from 'screeps-connectivity'
 import { client } from '~/stores/clientStore.js'
-import { profileUsername, goToGame, goToRoom, goToOverview } from '~/stores/routeStore.js'
+import { profileUsername, goToGame, goToRoom, goToUser } from '~/stores/routeStore.js'
 import { RankRing, GCL_RING, GCL_TEXT, GPL_RING, GPL_TEXT } from '~/components/RankRing.js'
 import { PlayerBadge } from '~/components/PlayerBadge.js'
 import { RoomPreviewTile } from '~/components/RoomPreviewTile.js'
@@ -139,7 +139,7 @@ export function Profile() {
                   <h1 style={{ margin: 0, 'font-size': '24px', 'font-weight': 600, color: '#ffd479' }}>{u().username}</h1>
                   <div style={{ flex: 1 }} />
                   <button
-                    onClick={goToOverview}
+                    onClick={goToUser}
                     title="Your own overview"
                     style={{ background: 'none', border: 'none', color: '#58a6ff', cursor: 'pointer', 'font-size': '13px' }}
                   >

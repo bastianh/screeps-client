@@ -3,8 +3,7 @@ import { client, status, tryAutoConnect, connect } from '~/stores/clientStore.js
 import { LoginForm } from '~/components/LoginForm.js'
 import { ConnectingScreen } from '~/components/ConnectingScreen.js'
 import { Dashboard } from './Dashboard.js'
-import { PowerCreeps } from '~/components/power/PowerCreeps.js'
-import { route } from '~/stores/routeStore.js'
+
 import { isEmbedded, isXxscreepsMode, embeddedServerUrl } from '~/utils/embedded.js'
 import { createLogger } from '~/utils/log.js'
 import { SS, getSession } from '~/utils/storage.js'
@@ -62,9 +61,7 @@ export function App() {
   return (
     <div style={{ width: '100%', height: '100%' }}>
       {isConnected()
-        ? (route() === 'power'
-            ? <PowerCreeps />
-            : <Dashboard />)
+        ? <Dashboard />
         : booting()
           ? <ConnectingScreen />
           : <LoginForm />}

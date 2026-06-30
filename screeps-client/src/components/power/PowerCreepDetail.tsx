@@ -1,7 +1,7 @@
 import { createSignal, Show, For } from 'solid-js'
 import { ChevronLeft, Pencil, Trash2, Check, X } from 'lucide-solid'
 import { client } from '~/stores/clientStore.js'
-import { goToPower } from '~/stores/routeStore.js'
+import { goToUserPower } from '~/stores/routeStore.js'
 import { addToast } from '~/stores/toastStore.js'
 import {
   POWER_CLASS_INFO, POWER_CREEP_MAX_LEVEL, powersForClass,
@@ -16,7 +16,7 @@ import { PANEL, BORDER, TEXT, MUTED, ACCENT, GREEN, GPL_TEXT, POWER_RED } from '
 export function PowerCreepDetail(props: { ctx: PowerContext; id: string | null; nav?: PowerNav }) {
   const creep = () => props.ctx.creeps().find((c) => c._id === props.id) ?? null
   const className = () => (creep()?.className ?? 'operator') as PowerCreepClass
-  const backToList = () => (props.nav?.goToList ?? goToPower)()
+  const backToList = () => (props.nav?.goToList ?? goToUserPower)()
   const powers = () => powersForClass(className())
 
   const [staged, setStaged] = createSignal<Record<number, number>>({})
