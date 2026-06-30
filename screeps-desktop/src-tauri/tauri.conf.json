@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "identifier": "com.screeps.client.desktop",
   "build": {
+    "removeUnusedCommands": true,
     "frontendDist": "../../screeps-client/dist/standalone",
     "devUrl": "http://localhost:5173",
     "beforeDevCommand": "pnpm --filter screeps-client dev",
