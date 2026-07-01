@@ -1,6 +1,6 @@
 # screeps-client
 
-A browser-based client for [Screeps](https://screeps.com) — a real-time strategy game where you program your units in JavaScript. This monorepo contains a reusable connectivity library and a SolidJS + PixiJS frontend.
+A browser-based client for [Screeps](https://screeps.com) — a real-time strategy game where you program your units in JavaScript. This monorepo contains a reusable connectivity library, a SolidJS + PixiJS frontend, and a Tauri desktop wrapper for it.
 
 ## Packages
 
@@ -10,6 +10,7 @@ A browser-based client for [Screeps](https://screeps.com) — a real-time strate
 | `screeps-client/` | SolidJS + PixiJS browser app that consumes `screeps-connectivity` |
 | `screeps-mod-client/` | Screeps server mod (`screepsmod-client-new`) that serves the embedded client at `/client` |
 | `xxscreeps-mod-client/` | xxscreeps mod that serves and wires up the embedded client |
+| `screeps-desktop/` | [Tauri v2](https://tauri.app) desktop wrapper — bundles the standalone client into a native macOS/Windows/Linux app |
 
 ## Features
 
@@ -20,6 +21,8 @@ A browser-based client for [Screeps](https://screeps.com) — a real-time strate
 - In-game console: view log output and send console commands
 - Persistent sessions — reconnects automatically on page reload using stored token
 - Two-tier terrain cache: in-memory + IndexedDB (no repeated API calls)
+- Native desktop app (macOS, Windows, Linux) via `screeps-desktop`, with OS-keychain
+  credential storage and a saved server list — no browser tab required
 
 ## Getting Started
 
@@ -60,6 +63,17 @@ pnpm build
 | `dist/xxscreeps-mod/` | `pnpm build:embedded:xxscreeps` | `/` | `xxscreeps-mod-client` |
 
 `pnpm --filter screeps-client build:all` builds all three. The release pipeline does this automatically before publishing — the two mod packages depend on `screeps-client` and resolve the right variant from its `dist/` at runtime, so they have no separate build step.
+
+### Desktop app
+
+`screeps-desktop` wraps the standalone build in a Tauri v2 native shell so it can run without a browser tab. Requires a Rust toolchain (see `screeps-desktop/README.md` for OS-specific prerequisites).
+
+```sh
+pnpm desktop          # dev: Vite dev server + native window (HMR)
+pnpm desktop:build    # production: native bundle in screeps-desktop/src-tauri/target/release/bundle/
+```
+
+Cross-platform release builds (macOS arm64/x86_64, Windows, Linux) are produced by the manually-triggered `Desktop Release` GitHub Actions workflow, published as a draft GitHub Release. See `screeps-desktop/README.md` for details on networking (Tauri HTTP plugin bypasses WebView CORS), credential storage (OS keychain via the `keyring` crate), and known limitations (ad-hoc macOS signing, no notarization yet).
 
 ## Development
 
@@ -166,7 +180,9 @@ screeps-client/          # monorepo root
 │       ├── renderer/      # PixiJS layers (RoomRenderer, TerrainLayer, ObjectLayer)
 │       ├── stores/        # clientStore (SolidJS signals)
 │       ├── types/         # Client-side type definitions
-│       └── utils/         # roomName parser/formatter
+│       └── utils/         # roomName parser/formatter, Tauri + keychain glue
+├── screeps-desktop/
+│   └── src-tauri/         # Tauri v2 Rust shell: HTTP plugin, OS keyring commands
 └── docs/                  # API reference and design specs
 ```
 
@@ -190,6 +206,8 @@ On push to `main`, `.github/workflows/release.yml` does one of:
 CI requires the `NPM_TOKEN` repository secret, and Settings → Actions → General → *Workflow permissions* must allow Actions to create pull requests.
 
 See `.changeset/README.md` for contributor-facing details.
+
+`screeps-desktop` is `private` and not part of this flow — it's released separately via the manually-triggered `Desktop Release` workflow (see [Desktop app](#desktop-app)).
 
 ## License
 
