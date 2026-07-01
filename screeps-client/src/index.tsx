@@ -1,3 +1,8 @@
+// Must run before any pixi.js renderer initializes: Tauri's CSP has no
+// 'unsafe-eval' in script-src, and pixi.js otherwise needs eval() / new
+// Function() to compile shaders and sync uniforms.
+import 'pixi.js/unsafe-eval'
+
 import { render } from 'solid-js/web'
 import { isTauri, installTauriFetch } from './utils/tauri.js'
 
