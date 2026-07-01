@@ -1,4 +1,4 @@
-import { createSignal, createEffect, on, onCleanup, onMount, For, Show, Switch, Match } from 'solid-js'
+import { createSignal, createEffect, on, onCleanup, onMount, untrack, For, Show, Switch, Match } from 'solid-js'
 import { Plus, Pencil, Trash2 } from 'lucide-solid'
 import { connect, status, error } from '~/stores/clientStore.js'
 import { createLogger } from '~/utils/log.js'
@@ -154,7 +154,7 @@ function ServerList(props: {
 
       <button
         type="button"
-        onClick={props.onAdd}
+        onClick={() => props.onAdd()}
         style={{
           display: 'flex',
           'align-items': 'center',
@@ -180,7 +180,7 @@ function ServerList(props: {
 
 function ServerLoginForm(props: { server: ServerConfig }) {
   const [authType, setAuthType] = createSignal<'password' | 'token'>(
-    props.server.forcedAuth === 'token' ? 'token' : 'password'
+    untrack(() => (props.server.forcedAuth === 'token' ? 'token' : 'password'))
   )
   const [email, setEmail] = createSignal('')
   const [password, setPassword] = createSignal('')
@@ -434,13 +434,13 @@ function ServerEditForm(props: {
 }) {
   const isEdit = () => !!props.server
 
-  const [name, setName] = createSignal(props.server?.name ?? '')
-  const [url, setUrl] = createSignal(props.server?.url ?? '')
+  const [name, setName] = createSignal(untrack(() => props.server?.name ?? ''))
+  const [url, setUrl] = createSignal(untrack(() => props.server?.url ?? ''))
   const [forcedAuth, setForcedAuth] = createSignal<'password' | 'token' | 'guest' | ''>(
-    props.server?.forcedAuth ?? ''
+    untrack(() => props.server?.forcedAuth ?? '')
   )
   const [hasServerPassword, setHasServerPassword] = createSignal(
-    props.server?.hasServerPassword ?? true
+    untrack(() => props.server?.hasServerPassword ?? true)
   )
 
   const handleSubmit = (e: Event) => {
@@ -528,7 +528,7 @@ function ServerEditForm(props: {
         </button>
         <button
           type="button"
-          onClick={props.onCancel}
+          onClick={() => props.onCancel()}
           style={{ flex: 1, padding: '10px', 'border-radius': '6px', border: '1px solid #30363d', background: 'transparent', color: '#8b949e', cursor: 'pointer' }}
         >
           Cancel
