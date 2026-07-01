@@ -1,6 +1,15 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { ScreepsClient } from '../src/ScreepsClient.js'
 import { TokenAuth } from '../src/http/auth/TokenAuth.js'
+import type { StorageAdapter } from '../src/storage/StorageAdapter.js'
+
+class MemoryStorage implements StorageAdapter {
+  readonly data = new Map<string, Uint8Array>()
+  async get(key: string): Promise<Uint8Array | null> { return this.data.get(key) ?? null }
+  async set(key: string, value: Uint8Array): Promise<void> { this.data.set(key, value) }
+  async delete(key: string): Promise<void> { this.data.delete(key) }
+  async clear(): Promise<void> { this.data.clear() }
+}
 
 class MockWS {
   static instances: MockWS[] = []
@@ -37,6 +46,49 @@ beforeEach(() => {
   }))
 })
 afterEach(() => { vi.unstubAllGlobals() })
+
+describe('ScreepsClient — cache namespace', () => {
+  it('does not collide between two worlds hosted under the same hostname (e.g. Screeps World vs Season)', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => {
+      const { pathname } = new URL(url)
+      const digit = pathname.startsWith('/season/') ? '1' : '0'
+      return Promise.resolve(
+        new Response(JSON.stringify({ ok: 1, terrain: [{ _id: 'id', room: 'W5N5', terrain: digit.repeat(2500), type: 'terrain' }] }), {
+          headers: { 'content-type': 'application/json' },
+        })
+      )
+    }))
+
+    const storage = new MemoryStorage()
+    const worldClient = new ScreepsClient({
+      url: 'https://test.local',
+      auth: new TokenAuth({ token: 'tok' }),
+      storage,
+      WebSocket: MockWS as unknown as typeof WebSocket,
+    })
+    const seasonClient = new ScreepsClient({
+      url: 'https://test.local/season',
+      auth: new TokenAuth({ token: 'tok' }),
+      storage,
+      WebSocket: MockWS as unknown as typeof WebSocket,
+    })
+
+    const worldTerrain = await worldClient.stores.room.terrain('W5N5', 'shard0')
+    const seasonTerrain = await seasonClient.stores.room.terrain('W5N5', 'shard0')
+
+    // Same room name + shard on both worlds must resolve to distinct terrain and
+    // distinct persisted cache keys — the path (/season) has to disambiguate them
+    // since hostname alone is identical.
+    expect(worldTerrain.get(0, 0)).toBe(0)
+    expect(seasonTerrain.get(0, 0)).toBe(1)
+    expect([...storage.data.keys()]).toEqual([
+      'test.local/terrain/shard0/W5N5',
+      'test.local/season/terrain/shard0/W5N5',
+    ])
+
+    vi.unstubAllGlobals()
+  })
+})
 
 describe('ScreepsClient', () => {
   it('exposes http, socket, and stores properties', () => {
