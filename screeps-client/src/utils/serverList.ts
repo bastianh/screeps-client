@@ -22,7 +22,7 @@ export const BUILTIN_SERVERS: readonly ServerConfig[] = [
   {
     id: 'screeps-season',
     name: 'Screeps Season',
-    url: 'https://season.screeps.com',
+    url: 'https://screeps.com/season',
     forcedAuth: 'token',
     hasServerPassword: false,
     builtin: true,
