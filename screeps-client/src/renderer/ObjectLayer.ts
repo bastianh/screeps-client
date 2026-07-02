@@ -1026,13 +1026,17 @@ function isForeignCreep(obj: RoomObject, currentUserId?: string): boolean {
 }
 
 // NPC users are never sent in the client `users` map, so detect by the engine's
-// stable Invader user id rather than username (which would never resolve).
+// stable NPC user ids rather than username (which would never resolve). Invaders
+// and Source Keepers both render as the red gem; only the label differs. Returns
+// the display name for an NPC creep, or null if the creep isn't an NPC.
 const USER_INVADER = '2'
-function isInvaderCreep(obj: RoomObject, users?: Record<string, { username: string }>): boolean {
+const USER_SOURCE_KEEPER = '3'
+function npcCreepName(obj: RoomObject, users?: Record<string, { username: string }>): string | null {
   const u = typeof obj.user === 'string' ? obj.user : undefined
-  if (!u) return false
-  if (u === USER_INVADER) return true
-  return users?.[u]?.username === 'Invader'
+  if (!u) return null
+  if (u === USER_INVADER || users?.[u]?.username === 'Invader') return 'Invader'
+  if (u === USER_SOURCE_KEEPER || users?.[u]?.username === 'Source Keeper') return 'Source Keeper'
+  return null
 }
 
 // Tier-based zIndex: structures=0, creeps=100, flags=200; each spec adds an offset
@@ -1074,7 +1078,8 @@ function createObjectVisual(
 
   switch (obj.type) {
     case 'creep': {
-      if (isInvaderCreep(obj, users)) {
+      // Invaders and Source Keepers both render as the red gem.
+      if (npcCreepName(obj, users)) {
         drawInvaderCreep(container as ContainerWithTarget)
         break
       }
@@ -2254,7 +2259,7 @@ function createObjectVisual(
     let labelText: string
     if (isForeign) {
       const userId = typeof obj.user === 'string' ? obj.user : undefined
-      labelText = isInvaderCreep(obj, users) ? 'Invader' : userId ? (users?.[userId]?.username ?? userId) : 'Hostile'
+      labelText = npcCreepName(obj, users) ?? (userId ? (users?.[userId]?.username ?? userId) : 'Hostile')
     } else {
       labelText = obj.name as string
     }
@@ -3905,7 +3910,7 @@ export class ObjectLayer {
       if (!visual.__nameLabel) continue
       if (!isForeignCreep(obj, this.currentUserId)) continue
       const userId = typeof obj.user === 'string' ? obj.user : undefined
-      const labelText = isInvaderCreep(obj, this.users) ? 'Invader' : userId ? (this.users?.[userId]?.username ?? userId) : 'Hostile'
+      const labelText = npcCreepName(obj, this.users) ?? (userId ? (this.users?.[userId]?.username ?? userId) : 'Hostile')
       if (visual.__nameLabel.text !== labelText) {
         visual.__nameLabel.text = labelText
       }
