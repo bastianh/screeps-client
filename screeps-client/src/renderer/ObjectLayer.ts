@@ -676,6 +676,45 @@ function drawLabCooldownGlow(g: Graphics, cx: number, cy: number): void {
   g.stroke({ width: LAB_GLOW_CORE_W, color: LAB_GLOW_COLOR, alpha: LAB_GLOW_CORE_A })
 }
 
+// Keeper lair: a near-black disc with a small red pupil ring, over which a red pulse expands from
+// the centre to almost fill the disc and fades. The pulse is one pre-baked radial-glow sprite
+// animated by scale + alpha in the ticker, so nothing is re-drawn or allocated per frame.
+const KL_BODY_R      = TILE_SIZE * 0.45   // black-disc radius (leaves a thin tile margin)
+const KL_BODY_COLOR  = 0x0E0708           // near-black with a faint warm tint
+const KL_RIM_COLOR   = 0x2A1618           // dark rim, lifts the disc off the terrain
+const KL_RIM_W       = TILE_SIZE * 0.06
+const KL_RED         = 0xE24A46           // pupil + pulse red
+const KL_PUPIL_R     = TILE_SIZE * 0.17   // red pupil-ring outer radius
+const KL_PUPIL_HOLE  = TILE_SIZE * 0.085  // dark centre punched through the pupil ring
+const KL_PULSE_MS    = 2600               // one ping every 2.6s
+const KL_PULSE_MIN_R = TILE_SIZE * 0.10   // pulse starts near the centre
+const KL_PULSE_MAX_R = TILE_SIZE * 0.42   // …and swells to almost fill the black disc
+const KL_PULSE_ALPHA = 0.6                // peak opacity mid-ping
+
+// Soft, tintable radial glow (opaque centre → transparent edge) baked once and shared by every
+// lair's pulse sprite; lazily built so it only touches the DOM/GPU when a lair first renders.
+// Shared, so it must outlive per-lair teardown: destroyVisual uses container.destroy({ children: true }),
+// whose object form leaves options.texture undefined, so the child sprite's destroy never frees this
+// texture. A refactor to destroy(true) (boolean) WOULD free it and blank every other lair — don't.
+let klGlowTexture: Texture | null = null
+function keeperGlowTexture(): Texture {
+  if (klGlowTexture) return klGlowTexture
+  const SIZE = 128
+  const canvas = document.createElement('canvas')
+  canvas.width = canvas.height = SIZE
+  const ctx = canvas.getContext('2d')!
+  const r = SIZE / 2
+  const grad = ctx.createRadialGradient(r, r, 0, r, r, r)
+  grad.addColorStop(0, 'rgba(255,255,255,1)')
+  grad.addColorStop(0.45, 'rgba(255,255,255,0.72)')
+  grad.addColorStop(0.75, 'rgba(255,255,255,0.22)')
+  grad.addColorStop(1, 'rgba(255,255,255,0)')
+  ctx.fillStyle = grad
+  ctx.fillRect(0, 0, SIZE, SIZE)
+  klGlowTexture = Texture.from(canvas)
+  return klGlowTexture
+}
+
 // Absolute tick a structure's cooldown ends (vanilla emits an absolute `cooldownTime`);
 // 0 when idle. Stored on the visual so the ticker can compare it against the live clock each
 // frame — `cooldownTime` is sent once and never re-sent, so a cached boolean would never clear.
@@ -2234,6 +2273,38 @@ function createObjectVisual(
       cwt.__powerBankRadius = pbRadius
       break
     }
+    case 'keeperLair': {
+      // Black disc with a dark rim.
+      g.circle(cx, cy, KL_BODY_R)
+      g.fill(KL_BODY_COLOR)
+      g.circle(cx, cy, KL_BODY_R)
+      g.stroke({ width: KL_RIM_W, color: KL_RIM_COLOR })
+      container.addChild(g)
+
+      // Pulse glow (welling up from the centre) — sits above the disc, below the pupil.
+      // Sized/faded each frame in tick(); starts at the minimum radius, invisible.
+      const glow = new Sprite(keeperGlowTexture())
+      glow.anchor.set(0.5)
+      glow.position.set(cx, cy)
+      glow.tint = KL_RED
+      glow.alpha = 0
+      glow.width = glow.height = KL_PULSE_MIN_R * 2
+      container.addChild(glow)
+
+      // Red pupil ring: a small red disc with a dark centre punched through to the body.
+      const pupil = new Graphics()
+      pupil.circle(cx, cy, KL_PUPIL_R)
+      pupil.fill(KL_RED)
+      pupil.circle(cx, cy, KL_PUPIL_HOLE)
+      pupil.fill(KL_BODY_COLOR)
+      container.addChild(pupil)
+
+      const kl = container as ContainerWithTarget
+      kl.__keeperGlow = glow
+      // Stable per-lair phase from its fixed position so neighbours don't ping in lockstep.
+      kl.__keeperPhase = ((obj.x * 31 + obj.y * 17) % 97) / 97
+      break
+    }
     default: {
       // Structures (fallback)
       const size = TILE_SIZE - 2
@@ -2242,7 +2313,7 @@ function createObjectVisual(
     }
   }
 
-  if (obj.type !== 'extension' && obj.type !== 'road' && obj.type !== 'creep' && obj.type !== 'tower' && obj.type !== 'controller' && obj.type !== 'flag' && obj.type !== 'source' && obj.type !== 'constructionSite' && obj.type !== 'mineral' && obj.type !== 'tombstone' && obj.type !== 'ruin' && obj.type !== 'storage' && obj.type !== 'constructedWall' && obj.type !== 'rampart' && obj.type !== 'container' && obj.type !== 'deposit' && obj.type !== 'link' && obj.type !== 'terminal' && obj.type !== 'lab' && obj.type !== 'nuker' && obj.type !== 'factory' && obj.type !== 'powerBank') {
+  if (obj.type !== 'extension' && obj.type !== 'road' && obj.type !== 'creep' && obj.type !== 'tower' && obj.type !== 'controller' && obj.type !== 'flag' && obj.type !== 'source' && obj.type !== 'constructionSite' && obj.type !== 'mineral' && obj.type !== 'tombstone' && obj.type !== 'ruin' && obj.type !== 'storage' && obj.type !== 'constructedWall' && obj.type !== 'rampart' && obj.type !== 'container' && obj.type !== 'deposit' && obj.type !== 'link' && obj.type !== 'terminal' && obj.type !== 'lab' && obj.type !== 'nuker' && obj.type !== 'factory' && obj.type !== 'powerBank' && obj.type !== 'keeperLair') {
     container.addChild(g)
   }
 
@@ -2391,6 +2462,8 @@ type ContainerWithTarget = Container & {
   __powerBankEllipseG?: Graphics
   __powerBankPower?: number
   __powerBankRadius?: number
+  __keeperGlow?: Sprite   // keeper-lair pulse glow; scale + alpha driven each frame
+  __keeperPhase?: number  // per-lair ping phase offset in [0,1)
 }
 
 function destroyVisual(visual: ContainerWithTarget): void {
@@ -2664,6 +2737,16 @@ export class ObjectLayer {
       if (visual.__terminalCooldownG) {
         const onCd = (visual.__terminalCooldownTime ?? 0) > this.currentGameTime
         visual.__terminalCooldownG.alpha = onCd ? cooldownPulse : 0
+      }
+      // Keeper-lair pulse: expand-and-fade glow on a free-running wall-clock cycle, offset per lair
+      // so neighbours don't ping in lockstep. Pure scale + alpha on the shared glow sprite; the sin
+      // envelope is 0 at both ends, so the radius reset at the wrap happens while fully invisible.
+      if (visual.__keeperGlow) {
+        const p = ((now / KL_PULSE_MS) + (visual.__keeperPhase ?? 0)) % 1
+        const rp = 1 - (1 - p) * (1 - p)   // ease-out: shoots outward, then eases as it nears the rim
+        const radius = KL_PULSE_MIN_R + rp * (KL_PULSE_MAX_R - KL_PULSE_MIN_R)
+        visual.__keeperGlow.width = visual.__keeperGlow.height = radius * 2
+        visual.__keeperGlow.alpha = KL_PULSE_ALPHA * Math.sin(Math.PI * p)   // smooth in/out, no pop at wrap
       }
     }
 

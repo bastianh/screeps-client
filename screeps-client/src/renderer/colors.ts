@@ -97,6 +97,7 @@ export const OBJECT_COLORS: Record<string, number> = {
   controller:  OBJ_BLUE,
   powerBank:   OBJ_ORANGE,
   portal:      OBJ_PURPLE,
+  keeperLair:  OBJ_RED,
 }
 
 // ── Resources ──────────────────────────────────────────────────────────────

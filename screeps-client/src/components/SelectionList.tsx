@@ -42,6 +42,7 @@ const OBJECT_COLORS: Record<string, string> = {
   controller:  '#58a6ff',
   powerBank:   '#f0883e',
   portal:      '#a371f7',
+  keeperLair:  '#f85149',
   energy:      '#d29922',
 }
 
@@ -70,6 +71,7 @@ const TYPE_LABELS: Record<string, string> = {
   controller:  'Controller',
   powerBank:   'Power Bank',
   portal:      'Portal',
+  keeperLair:  'Keeper Lair',
   energy:      'Energy',
   flag:        'Flag',
 }
