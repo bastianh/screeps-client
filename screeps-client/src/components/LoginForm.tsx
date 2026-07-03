@@ -11,6 +11,7 @@ import {
   checkEmail,
   registerUser,
   getScreepsmodAuth,
+  getXxscreepsModClientFeature,
 } from 'screeps-connectivity'
 import type { ServerVersion, ApiAuthModInfoResponse } from 'screeps-connectivity'
 
@@ -287,14 +288,27 @@ export function LoginForm() {
 
   const welcomeText = () => serverVersion()?.serverData?.welcomeText ?? null
   const mods = () => (serverVersion()?.serverData?.features ?? []).filter(f => f.name !== 'auth' && f.version != null)
+  // xxscreeps-mod-client publishes its own feature reflecting `.screepsrc.yaml`'s
+  // `backend.allowGuestAccess` / `allowEmailRegistration` / `steamApiKey`, which
+  // takes priority over the generic screepsmod-auth/official-like heuristics below.
+  const xxscreepsCaps = () => {
+    const v = serverVersion()
+    return v ? getXxscreepsModClientFeature(v) : undefined
+  }
   const hasSteam = () => {
+    const caps = xxscreepsCaps()
+    if (caps) return caps.steamLogin
     const v = serverVersion()
     if (!v) return true
     return getScreepsmodAuth(v)?.authTypes?.includes('steam') ?? true
   }
-  const canRegister = () =>
-    authModInfo()?.allowRegistration === true ||
-    (serverVersion()?.serverData?.features ?? []).some(f => f.name === 'official-like')
+  const canRegister = () => {
+    const caps = xxscreepsCaps()
+    if (caps) return caps.allowEmailRegistration
+    return authModInfo()?.allowRegistration === true ||
+      (serverVersion()?.serverData?.features ?? []).some(f => f.name === 'official-like')
+  }
+  const allowGuest = () => xxscreepsCaps()?.allowGuestAccess ?? true
 
   const steamLogin = useOAuthLogin('steam', ({ url: steamUrl, token }) => {
     setMode('login')
@@ -484,7 +498,7 @@ export function LoginForm() {
               </button>
             </Show>
 
-            <Show when={!embedded || xxscreeps}>
+            <Show when={(!embedded || xxscreeps) && allowGuest()}>
               <button
                 type="button"
                 disabled={isConnecting()}

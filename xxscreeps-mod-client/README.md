@@ -35,6 +35,10 @@ SCREEPS_MOD_CLIENT_MOUNT_PATH=/play npx xxscreeps start
 
 The mod resolves the client bundle from its [`screeps-client`](../screeps-client) dependency at runtime — no separate build step is needed. The shipped bundle is built with `base=./`, but the client resolves some assets (e.g. the sprite atlas under `themes/`) against the server root `/`. Mounting anywhere other than `/` therefore breaks those asset URLs and requires a custom build of `screeps-client` with a matching base — which is why the mount path defaults to `/`.
 
+## Login UI feature detection
+
+The mod reads `backend.allowGuestAccess`, `backend.allowEmailRegistration`, and `backend.steamApiKey` from `.screepsrc.yaml` and publishes them at `/api/version` as an `xxscreeps-mod-client` feature. `screeps-client` reads this to show or hide the Guest button, the "Create account" link, and the "Login with Steam" button to match what the server actually allows.
+
 ## xxscreeps mode
 
 The client bundle shipped with this mod is built with `VITE_XXSCREEPS=true`. In this mode the client auto-connects to its own origin as a guest (read-only) on first load, mirroring `@xxscreeps/client`'s default UX. A "Connect as Guest" button stays available in the login form so users can return to guest mode after signing out.

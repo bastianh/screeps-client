@@ -19,7 +19,7 @@ import {
   loadSavedCredential,
   deleteSavedCredential,
 } from '~/utils/keychain.js'
-import { fetchServerVersion, getScreepsmodAuth } from 'screeps-connectivity'
+import { fetchServerVersion, getScreepsmodAuth, getXxscreepsModClientFeature } from 'screeps-connectivity'
 import type { ServerVersion } from 'screeps-connectivity'
 import { useOAuthLogin } from '~/utils/useOAuthLogin.js'
 import { OAuthUsernameForm } from './OAuthUsernameForm.js'
@@ -231,6 +231,8 @@ function ServerLoginForm(props: { server: ServerConfig }) {
     if (props.server.forcedAuth) return false
     const v = serverVersion()
     if (!v) return true
+    const caps = getXxscreepsModClientFeature(v)
+    if (caps) return caps.steamLogin
     return getScreepsmodAuth(v)?.authTypes?.includes('steam') ?? true
   }
 

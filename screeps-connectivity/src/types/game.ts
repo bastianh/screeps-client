@@ -113,6 +113,18 @@ export interface ScreepsmodAuthFeature extends ServerFeature {
     }>
 }
 
+/**
+ * Published by `xxscreeps-mod-client` at `/api/version`, reflecting the
+ * `backend` settings from the server's `.screepsrc.yaml`.
+ */
+export interface XxscreepsModClientFeature extends ServerFeature {
+    name: 'xxscreeps-mod-client'
+    version: number
+    allowGuestAccess: boolean
+    allowEmailRegistration: boolean
+    steamLogin: boolean
+}
+
 export interface ServerVersion {
     ok: number
     package: number

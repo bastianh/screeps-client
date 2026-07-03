@@ -1,5 +1,5 @@
 import type { ServerVersion } from '../types/game.js'
-import type { ScreepsmodAuthFeature, ServerFeature } from '../types/game.js'
+import type { ScreepsmodAuthFeature, ServerFeature, XxscreepsModClientFeature } from '../types/game.js'
 import type { ApiAuthMeResponse, ApiAuthModInfoResponse, ApiRegisterCheckResponse } from '../types/api.js'
 import { getFetch } from './fetchFn.js'
 
@@ -178,4 +178,18 @@ export function getServerFeature<T extends ServerFeature = ServerFeature>(
  */
 export function getScreepsmodAuth(version: ServerVersion): ScreepsmodAuthFeature | undefined {
   return getServerFeature<ScreepsmodAuthFeature>(version, 'screepsmod-auth')
+}
+
+/**
+ * Returns the `xxscreeps-mod-client` feature entry if present, otherwise `undefined`.
+ * This feature reflects the server's `.screepsrc.yaml` `backend` settings
+ * (`allowGuestAccess`, `allowEmailRegistration`, `steamApiKey`), letting the client
+ * gate guest/registration/Steam UI without an extra request.
+ *
+ * @example
+ * const caps = getXxscreepsModClientFeature(version)
+ * if (caps && !caps.allowGuestAccess) hideGuestButton()
+ */
+export function getXxscreepsModClientFeature(version: ServerVersion): XxscreepsModClientFeature | undefined {
+  return getServerFeature<XxscreepsModClientFeature>(version, 'xxscreeps-mod-client')
 }

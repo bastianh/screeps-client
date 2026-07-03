@@ -2,6 +2,7 @@ import path from 'node:path'
 import { createRequire } from 'node:module'
 import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs'
 import { hooks } from 'xxscreeps/backend/index.js'
+import { config } from 'xxscreeps/config/index.js'
 
 const require = createRequire(import.meta.url)
 const pkg = require('./package.json')
@@ -106,6 +107,21 @@ function sendInjectedIndex(ctx) {
   ctx.set('Cache-Control', REVALIDATE_CACHE)
   ctx.body = renderInjectedIndex(indexFile)
 }
+
+// Advertise the server's guest/registration/Steam settings at `/api/version` so
+// screeps-client can gate the corresponding login UI without extra requests.
+// See `.screepsrc.yaml`'s `backend.allowGuestAccess`, `backend.allowEmailRegistration`,
+// and `backend.steamApiKey`.
+hooks.register('version', serverData => {
+  const backend = config.backend ?? {}
+  serverData.features.push({
+    name: 'xxscreeps-mod-client',
+    version: 1,
+    allowGuestAccess: backend.allowGuestAccess ?? true,
+    allowEmailRegistration: backend.allowEmailRegistration ?? false,
+    steamLogin: Boolean(backend.steamApiKey),
+  })
+})
 
 hooks.register('middleware', koa => {
   if (!existsSync(indexFile)) {
