@@ -64,7 +64,12 @@ export class ScreepsClient {
   constructor(opts: ScreepsClientOptions) {
     let namespace: string
     try {
-      namespace = new URL(opts.url).hostname
+      const parsed = new URL(opts.url)
+      const path = parsed.pathname.replace(/\/+$/, '')
+      // Hostname alone isn't enough: some servers host multiple distinct worlds under one
+      // domain via a path (e.g. Screeps World at screeps.com vs Screeps Season at
+      // screeps.com/season) — including the path keeps their caches from colliding.
+      namespace = path ? `${parsed.hostname}${path}` : parsed.hostname
     } catch {
       throw new TypeError(`ScreepsClient: invalid url "${opts.url}"`)
     }
