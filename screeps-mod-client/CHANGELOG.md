@@ -1,5 +1,18 @@
 # screepsmod-client-new
 
+## 0.2.19
+
+### Patch Changes
+
+- 594073a: Update the required `screeps-client` version for both mod packages after the next client release.
+- Updated dependencies [8fd1a08]
+- Updated dependencies [3ca699d]
+- Updated dependencies [27b092e]
+- Updated dependencies [594073a]
+- Updated dependencies [15d0c1f]
+- Updated dependencies [b26940a]
+  - screeps-client@0.14.0
+
 ## 0.2.18
 
 ### Patch Changes

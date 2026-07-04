@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.12.0
+
+### Minor Changes
+
+- 8fd1a08: Fix Steam login failing with "auth failed" on brand-new accounts (e.g. xxscreeps). Some servers hand back a provisional token for a first-time OAuth signup that can't authenticate the websocket until a username is chosen; the login flow now detects this via `/api/auth/me` and prompts for a username before connecting. Adds `fetchAuthMeWithToken` and `completeProviderRegistration` to `screeps-connectivity`.
+- b26940a: xxscreeps-mod-client now publishes an `xxscreeps-mod-client` server feature at `/api/version` reflecting `.screepsrc.yaml`'s `backend.allowGuestAccess`, `backend.allowEmailRegistration`, and `backend.steamApiKey`. screeps-client reads this via the new `getXxscreepsModClientFeature` helper (screeps-connectivity) to show or hide the Guest, "Create account", and "Login with Steam" options to match what the server actually allows, instead of guessing.
+
+### Patch Changes
+
+- 594073a: Fix cache/storage namespace collision when two distinct game worlds are hosted under the same domain via a path (e.g. Screeps World vs Screeps Season on screeps.com) — terrain and other cached data no longer bleed between them.
+- 15d0c1f: Show a dismissable popup (reload/logout) instead of silently bouncing to the login screen when an already-connected session hits a fatal socket error or disconnect. Add a similar popup for 429 rate-limit responses from official servers, with a button to open the server's "disable rate limiting" link (opens the OS browser in the desktop app). Fix the map view not reloading terrain when switching shards — room names collide across shards, so the renderer's terrain cache was serving stale terrain from the previously viewed shard. Also removes the 5-minute sessionStorage cache on `fetchServerVersion` so the pre-login welcome screen always reflects the server's current `/api/version`.
+
 ## 0.11.0
 
 ### Minor Changes

@@ -1,5 +1,22 @@
 # xxscreeps-mod-client
 
+## 0.3.0
+
+### Minor Changes
+
+- b26940a: xxscreeps-mod-client now publishes an `xxscreeps-mod-client` server feature at `/api/version` reflecting `.screepsrc.yaml`'s `backend.allowGuestAccess`, `backend.allowEmailRegistration`, and `backend.steamApiKey`. screeps-client reads this via the new `getXxscreepsModClientFeature` helper (screeps-connectivity) to show or hide the Guest, "Create account", and "Login with Steam" options to match what the server actually allows, instead of guessing.
+
+### Patch Changes
+
+- 594073a: Update the required `screeps-client` version for both mod packages after the next client release.
+- Updated dependencies [8fd1a08]
+- Updated dependencies [3ca699d]
+- Updated dependencies [27b092e]
+- Updated dependencies [594073a]
+- Updated dependencies [15d0c1f]
+- Updated dependencies [b26940a]
+  - screeps-client@0.14.0
+
 ## 0.2.19
 
 ### Patch Changes
