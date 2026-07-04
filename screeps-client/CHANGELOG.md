@@ -1,5 +1,19 @@
 # screeps-client
 
+## 0.14.1
+
+### Patch Changes
+
+- 23ed626: Consolidate scattered isTauri/isEmbedded/isXxscreepsMode checks behind a single capabilities() interface, with hasMarket/hasMessaging placeholders for future server-feature gating; dedupe the pre-login server-info hook shared by LoginForm and DesktopLoginForm.
+- 94a6658: Add Discord OAuth login: getDiscordFeature() helper in screeps-connectivity, and a "Login with Discord" button in the web and desktop login forms.
+- 0296bdf: Carry the shard as a URL path segment for the map and room views
+  (`/map/shard0`, `/room/shard0/W11N11`) instead of a `?shard` query param. The
+  shard segment is optional, so private servers reporting a single shard keep bare
+  `/map` and `/room/W11N11` URLs. Old `?shard=` bookmarks still resolve.
+- 46b5e2d: Fix Steam/password logins silently expiring after ~5 minutes on screepsmod-auth servers. These logins reconnect via a rotating, TTL-limited session token, but `TokenAuth` was hard-coded to ignore the server-issued `X-Token`, so the client kept replaying the original token until the server expired it — surfacing as a sudden `401` on `/api/user/world-status` (and every other authed request) even while actively using the client.
+
+  `TokenAuth` now accepts `supportsTokenRefresh` (default `false`, preserving durable personal-API-token behavior). The client enables it for Steam/password-derived session tokens so the rotated `X-Token` is adopted on every response, keeping the session alive.
+
 ## 0.14.0
 
 ### Minor Changes
