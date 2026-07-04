@@ -1,5 +1,6 @@
 import { createSignal } from 'solid-js'
 import { basePath } from '~/utils/embedded.js'
+import { buildRoomUrl } from '~/utils/gameRoutes.js'
 
 // Top-level screen the connected app shows. The in-game Dashboard owns its own
 // /room and /map sub-routing; this store decides the User hub (/user) vs.
@@ -202,9 +203,10 @@ export function goToGame(): void {
 }
 
 // Jump straight to a specific room view (the Dashboard mounts on route→'game'
-// and reads room + shard from the URL).
+// and reads room + shard from the URL). The shard is carried as a path segment
+// (/room/<shard>/<room>); see buildRoomUrl.
 export function goToRoom(room: string, shard: string | null): void {
-  const path = `${basePath()}/room/${room}${shard ? `?shard=${encodeURIComponent(shard)}` : ''}`
+  const path = buildRoomUrl(room, shard)
   lastGamePath = path
   history.pushState(null, '', path)
   setRoute('game')

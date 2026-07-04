@@ -34,33 +34,40 @@ const DEFAULT_BADGE: Badge = { type: 1, color1: '#4a5060', color2: '#7a9ec0', co
 
 import { parseRoomName } from '~/utils/roomName.js'
 import { basePath } from '~/utils/embedded.js'
+import { buildMapUrl, buildRoomUrl } from '~/utils/gameRoutes.js'
 import { isTypingTarget } from '~/utils/dom.js'
 import { LS, getStr, setStr, removeLocal, getNum, setNum } from '~/utils/storage.js'
 
+// Shard used to live in the ?shard query; it now sits in the path. Still read
+// the query as a fallback so old bookmarks keep resolving to the right shard.
+function legacyQueryShard(): string | null {
+  return new URLSearchParams(window.location.search).get('shard')
+}
+
 function parseRoomUrl(): { room: string | null; shard: string | null; tick: number | null } {
-  const base = basePath()
-  const match = window.location.pathname.match(new RegExp(`^${base}/room/([A-Za-z0-9]+)`))
-  if (!match) return { room: null, shard: null, tick: null }
-  const room = match[1].toUpperCase()
+  const prefix = `${basePath()}/room/`
+  const path = window.location.pathname
+  if (!path.startsWith(prefix)) return { room: null, shard: null, tick: null }
+  const segments = path.slice(prefix.length).split('/').filter(Boolean)
+  // /room/<room> or /room/<shard>/<room>
+  const roomSeg = segments.length >= 2 ? segments[1] : segments[0]
+  const pathShard = segments.length >= 2 ? decodeURIComponent(segments[0]) : null
+  if (!roomSeg) return { room: null, shard: null, tick: null }
+  const room = roomSeg.toUpperCase()
   if (!parseRoomName(room)) return { room: null, shard: null, tick: null }
-  const shard = new URLSearchParams(window.location.search).get('shard')
+  const shard = pathShard ?? legacyQueryShard()
   const tickMatch = window.location.hash.match(/tick=(\d+)/)
   const tick = tickMatch ? parseInt(tickMatch[1], 10) : null
   return { room, shard, tick }
 }
 
-function buildRoomUrl(room: string, shard: string | null): string {
-  return `${basePath()}/room/${room}${shard ? `?shard=${encodeURIComponent(shard)}` : ''}`
-}
-
-function buildMapUrl(shard: string | null): string {
-  return `${basePath()}/map${shard ? `?shard=${encodeURIComponent(shard)}` : ''}`
-}
-
 function parseMapUrl(): { shard: string | null } | null {
-  if (!window.location.pathname.startsWith(`${basePath()}/map`)) return null
-  const shard = new URLSearchParams(window.location.search).get('shard')
-  return { shard }
+  const mapPath = `${basePath()}/map`
+  const path = window.location.pathname
+  if (path !== mapPath && !path.startsWith(`${mapPath}/`)) return null
+  const rest = path.slice(mapPath.length).replace(/^\//, '')
+  const pathShard = rest ? decodeURIComponent(rest.split('/')[0]) : null
+  return { shard: pathShard ?? legacyQueryShard() }
 }
 
 function HeaderButton(props: {
