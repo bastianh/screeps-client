@@ -176,7 +176,12 @@ export async function connect(opts: {
       if (!opts.token) {
         throw new Error('Token is required')
       }
-      authStrategy = new TokenAuth({ token: opts.token })
+      // Steam/password logins reconnect via a screepsmod-auth session token that the
+      // server rotates on every response and expires on a fixed TTL (~5 min) regardless
+      // of activity. Adopt the rotated X-Token so the session stays alive. A pasted
+      // personal API token (authMethod 'token') is durable and must not be replaced.
+      const isSessionToken = opts.authMethod === 'steam' || opts.authMethod === 'password'
+      authStrategy = new TokenAuth({ token: opts.token, supportsTokenRefresh: isSessionToken })
     }
 
     const screepsClient = new ScreepsClient({

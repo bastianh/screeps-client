@@ -98,6 +98,16 @@ describe('HttpClient', () => {
     expect(http.token).toBe('my-static-token')
   })
 
+  it('DOES update token from x-token header when TokenAuth opts into refresh (session token)', async () => {
+    fetchMock.mockResolvedValue(mockResponse({ ok: 1 }, {
+      headers: { 'content-type': 'application/json', 'x-token': 'rotated' },
+    }))
+    const http = new HttpClient({ url: 'http://test.local', auth: new TokenAuth({ token: 'session-token', supportsTokenRefresh: true }) })
+    http.token = 'session-token'
+    await http.request('GET', '/api/version')
+    expect(http.token).toBe('rotated')
+  })
+
   it('retries once on 401 after re-authenticating', async () => {
     let calls = 0
     fetchMock.mockImplementation(() => {
