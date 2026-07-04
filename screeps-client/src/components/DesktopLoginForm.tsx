@@ -21,8 +21,8 @@ import {
 } from '~/utils/keychain.js'
 import { fetchServerVersion, getScreepsmodAuth } from 'screeps-connectivity'
 import type { ServerVersion } from 'screeps-connectivity'
-import { useSteamLogin } from '~/utils/useSteamLogin.js'
-import { SteamUsernameForm } from './SteamUsernameForm.js'
+import { useOAuthLogin } from '~/utils/useOAuthLogin.js'
+import { OAuthUsernameForm } from './OAuthUsernameForm.js'
 
 // ── styles ─────────────────────────────────────────────────────────────────────
 
@@ -279,15 +279,16 @@ function ServerLoginForm(props: { server: ServerConfig }) {
     }
   }
 
-  const steamLogin = useSteamLogin(({ url: steamUrl, token }) => {
+  const steamLogin = useOAuthLogin('steam', ({ url: steamUrl, token }) => {
     void connect({ url: steamUrl, auth: 'token', authMethod: 'steam', token, serverPassword: serverPassword() || undefined, storage: null })
   })
   const handleSteamLogin = () => steamLogin.startLogin(props.server.url)
 
   return (
     <Show when={!steamLogin.pending()} fallback={
-      <SteamUsernameForm
+      <OAuthUsernameForm
         url={steamLogin.pending()!.url}
+        providerLabel="Steam"
         submitting={steamLogin.submitting()}
         error={steamLogin.regError()}
         onSubmit={(username, regEmail) => void steamLogin.completeRegistration(username, regEmail)}

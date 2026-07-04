@@ -1,21 +1,22 @@
 import { createSignal, onCleanup } from 'solid-js'
 import { fetchAuthMeWithToken, completeProviderRegistration } from 'screeps-connectivity'
 
-export interface SteamPendingRegistration {
+export interface OAuthPendingRegistration {
   url: string
   token: string
 }
 
 /**
- * Drives the Steam OAuth popup flow. Some servers (xxscreeps) hand back a provisional
- * token for a brand-new Steam signup that has no username yet — that token can't
- * authenticate anything (including the websocket) until a username is chosen via
- * `/api/register/set-username`. This checks `/api/auth/me` right after the popup
- * closes to tell the two cases apart, so the caller never tries to connect with a
- * token that's guaranteed to fail auth.
+ * Drives an OAuth popup login flow (`/api/auth/<provider>`) for any provider a
+ * screepsmod-auth/xxscreeps server supports — Steam, Discord, GitHub, GitLab, etc.
+ * Some servers hand back a provisional token for a brand-new signup that has no
+ * username yet — that token can't authenticate anything (including the websocket)
+ * until a username is chosen via `/api/register/set-username`. This checks
+ * `/api/auth/me` right after the popup closes to tell the two cases apart, so the
+ * caller never tries to connect with a token that's guaranteed to fail auth.
  */
-export function useSteamLogin(onAuthenticated: (result: { url: string; token: string }) => void) {
-  const [pending, setPending] = createSignal<SteamPendingRegistration | null>(null)
+export function useOAuthLogin(provider: string, onAuthenticated: (result: { url: string; token: string }) => void) {
+  const [pending, setPending] = createSignal<OAuthPendingRegistration | null>(null)
   const [submitting, setSubmitting] = createSignal(false)
   const [regError, setRegError] = createSignal<string | null>(null)
 
@@ -36,7 +37,7 @@ export function useSteamLogin(onAuthenticated: (result: { url: string; token: st
 
   const startLogin = (rawUrl: string) => {
     const url = rawUrl.replace(/\/$/, '')
-    const popup = window.open(`${url}/api/auth/steam`, 'screeps-steam-auth', 'width=800,height=600,left=200,top=100')
+    const popup = window.open(`${url}/api/auth/${provider}`, `screeps-oauth-${provider}`, 'width=800,height=600,left=200,top=100')
     const onMessage = (event: MessageEvent) => {
       try {
         const data = JSON.parse(event.data as string) as { token?: string }

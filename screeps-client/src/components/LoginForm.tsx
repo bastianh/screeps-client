@@ -2,8 +2,8 @@ import { createSignal, createEffect, onCleanup, For, Show, JSX } from 'solid-js'
 import { Check, X as XIcon } from 'lucide-solid'
 import { connect, status, error } from '~/stores/clientStore.js'
 import { isEmbedded, isXxscreepsMode, embeddedServerUrl } from '~/utils/embedded.js'
-import { useSteamLogin } from '~/utils/useSteamLogin.js'
-import { SteamUsernameForm } from './SteamUsernameForm.js'
+import { useOAuthLogin } from '~/utils/useOAuthLogin.js'
+import { OAuthUsernameForm } from './OAuthUsernameForm.js'
 import {
   fetchServerVersion,
   fetchAuthModInfo,
@@ -296,7 +296,7 @@ export function LoginForm() {
     authModInfo()?.allowRegistration === true ||
     (serverVersion()?.serverData?.features ?? []).some(f => f.name === 'official-like')
 
-  const steamLogin = useSteamLogin(({ url: steamUrl, token }) => {
+  const steamLogin = useOAuthLogin('steam', ({ url: steamUrl, token }) => {
     setMode('login')
     void connect({ url: steamUrl, auth: 'token', authMethod: 'steam', token, serverPassword: serverPassword() || undefined, storage: null })
   })
@@ -387,8 +387,9 @@ export function LoginForm() {
         </Show>
 
         <Show when={mode() === 'steam-username'}>
-          <SteamUsernameForm
+          <OAuthUsernameForm
             url={steamLogin.pending()!.url}
+            providerLabel="Steam"
             submitting={steamLogin.submitting()}
             error={steamLogin.regError()}
             onSubmit={(username, regEmail) => void steamLogin.completeRegistration(username, regEmail)}

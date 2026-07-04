@@ -57,9 +57,11 @@ function FieldStatus(props: { state: AvailState }) {
   )
 }
 
-/** Shown after a Steam login popup returns a provisional token for a brand-new account. */
-export function SteamUsernameForm(props: {
+/** Shown after an OAuth login popup (Steam, Discord, GitHub, ...) returns a provisional token for a brand-new account. */
+export function OAuthUsernameForm(props: {
   url: string
+  /** Display name of the provider the user just signed in with, e.g. "Steam" or "Discord". */
+  providerLabel: string
   submitting: boolean
   error: string | null
   onSubmit: (username: string, email?: string) => void
@@ -85,7 +87,7 @@ export function SteamUsernameForm(props: {
     <form onSubmit={handleSubmit} style={{ display: 'flex', 'flex-direction': 'column', gap: '16px' }}>
       <h2 style={{ margin: 0, 'font-size': '20px' }}>Finish creating your account</h2>
       <div style={{ 'font-size': '13px', color: '#8b949e' }}>
-        Signed in with Steam — choose a username to finish setting up your account.
+        Signed in with {props.providerLabel} — choose a username to finish setting up your account.
       </div>
 
       <label style={{ display: 'flex', 'flex-direction': 'column', gap: '4px' }}>
