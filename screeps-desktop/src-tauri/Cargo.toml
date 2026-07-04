@@ -15,6 +15,7 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = ["devtools"] }
 tauri-plugin-http = "2"
+tauri-plugin-opener = "2"
 keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
 
 [features]

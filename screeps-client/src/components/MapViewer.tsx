@@ -141,12 +141,17 @@ export function MapViewer(props: MapViewerProps) {
       })
   }
 
-  // Drop local room stats when connection or shard changes
+  // Drop local room stats + rendered terrain when connection or shard changes.
+  // Room names collide across shards (every shard has a "W5N5"), so the
+  // renderer's terrain cache must be force-cleared or it'll keep showing the
+  // previous shard's terrain for rooms it already rendered.
   createEffect(() => {
     client()
     void props.shard
     roomStats.clear()
     roomUnclaimable.clear()
+    requested.clear()
+    renderer?.clearAllRooms()
   })
 
   onMount(() => {

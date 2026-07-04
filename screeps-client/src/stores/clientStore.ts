@@ -31,6 +31,21 @@ const { log } = createLogger('client')
 const [client, setClient] = createSignal<ScreepsClient | null>(null)
 const [status, setStatus] = createSignal<ConnectionStatus>('idle')
 const [error, setError] = createSignal<string | null>(null)
+// Fatal error on an already-connected session (socket gave up reconnecting, or
+// the server closed the connection for good). Unlike `error` (shown inline on
+// the login form for failed connect attempts), this keeps the Dashboard mounted
+// and shows a popup — see SessionErrorModal — so the user can choose to reload
+// or log out instead of being silently bounced back to the login screen.
+const [sessionError, setSessionError] = createSignal<string | null>(null)
+export interface RateLimitError {
+  message: string
+  /** The server's "disable rate limiting" link, extracted from the error body, if present. */
+  disableLink: string | null
+}
+// Set when a request comes back 429 — the official server rate-limits API
+// tokens and includes a per-account link to disable it. Shown as a dismissable
+// popup (RateLimitModal) rather than a toast, since it needs the link.
+const [rateLimitError, setRateLimitError] = createSignal<RateLimitError | null>(null)
 const [userInfo, setUserInfo] = createSignal<UserInfo | null>(null)
 const [serverVersion, setServerVersion] = createSignal<ServerVersion | null>(null)
 const [gameTime, setGameTime] = createSignal<number | null>(null)
@@ -124,7 +139,7 @@ export const isPrivateServer = () => {
   return (v.serverData?.shards?.length ?? 0) === 0
 }
 
-export { client, status, error, userInfo, serverVersion, gameTime, setGameTime, tickDuration, setTickDuration, isGuest, authMethod, worldBounds, setWorldBounds, userFlags, worldStatus }
+export { client, status, error, sessionError, rateLimitError, setRateLimitError, userInfo, serverVersion, gameTime, setGameTime, tickDuration, setTickDuration, isGuest, authMethod, worldBounds, setWorldBounds, userFlags, worldStatus }
 
 export async function connect(opts: {
   url: string
@@ -144,6 +159,8 @@ export async function connect(opts: {
   log(`connecting to ${opts.url} (auth: ${opts.auth})`)
   setStatus('connecting')
   setError(null)
+  setSessionError(null)
+  setRateLimitError(null)
 
   try {
     let authStrategy: AuthStrategy
@@ -179,8 +196,16 @@ export async function connect(opts: {
       }
     })
 
-    screepsClient.http.on('http:error', ({ method, path, error, silent }) => {
+    screepsClient.http.on('http:error', ({ method, path, error, silent, status }) => {
       log('http error:', method, path, error.message)
+      if (status === 429) {
+        const linkMatch = error.message.match(/https?:\/\/\S+/)
+        setRateLimitError({
+          message: error.message.replace(/^HTTP 429:\s*/, ''),
+          disableLink: linkMatch ? linkMatch[0] : null,
+        })
+        return
+      }
       // Optional endpoints (e.g. /api/user/overview) opt out of the toast; the
       // caller handles their failure, so don't nag the user about it.
       if (!silent) addToast(`Request failed: ${method} ${path} — ${error.message}`, 'error', 6000)
@@ -189,19 +214,15 @@ export async function connect(opts: {
     screepsClient.stores.server.on('server:disconnected', (data) => {
       log(`server disconnected (willReconnect: ${data.willReconnect})`)
       if (!data.willReconnect) {
-        setStatus('idle')
-        setClient(null)
-        setUserInfo(null)
-        setServerVersion(null)
         worldStatusPollUntil = 0
         updateWorldStatusPolling(null)
+        setSessionError('Lost connection to the server.')
       }
     })
 
     screepsClient.stores.server.on('server:error', (data) => {
       log('server error:', data.error.message)
-      setError(data.error.message)
-      setStatus('error')
+      setSessionError(data.error.message)
     })
 
     screepsClient.stores.user.on('user:me', (info) => {
@@ -327,6 +348,8 @@ export function disconnect(): void {
   setClient(null)
   setStatus('idle')
   setError(null)
+  setSessionError(null)
+  setRateLimitError(null)
   setUserInfo(null)
   setServerVersion(null)
   setGameTime(null)

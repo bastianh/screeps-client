@@ -49,19 +49,12 @@ function baseUrl(url: string): string {
 
 /**
  * Fetch `/api/version` from a Screeps server without authentication.
- * The result is cached in `sessionStorage` for 5 minutes (per server hostname).
  * Useful for pre-login UI: showing the welcome text and detecting installed mods.
  */
 export async function fetchServerVersion(url: string): Promise<ServerVersion> {
-  const key = sessionKey('version', url)
-  const cached = readFromSession<ServerVersion>(key)
-  if (cached) return cached
-
   const res = await getFetch()(`${baseUrl(url)}api/version`)
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
-  const data = await res.json() as ServerVersion
-  writeToSession(key, data)
-  return data
+  return res.json() as Promise<ServerVersion>
 }
 
 /**

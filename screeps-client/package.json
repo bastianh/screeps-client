@@ -33,6 +33,7 @@
     "@solid-devtools/debugger": "^0.28.1",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-http": "^2",
+    "@tauri-apps/plugin-opener": "^2",
     "codemirror": "^6.0.2",
     "eslint": "^9.0.0",
     "eslint-plugin-solid": "^0.14.0",

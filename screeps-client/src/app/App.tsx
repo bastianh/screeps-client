@@ -3,6 +3,8 @@ import { client, status, tryAutoConnect, connect } from '~/stores/clientStore.js
 import { LoginForm } from '~/components/LoginForm.js'
 import { DesktopLoginForm } from '~/components/DesktopLoginForm.js'
 import { ConnectingScreen } from '~/components/ConnectingScreen.js'
+import { SessionErrorModal } from '~/components/SessionErrorModal.js'
+import { RateLimitModal } from '~/components/RateLimitModal.js'
 import { Dashboard } from './Dashboard.js'
 
 import { isEmbedded, isXxscreepsMode, embeddedServerUrl } from '~/utils/embedded.js'
@@ -71,6 +73,8 @@ export function App() {
         : booting()
           ? <ConnectingScreen />
           : isDesktop ? <DesktopLoginForm /> : <LoginForm />}
+      <SessionErrorModal />
+      <RateLimitModal />
     </div>
   )
 }

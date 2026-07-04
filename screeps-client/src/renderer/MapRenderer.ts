@@ -800,6 +800,17 @@ export class MapRenderer {
   }
 
 
+  // Force every currently active room to be torn down and re-fetched — used
+  // when the shard changes, since terrainBaked/terrainData/activeRooms are all
+  // keyed by room name alone and room names collide across shards (e.g. every
+  // shard has a "W5N5"). Without this, hasRoom() keeps reporting the old
+  // shard's terrain as already loaded and the new shard's terrain never fetches.
+  clearAllRooms(): void {
+    for (const name of [...this.activeRooms.keys()]) {
+      this.clearRoom(name)
+    }
+  }
+
   clearInvisibleRooms(visibleSet: ReadonlySet<string>): void {
     const b = this.lastVisibleBounds
     for (const name of [...this.activeRooms.keys()]) {

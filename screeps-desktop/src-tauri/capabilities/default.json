@@ -13,6 +13,7 @@
         { "url": "https://*" },
         { "url": "https://*:*" }
       ]
-    }
+    },
+    "opener:default"
   ]
 }
