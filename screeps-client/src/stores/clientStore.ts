@@ -51,7 +51,7 @@ const [serverVersion, setServerVersion] = createSignal<ServerVersion | null>(nul
 const [gameTime, setGameTime] = createSignal<number | null>(null)
 const [tickDuration, setTickDuration] = createSignal<number | null>(null)
 const [isGuest, setIsGuest] = createSignal(false)
-const [authMethod, setAuthMethod] = createSignal<'password' | 'steam' | 'token' | 'guest' | null>(null)
+const [authMethod, setAuthMethod] = createSignal<'password' | 'steam' | 'discord' | 'token' | 'guest' | null>(null)
 const [worldBounds, setWorldBounds] = createSignal<WorldInfo | null>(null)
 const [userFlags, setUserFlags] = createSignal<Record<string, UserFlag>>({})
 const [worldStatus, setWorldStatus] = createSignal<WorldStatus | null>(null)
@@ -144,8 +144,8 @@ export { client, status, error, sessionError, rateLimitError, setRateLimitError,
 export async function connect(opts: {
   url: string
   auth: 'password' | 'token' | 'guest'
-  /** Original login method, preserved across reloads. Defaults to `auth`. Auto-connect passes the persisted value so a password/steam login still reports its real method even though it reconnects via its session token. Steam logins use `auth: 'token'` but should report 'steam'. */
-  authMethod?: 'password' | 'steam' | 'token' | 'guest'
+  /** Original login method, preserved across reloads. Defaults to `auth`. Auto-connect passes the persisted value so a password/steam/discord login still reports its real method even though it reconnects via its session token. Steam and Discord logins use `auth: 'token'` but should report 'steam'/'discord'. */
+  authMethod?: 'password' | 'steam' | 'discord' | 'token' | 'guest'
   email?: string
   password?: string
   token?: string
@@ -307,7 +307,7 @@ export async function tryAutoConnect(): Promise<void> {
 
   if (!token) return
 
-  const storedAuthMethod = getSession(SS.authMethod) as 'password' | 'steam' | 'token' | 'guest' | null
+  const storedAuthMethod = getSession(SS.authMethod) as 'password' | 'steam' | 'discord' | 'token' | 'guest' | null
   log(`auto-connect: ${url}`)
   try {
     if (token === 'guest') {

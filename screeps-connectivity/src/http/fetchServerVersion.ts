@@ -1,5 +1,5 @@
 import type { ServerVersion } from '../types/game.js'
-import type { ScreepsmodAuthFeature, ServerFeature, XxscreepsModClientFeature } from '../types/game.js'
+import type { DiscordFeature, ScreepsmodAuthFeature, ServerFeature, XxscreepsModClientFeature } from '../types/game.js'
 import type { ApiAuthMeResponse, ApiAuthModInfoResponse, ApiRegisterCheckResponse } from '../types/api.js'
 import { getFetch } from './fetchFn.js'
 
@@ -192,4 +192,17 @@ export function getScreepsmodAuth(version: ServerVersion): ScreepsmodAuthFeature
  */
 export function getXxscreepsModClientFeature(version: ServerVersion): XxscreepsModClientFeature | undefined {
   return getServerFeature<XxscreepsModClientFeature>(version, 'xxscreeps-mod-client')
+}
+
+/**
+ * Returns the `discord` feature entry (published by `xxscreeps-mod-discord`) if
+ * present, otherwise `undefined`. Use `discordLogin` to gate the "Login with
+ * Discord" button before showing it.
+ *
+ * @example
+ * const discord = getDiscordFeature(version)
+ * if (discord?.discordLogin) showDiscordButton()
+ */
+export function getDiscordFeature(version: ServerVersion): DiscordFeature | undefined {
+  return getServerFeature<DiscordFeature>(version, 'discord')
 }

@@ -19,7 +19,7 @@ import {
   loadSavedCredential,
   deleteSavedCredential,
 } from '~/utils/keychain.js'
-import { getScreepsmodAuth, getXxscreepsModClientFeature } from 'screeps-connectivity'
+import { getScreepsmodAuth, getXxscreepsModClientFeature, getDiscordFeature } from 'screeps-connectivity'
 import { useOAuthLogin } from '~/utils/useOAuthLogin.js'
 import { useServerInfo } from '~/utils/useServerInfo.js'
 import { OAuthUsernameForm } from './OAuthUsernameForm.js'
@@ -210,6 +210,11 @@ function ServerLoginForm(props: { server: ServerConfig }) {
     if (caps) return caps.steamLogin
     return getScreepsmodAuth(v)?.authTypes?.includes('steam') ?? true
   }
+  const hasDiscord = () => {
+    if (props.server.forcedAuth) return false
+    const v = serverVersion()
+    return v ? getDiscordFeature(v)?.discordLogin ?? false : false
+  }
 
   const isConnecting = () => status() === 'connecting'
 
@@ -261,15 +266,27 @@ function ServerLoginForm(props: { server: ServerConfig }) {
   })
   const handleSteamLogin = () => steamLogin.startLogin(props.server.url)
 
+  const discordLogin = useOAuthLogin('discord', ({ url: discordUrl, token }) => {
+    void connect({ url: discordUrl, auth: 'token', authMethod: 'discord', token, serverPassword: serverPassword() || undefined, storage: null })
+  })
+  const handleDiscordLogin = () => discordLogin.startLogin(props.server.url)
+
+  // Whichever OAuth login is mid-registration (only one can be pending at a time)
+  // takes over the panel with the username form.
+  const pendingOAuth = () =>
+    steamLogin.pending() ? { login: steamLogin, label: 'Steam' } :
+    discordLogin.pending() ? { login: discordLogin, label: 'Discord' } :
+    undefined
+
   return (
-    <Show when={!steamLogin.pending()} fallback={
+    <Show when={!pendingOAuth()} fallback={
       <OAuthUsernameForm
-        url={steamLogin.pending()!.url}
-        providerLabel="Steam"
-        submitting={steamLogin.submitting()}
-        error={steamLogin.regError()}
-        onSubmit={(username, regEmail) => void steamLogin.completeRegistration(username, regEmail)}
-        onCancel={() => steamLogin.cancelRegistration()}
+        url={pendingOAuth()!.login.pending()!.url}
+        providerLabel={pendingOAuth()!.label}
+        submitting={pendingOAuth()!.login.submitting()}
+        error={pendingOAuth()!.login.regError()}
+        onSubmit={(username, regEmail) => void pendingOAuth()!.login.completeRegistration(username, regEmail)}
+        onCancel={() => pendingOAuth()!.login.cancelRegistration()}
       />
     }>
     <form onSubmit={handleSubmit} style={{ display: 'flex', 'flex-direction': 'column', gap: '16px' }}>
@@ -382,12 +399,14 @@ function ServerLoginForm(props: { server: ServerConfig }) {
         {isConnecting() ? 'Connecting…' : effectiveAuth() === 'guest' ? 'Connect as Guest (read-only)' : 'Connect'}
       </button>
 
-      <Show when={hasSteam()}>
+      <Show when={hasSteam() || hasDiscord()}>
         <div style={{ display: 'flex', 'align-items': 'center', gap: '8px', color: '#484f58', 'font-size': '12px' }}>
           <div style={{ flex: 1, height: '1px', background: '#30363d' }} />
           or
           <div style={{ flex: 1, height: '1px', background: '#30363d' }} />
         </div>
+      </Show>
+      <Show when={hasSteam()}>
         <button
           type="button"
           disabled={isConnecting()}
@@ -395,6 +414,16 @@ function ServerLoginForm(props: { server: ServerConfig }) {
           style={{ padding: '10px', 'border-radius': '6px', border: 'none', background: '#1b2838', color: '#c7d5e0', 'font-weight': 600, cursor: isConnecting() ? 'not-allowed' : 'pointer', opacity: isConnecting() ? 0.6 : 1 }}
         >
           Login with Steam
+        </button>
+      </Show>
+      <Show when={hasDiscord()}>
+        <button
+          type="button"
+          disabled={isConnecting()}
+          onClick={handleDiscordLogin}
+          style={{ padding: '10px', 'border-radius': '6px', border: 'none', background: '#5865F2', color: '#fff', 'font-weight': 600, cursor: isConnecting() ? 'not-allowed' : 'pointer', opacity: isConnecting() ? 0.6 : 1 }}
+        >
+          Login with Discord
         </button>
       </Show>
     </form>

@@ -11,6 +11,7 @@ import {
   registerUser,
   getScreepsmodAuth,
   getXxscreepsModClientFeature,
+  getDiscordFeature,
 } from 'screeps-connectivity'
 
 // ── shared styles ─────────────────────────────────────────────────────────────
@@ -239,7 +240,7 @@ function RegistrationForm(props: {
 export function LoginForm() {
   const embedded = isEmbedded()
   const xxscreeps = isXxscreepsMode()
-  const [mode, setMode] = createSignal<'login' | 'register' | 'steam-username'>('login')
+  const [mode, setMode] = createSignal<'login' | 'register' | 'steam-username' | 'discord-username'>('login')
   const [authType, setAuthType] = createSignal<'password' | 'token'>('password')
   const [url, setUrl] = createSignal(embedded ? embeddedServerUrl() : window.location.origin)
   const [email, setEmail] = createSignal('')
@@ -265,6 +266,10 @@ export function LoginForm() {
     if (!v) return true
     return getScreepsmodAuth(v)?.authTypes?.includes('steam') ?? true
   }
+  const hasDiscord = () => {
+    const v = serverVersion()
+    return v ? getDiscordFeature(v)?.discordLogin ?? false : false
+  }
   const canRegister = () => {
     const caps = xxscreepsCaps()
     if (caps) return caps.allowEmailRegistration
@@ -279,6 +284,13 @@ export function LoginForm() {
   })
   createEffect(() => { if (steamLogin.pending()) setMode('steam-username') })
   const handleSteamLogin = () => steamLogin.startLogin(url())
+
+  const discordLogin = useOAuthLogin('discord', ({ url: discordUrl, token }) => {
+    setMode('login')
+    void connect({ url: discordUrl, auth: 'token', authMethod: 'discord', token, serverPassword: serverPassword() || undefined, storage: null })
+  })
+  createEffect(() => { if (discordLogin.pending()) setMode('discord-username') })
+  const handleDiscordLogin = () => discordLogin.startLogin(url())
 
   const handleSubmit = async (e: Event) => {
     e.preventDefault()
@@ -374,6 +386,17 @@ export function LoginForm() {
           />
         </Show>
 
+        <Show when={mode() === 'discord-username'}>
+          <OAuthUsernameForm
+            url={discordLogin.pending()!.url}
+            providerLabel="Discord"
+            submitting={discordLogin.submitting()}
+            error={discordLogin.regError()}
+            onSubmit={(username, regEmail) => void discordLogin.completeRegistration(username, regEmail)}
+            onCancel={() => { discordLogin.cancelRegistration(); setMode('login') }}
+          />
+        </Show>
+
         <Show when={mode() === 'login'}>
           <form onSubmit={handleSubmit} style={{ display: 'flex', 'flex-direction': 'column', gap: '16px' }}>
             <div style={{ display: 'flex', 'align-items': 'baseline', 'justify-content': 'space-between' }}>
@@ -450,14 +473,21 @@ export function LoginForm() {
               {isConnecting() ? 'Connecting…' : 'Connect'}
             </button>
 
-            <Show when={hasSteam()}>
+            <Show when={hasSteam() || hasDiscord()}>
               <div style={{ display: 'flex', 'align-items': 'center', gap: '8px', color: '#484f58', 'font-size': '12px' }}>
                 <div style={{ flex: 1, height: '1px', background: '#30363d' }} />
                 or
                 <div style={{ flex: 1, height: '1px', background: '#30363d' }} />
               </div>
+            </Show>
+            <Show when={hasSteam()}>
               <button type="button" disabled={isConnecting()} onClick={handleSteamLogin} style={{ padding: '10px', 'border-radius': '6px', border: 'none', background: '#1b2838', color: '#c7d5e0', 'font-weight': 600, cursor: isConnecting() ? 'not-allowed' : 'pointer', opacity: isConnecting() ? 0.6 : 1 }}>
                 Login with Steam
+              </button>
+            </Show>
+            <Show when={hasDiscord()}>
+              <button type="button" disabled={isConnecting()} onClick={handleDiscordLogin} style={{ padding: '10px', 'border-radius': '6px', border: 'none', background: '#5865F2', color: '#fff', 'font-weight': 600, cursor: isConnecting() ? 'not-allowed' : 'pointer', opacity: isConnecting() ? 0.6 : 1 }}>
+                Login with Discord
               </button>
             </Show>
 

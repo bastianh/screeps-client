@@ -16,7 +16,7 @@ export function UserMenu(props: { onOpenSettings: () => void; onOpenBadgePicker:
 
   // Setting/changing a password needs an interactive session (password or steam login).
   // A pasted API token can't manage the account; guests have no account.
-  const canManagePassword = () => authMethod() === 'password' || authMethod() === 'steam'
+  const canManagePassword = () => authMethod() === 'password' || authMethod() === 'steam' || authMethod() === 'discord'
   // Steam-only accounts have no password yet → "Set password" without a current-password field.
   const hasPassword = () => userInfo()?.password === true
 

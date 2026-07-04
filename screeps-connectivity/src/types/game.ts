@@ -125,6 +125,18 @@ export interface XxscreepsModClientFeature extends ServerFeature {
     steamLogin: boolean
 }
 
+/**
+ * Published by `xxscreeps-mod-discord` at `/api/version` when Discord login is
+ * configured. `discordLogin` gates the UI; `loginUrl` is the OAuth entry point
+ * (a popup navigates there to start the flow).
+ */
+export interface DiscordFeature extends ServerFeature {
+    name: 'discord'
+    version: number
+    discordLogin: boolean
+    loginUrl: string
+}
+
 export interface ServerVersion {
     ok: number
     package: number
