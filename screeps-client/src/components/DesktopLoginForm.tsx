@@ -1,4 +1,4 @@
-import { createSignal, createEffect, on, onCleanup, onMount, untrack, For, Show, Switch, Match } from 'solid-js'
+import { createSignal, createEffect, on, onMount, untrack, For, Show, Switch, Match } from 'solid-js'
 import { Plus, Pencil, Trash2 } from 'lucide-solid'
 import { connect, status, error } from '~/stores/clientStore.js'
 import { createLogger } from '~/utils/log.js'
@@ -19,9 +19,9 @@ import {
   loadSavedCredential,
   deleteSavedCredential,
 } from '~/utils/keychain.js'
-import { fetchServerVersion, getScreepsmodAuth, getXxscreepsModClientFeature } from 'screeps-connectivity'
-import type { ServerVersion } from 'screeps-connectivity'
+import { getScreepsmodAuth, getXxscreepsModClientFeature } from 'screeps-connectivity'
 import { useOAuthLogin } from '~/utils/useOAuthLogin.js'
+import { useServerInfo } from '~/utils/useServerInfo.js'
 import { OAuthUsernameForm } from './OAuthUsernameForm.js'
 
 // ── styles ─────────────────────────────────────────────────────────────────────
@@ -35,31 +35,6 @@ const inputStyle = {
   width: '100%',
   'box-sizing': 'border-box',
 } as const
-
-// ── server info hook ───────────────────────────────────────────────────────────
-
-function useServerInfo(url: () => string) {
-  const [serverVersion, setServerVersion] = createSignal<ServerVersion | null>(null)
-  const [serverError, setServerError] = createSignal<string | null>(null)
-
-  createEffect(() => {
-    const rawUrl = url()
-    setServerVersion(null)
-    setServerError(null)
-    let cancelled = false
-    const timer = setTimeout(async () => {
-      try {
-        const v = await fetchServerVersion(rawUrl)
-        if (!cancelled) { setServerVersion(v); setServerError(null) }
-      } catch {
-        if (!cancelled) setServerError('Could not reach server')
-      }
-    }, 400)
-    onCleanup(() => { cancelled = true; clearTimeout(timer) })
-  })
-
-  return { serverVersion, serverError }
-}
 
 // ── server list sidebar ────────────────────────────────────────────────────────
 

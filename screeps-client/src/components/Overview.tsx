@@ -2,6 +2,7 @@ import { createEffect, createSignal, onCleanup, onMount, For, Show, Switch, Matc
 import { X, Zap, Mail } from 'lucide-solid'
 import type { ApiUserOverviewTotals, ApiPowerCreep } from 'screeps-connectivity'
 import { client, userInfo } from '~/stores/clientStore.js'
+import { capabilities } from '~/stores/capabilities.js'
 import { goToGame, goToRoom, goToUser, goToUserPower, goToUserPowerNew, goToUserPowerCreep, userView, powerView, powerCreepId } from '~/stores/routeStore.js'
 import { Messages } from '~/components/Messages.js'
 import { RankRing, GCL_RING, GCL_TEXT, GPL_RING, GPL_TEXT } from '~/components/RankRing.js'
@@ -141,18 +142,20 @@ export function Overview() {
           </h1>
           <span style={{ color: MUTED, 'font-size': '14px' }}>{userInfo()?.username}</span>
           <div style={{ flex: 1 }} />
-          <button
-            onClick={() => setShowMessages((v) => !v)}
-            title={showMessages() ? 'Back to overview' : 'Messages'}
-            style={{
-              display: 'flex', 'align-items': 'center', padding: '7px', 'border-radius': '4px', cursor: 'pointer',
-              border: showMessages() ? '1px solid #388bfd' : `1px solid ${BORDER}`,
-              background: showMessages() ? '#1f3158' : '#21262d',
-              color: showMessages() ? '#58a6ff' : TEXT,
-            }}
-          >
-            <Mail size={16} />
-          </button>
+          <Show when={capabilities().hasMessaging}>
+            <button
+              onClick={() => setShowMessages((v) => !v)}
+              title={showMessages() ? 'Back to overview' : 'Messages'}
+              style={{
+                display: 'flex', 'align-items': 'center', padding: '7px', 'border-radius': '4px', cursor: 'pointer',
+                border: showMessages() ? '1px solid #388bfd' : `1px solid ${BORDER}`,
+                background: showMessages() ? '#1f3158' : '#21262d',
+                color: showMessages() ? '#58a6ff' : TEXT,
+              }}
+            >
+              <Mail size={16} />
+            </button>
+          </Show>
           <button
             onClick={togglePower}
             title={userView() === 'power' ? 'Back to Overview' : 'Manage Power Creeps'}

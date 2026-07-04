@@ -7,10 +7,10 @@ import { SessionErrorModal } from '~/components/SessionErrorModal.js'
 import { RateLimitModal } from '~/components/RateLimitModal.js'
 import { Dashboard } from './Dashboard.js'
 
-import { isEmbedded, isXxscreepsMode, embeddedServerUrl } from '~/utils/embedded.js'
-import { isTauri } from '~/utils/tauri.js'
+import { embeddedServerUrl } from '~/utils/embedded.js'
 import { createLogger } from '~/utils/log.js'
 import { SS, getSession } from '~/utils/storage.js'
+import { capabilities } from '~/stores/capabilities.js'
 
 const { log } = createLogger('app')
 
@@ -26,19 +26,21 @@ function guestAutoConnectUrl(): string | null {
 // flashing the LoginForm. Mirrors the conditions handled in onMount and
 // tryAutoConnect.
 function willAutoConnect(): boolean {
-  if (isXxscreepsMode()) return true
+  const caps = capabilities()
+  if (caps.isXxscreepsMode) return true
   if (guestAutoConnectUrl() !== null) return true
-  const url = isEmbedded() ? embeddedServerUrl() : getSession(SS.url)
+  const url = caps.isEmbedded ? embeddedServerUrl() : getSession(SS.url)
   // In Tauri the token lives in the OS keychain (async) — if a URL is stored,
   // optimistically show the boot screen and let tryAutoConnect() decide.
-  if (isTauri()) return Boolean(url)
+  if (caps.isDesktop) return Boolean(url)
   const token = getSession(SS.token)
   return Boolean(url && token)
 }
 
 export function App() {
   const isConnected = () => status() === 'connected' && client() !== null
-  const isDesktop = isTauri()
+  const caps = capabilities()
+  const isDesktop = caps.isDesktop
   // True until the initial auto-connect attempt settles, so the boot splash is
   // only shown during startup and never re-appears (e.g. after a later logout).
   const [booting, setBooting] = createSignal(willAutoConnect())
@@ -48,11 +50,11 @@ export function App() {
       if (status() === 'idle') {
         await tryAutoConnect().catch(() => {})
         if (status() !== 'connected') {
-          if (isXxscreepsMode()) {
+          if (caps.isXxscreepsMode) {
             const url = embeddedServerUrl()
             log(`xxscreeps mode — auto-connecting as guest to ${url}`)
             await connect({ url, auth: 'guest', storage: null }).catch(() => {})
-          } else if (!isEmbedded()) {
+          } else if (!caps.isEmbedded) {
             const guestUrl = guestAutoConnectUrl()
             if (guestUrl) {
               log(`?guest param — auto-connecting as guest to ${guestUrl}`)

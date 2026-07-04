@@ -3,17 +3,15 @@ import { Check, X as XIcon } from 'lucide-solid'
 import { connect, status, error } from '~/stores/clientStore.js'
 import { isEmbedded, isXxscreepsMode, embeddedServerUrl } from '~/utils/embedded.js'
 import { useOAuthLogin } from '~/utils/useOAuthLogin.js'
+import { useServerInfo } from '~/utils/useServerInfo.js'
 import { OAuthUsernameForm } from './OAuthUsernameForm.js'
 import {
-  fetchServerVersion,
-  fetchAuthModInfo,
   checkUsername,
   checkEmail,
   registerUser,
   getScreepsmodAuth,
   getXxscreepsModClientFeature,
 } from 'screeps-connectivity'
-import type { ServerVersion, ApiAuthModInfoResponse } from 'screeps-connectivity'
 
 // ── shared styles ─────────────────────────────────────────────────────────────
 
@@ -23,41 +21,6 @@ const inputStyle = {
   border: '1px solid #30363d',
   background: '#0d1117',
   color: '#c9d1d9',
-}
-
-// ── pre-login server info hook ─────────────────────────────────────────────────
-
-function useServerInfo(url: () => string) {
-  const [serverVersion, setServerVersion] = createSignal<ServerVersion | null>(null)
-  const [authModInfo, setAuthModInfo] = createSignal<ApiAuthModInfoResponse | null>(null)
-  const [serverError, setServerError] = createSignal<string | null>(null)
-
-  createEffect(() => {
-    const rawUrl = url()
-    setServerVersion(null)
-    setAuthModInfo(null)
-    setServerError(null)
-
-    let cancelled = false
-    const timer = setTimeout(async () => {
-      try {
-        const v = await fetchServerVersion(rawUrl)
-        if (cancelled) return
-        setServerVersion(v)
-        setServerError(null)
-        if (getScreepsmodAuth(v)) {
-          const mod = await fetchAuthModInfo(rawUrl)
-          if (!cancelled) setAuthModInfo(mod)
-        }
-      } catch {
-        if (!cancelled) { setServerError('Could not reach server'); setServerVersion(null) }
-      }
-    }, 400)
-
-    onCleanup(() => { cancelled = true; clearTimeout(timer) })
-  })
-
-  return { serverVersion, authModInfo, serverError }
 }
 
 // ── field availability check hook ─────────────────────────────────────────────

@@ -18,6 +18,7 @@ const MapViewer = lazy(() =>
   import('~/components/MapViewer.js').then((m) => ({ default: m.MapViewer })),
 )
 import { client, disconnect, isGuest, userInfo, gameTime, isPrivateServer, serverVersion } from '~/stores/clientStore.js'
+import { capabilities } from '~/stores/capabilities.js'
 import { historyMode, historyTick, enterHistoryMode, exitHistoryMode, seekToTick } from '~/stores/historyStore.js'
 import { widescreenMode } from '~/stores/settingsStore.js'
 import { toggleShowLog, toggleShowConsole, toggleShowMemory } from '~/stores/consoleStore.js'
@@ -462,7 +463,7 @@ export function Dashboard() {
         >
           <LayoutDashboard size={16} />
         </HeaderButton>
-        <Show when={!isGuest()}>
+        <Show when={!isGuest() && capabilities().hasMarket}>
           <HeaderButton
             title={route() === 'market' ? 'Close Market' : 'Market'}
             active={route() === 'market'}
