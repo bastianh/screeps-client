@@ -40,9 +40,9 @@ export type {
   MapVisualEntry,
 } from './types/game.js'
 
-export { fetchServerVersion, fetchAuthModInfo, checkUsername, checkEmail, registerUser, getServerFeature, getScreepsmodAuth } from './http/fetchServerVersion.js'
+export { fetchServerVersion, fetchAuthModInfo, checkUsername, checkEmail, registerUser, fetchAuthMeWithToken, completeProviderRegistration, getServerFeature, getScreepsmodAuth } from './http/fetchServerVersion.js'
 export type { ApiAuthModInfoResponse } from './http/fetchServerVersion.js'
-export type { RoomHistoryChunk, ApiRoomDecorationsResponse, ApiRoomDecorationItem, ApiRoomDecorationDef, ApiRoomDecorationGraphic, ApiRoomDecorationActive, ApiUserOverviewResponse, ApiUserOverviewTotals, ApiUserRoomsResponse, ApiUserStatsResponse, ApiLeaderboardFindResponse, ApiUserMoneyHistoryResponse, ApiMarketOrder, ApiMarketOrdersIndexResponse, ApiMarketOrdersResponse, ApiMarketMyOrdersResponse, ApiMarketStat, ApiMarketStatsResponse, ApiPowerCreep, ApiPowerCreepsListResponse, ApiUserMessage, ApiUserMessagesListResponse, ApiUserMessagesIndexEntry, ApiUserMessagesIndexResponse, ApiUserMessagesUnreadCountResponse, ApiUserFindResponse } from './types/api.js'
+export type { ApiAuthMeResponse, RoomHistoryChunk, ApiRoomDecorationsResponse, ApiRoomDecorationItem, ApiRoomDecorationDef, ApiRoomDecorationGraphic, ApiRoomDecorationActive, ApiUserOverviewResponse, ApiUserOverviewTotals, ApiUserRoomsResponse, ApiUserStatsResponse, ApiLeaderboardFindResponse, ApiUserMoneyHistoryResponse, ApiMarketOrder, ApiMarketOrdersIndexResponse, ApiMarketOrdersResponse, ApiMarketMyOrdersResponse, ApiMarketStat, ApiMarketStatsResponse, ApiPowerCreep, ApiPowerCreepsListResponse, ApiUserMessage, ApiUserMessagesListResponse, ApiUserMessagesIndexEntry, ApiUserMessagesIndexResponse, ApiUserMessagesUnreadCountResponse, ApiUserFindResponse } from './types/api.js'
 export { ROOM_DECORATIONS_MOCK } from './mocks/roomDecorations.js'
 
 export { badgeToSvg } from './badge/index.js'

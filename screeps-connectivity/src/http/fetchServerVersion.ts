@@ -1,6 +1,6 @@
 import type { ServerVersion } from '../types/game.js'
 import type { ScreepsmodAuthFeature, ServerFeature } from '../types/game.js'
-import type { ApiAuthModInfoResponse, ApiRegisterCheckResponse } from '../types/api.js'
+import type { ApiAuthMeResponse, ApiAuthModInfoResponse, ApiRegisterCheckResponse } from '../types/api.js'
 import { getFetch } from './fetchFn.js'
 
 export type { ApiAuthModInfoResponse }
@@ -121,6 +121,42 @@ export async function registerUser(
   })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   return res.json() as Promise<{ ok: number; error?: string }>
+}
+
+/**
+ * Fetch `/api/auth/me` using a bare token, without going through a full `ScreepsClient`.
+ * Used right after an OAuth popup (Steam, GitHub, ...) hands back a token, to check whether
+ * the account still needs to finish registration — servers like xxscreeps issue a provisional
+ * token for brand-new provider signups that has no `username` yet until one is chosen.
+ */
+export async function fetchAuthMeWithToken(url: string, token: string): Promise<ApiAuthMeResponse | null> {
+  const res = await getFetch()(`${baseUrl(url)}api/auth/me`, {
+    headers: { 'X-Token': token, 'X-Username': token },
+  })
+  if (!res.ok) return null
+  return res.json() as Promise<ApiAuthMeResponse>
+}
+
+/**
+ * Finish an OAuth provider signup (Steam, GitHub, ...) by choosing a username for the
+ * provisional account. Requires the provisional token handed back from the OAuth popup.
+ * Returns the upgraded token (a real, non-expiring-in-2-minutes user token) taken from the
+ * `X-Token` response header — the provisional token cannot authenticate anything else.
+ */
+export async function completeProviderRegistration(
+  url: string,
+  token: string,
+  username: string,
+  email?: string,
+): Promise<{ token: string }> {
+  const res = await getFetch()(`${baseUrl(url)}api/register/set-username`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Token': token, 'X-Username': token },
+    body: JSON.stringify({ username, ...(email ? { email } : {}) }),
+  })
+  const data = await res.json() as { ok?: number; error?: string }
+  if (!res.ok || data.error) throw new Error(data.error ?? `HTTP ${res.status}`)
+  return { token: res.headers.get('x-token') ?? token }
 }
 
 /**

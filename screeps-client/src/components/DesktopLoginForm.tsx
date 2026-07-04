@@ -21,6 +21,8 @@ import {
 } from '~/utils/keychain.js'
 import { fetchServerVersion, getScreepsmodAuth } from 'screeps-connectivity'
 import type { ServerVersion } from 'screeps-connectivity'
+import { useSteamLogin } from '~/utils/useSteamLogin.js'
+import { SteamUsernameForm } from './SteamUsernameForm.js'
 
 // ── styles ─────────────────────────────────────────────────────────────────────
 
@@ -277,25 +279,21 @@ function ServerLoginForm(props: { server: ServerConfig }) {
     }
   }
 
-  const handleSteamLogin = () => {
-    const serverUrl = props.server.url.replace(/\/$/, '')
-    const popup = window.open(`${serverUrl}/api/auth/steam`, 'screeps-steam-auth', 'width=800,height=600,left=200,top=100')
-    const onMessage = (event: MessageEvent) => {
-      try {
-        const data = JSON.parse(event.data as string) as { token?: string }
-        if (data.token) {
-          cleanup()
-          void connect({ url: serverUrl, auth: 'token', authMethod: 'steam', token: data.token, serverPassword: serverPassword() || undefined, storage: null })
-        }
-      } catch { /* non-JSON */ }
-    }
-    const checkClosed = setInterval(() => { if (popup?.closed) cleanup() }, 500)
-    const cleanup = () => { clearInterval(checkClosed); window.removeEventListener('message', onMessage) }
-    window.addEventListener('message', onMessage)
-    onCleanup(cleanup)
-  }
+  const steamLogin = useSteamLogin(({ url: steamUrl, token }) => {
+    void connect({ url: steamUrl, auth: 'token', authMethod: 'steam', token, serverPassword: serverPassword() || undefined, storage: null })
+  })
+  const handleSteamLogin = () => steamLogin.startLogin(props.server.url)
 
   return (
+    <Show when={!steamLogin.pending()} fallback={
+      <SteamUsernameForm
+        url={steamLogin.pending()!.url}
+        submitting={steamLogin.submitting()}
+        error={steamLogin.regError()}
+        onSubmit={(username, regEmail) => void steamLogin.completeRegistration(username, regEmail)}
+        onCancel={() => steamLogin.cancelRegistration()}
+      />
+    }>
     <form onSubmit={handleSubmit} style={{ display: 'flex', 'flex-direction': 'column', gap: '16px' }}>
       <div>
         <h2 style={{ margin: '0 0 4px', 'font-size': '18px', color: '#c9d1d9' }}>{props.server.name}</h2>
@@ -422,6 +420,7 @@ function ServerLoginForm(props: { server: ServerConfig }) {
         </button>
       </Show>
     </form>
+    </Show>
   )
 }
 

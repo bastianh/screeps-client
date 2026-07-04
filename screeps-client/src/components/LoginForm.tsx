@@ -2,6 +2,8 @@ import { createSignal, createEffect, onCleanup, For, Show, JSX } from 'solid-js'
 import { Check, X as XIcon } from 'lucide-solid'
 import { connect, status, error } from '~/stores/clientStore.js'
 import { isEmbedded, isXxscreepsMode, embeddedServerUrl } from '~/utils/embedded.js'
+import { useSteamLogin } from '~/utils/useSteamLogin.js'
+import { SteamUsernameForm } from './SteamUsernameForm.js'
 import {
   fetchServerVersion,
   fetchAuthModInfo,
@@ -273,7 +275,7 @@ function RegistrationForm(props: {
 export function LoginForm() {
   const embedded = isEmbedded()
   const xxscreeps = isXxscreepsMode()
-  const [mode, setMode] = createSignal<'login' | 'register'>('login')
+  const [mode, setMode] = createSignal<'login' | 'register' | 'steam-username'>('login')
   const [authType, setAuthType] = createSignal<'password' | 'token'>('password')
   const [url, setUrl] = createSignal(embedded ? embeddedServerUrl() : window.location.origin)
   const [email, setEmail] = createSignal('')
@@ -294,20 +296,12 @@ export function LoginForm() {
     authModInfo()?.allowRegistration === true ||
     (serverVersion()?.serverData?.features ?? []).some(f => f.name === 'official-like')
 
-  const handleSteamLogin = () => {
-    const serverUrl = url().replace(/\/$/, '')
-    const popup = window.open(`${serverUrl}/api/auth/steam`, 'screeps-steam-auth', 'width=800,height=600,left=200,top=100')
-    const onMessage = (event: MessageEvent) => {
-      try {
-        const data = JSON.parse(event.data as string) as { token?: string }
-        if (data.token) { cleanup(); connect({ url: serverUrl, auth: 'token', authMethod: 'steam', token: data.token, serverPassword: serverPassword() || undefined, storage: null }) }
-      } catch { /* non-JSON */ }
-    }
-    const checkClosed = setInterval(() => { if (popup?.closed) cleanup() }, 500)
-    const cleanup = () => { clearInterval(checkClosed); window.removeEventListener('message', onMessage) }
-    window.addEventListener('message', onMessage)
-    onCleanup(cleanup)
-  }
+  const steamLogin = useSteamLogin(({ url: steamUrl, token }) => {
+    setMode('login')
+    void connect({ url: steamUrl, auth: 'token', authMethod: 'steam', token, serverPassword: serverPassword() || undefined, storage: null })
+  })
+  createEffect(() => { if (steamLogin.pending()) setMode('steam-username') })
+  const handleSteamLogin = () => steamLogin.startLogin(url())
 
   const handleSubmit = async (e: Event) => {
     e.preventDefault()
@@ -389,6 +383,16 @@ export function LoginForm() {
             serverPassword={serverPassword()}
             onSuccess={handleRegistrationSuccess}
             onCancel={() => setMode('login')}
+          />
+        </Show>
+
+        <Show when={mode() === 'steam-username'}>
+          <SteamUsernameForm
+            url={steamLogin.pending()!.url}
+            submitting={steamLogin.submitting()}
+            error={steamLogin.regError()}
+            onSubmit={(username, regEmail) => void steamLogin.completeRegistration(username, regEmail)}
+            onCancel={() => { steamLogin.cancelRegistration(); setMode('login') }}
           />
         </Show>
 

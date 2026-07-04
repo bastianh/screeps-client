@@ -309,6 +309,28 @@ if (authMod) {
 }
 ```
 
+### Completing an OAuth provider signup (Steam, GitHub, ...)
+
+OAuth popups (`/api/auth/steam`, etc.) hand back a token via `postMessage`. On some servers — notably `xxscreeps` — a **brand-new** signup gets a provisional token that has no username yet and cannot authenticate anything else (including the WebSocket) until one is chosen. This mirrors the official Screeps client's own behavior: it treats any session where `/api/auth/me` comes back without a `username` as "registration incomplete" and prompts for one, regardless of which provider was used to sign in.
+
+```ts
+import { fetchAuthMeWithToken, completeProviderRegistration, checkUsername } from 'screeps-connectivity'
+
+// After the OAuth popup posts back { token }:
+const me = await fetchAuthMeWithToken(serverUrl, token)
+
+if (me?.username) {
+  // Already a real account — connect normally with TokenAuth
+} else {
+  // Registration incomplete — prompt for a username, then finish signup
+  await checkUsername(serverUrl, chosenUsername) // optional live availability check
+  const { token: upgradedToken } = await completeProviderRegistration(serverUrl, token, chosenUsername, optionalEmail)
+  // upgradedToken is a real user token — safe to use for both HTTP and the WebSocket
+}
+```
+
+`completeProviderRegistration` posts to `/api/register/set-username` and reads the upgraded token back from the `X-Token` response header — the original provisional token is discarded.
+
 ### `ServerFeature` types
 
 ```ts
