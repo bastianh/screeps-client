@@ -61,7 +61,11 @@ const rootRedirect = readBool('SCREEPS_MOD_CLIENT_ROOT_REDIRECT', mountPath !== 
 // Paths that should never be handled by the client mod, even when mounted at '/'.
 // Can be overridden via SCREEPS_MOD_CLIENT_EXCLUDE (comma-separated prefixes).
 // Note: /assets/ is reserved by the game server; the client bundle uses /_client/ instead.
-const DEFAULT_EXCLUDES = ['/api/', '/socket', '/backend/', '/auth/', '/assets/', '/map/']
+// Do NOT exclude /map/ — it's a client-side SPA route (/map/<shard>). xxscreeps has no
+// HTTP route there (map-stats is under /api/, map render assets under /assets/, the map
+// renderer is a websocket), and the await-next()-then-404-fallback below already leaves
+// any real server route untouched.
+const DEFAULT_EXCLUDES = ['/api/', '/socket', '/backend/', '/auth/', '/assets/']
 const excludePrefixes = process.env.SCREEPS_MOD_CLIENT_EXCLUDE
   ? process.env.SCREEPS_MOD_CLIENT_EXCLUDE.split(',').map(s => s.trim()).filter(Boolean)
   : DEFAULT_EXCLUDES
