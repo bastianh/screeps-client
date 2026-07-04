@@ -1,4 +1,4 @@
-import { createSignal } from 'solid-js'
+import { createSignal, untrack } from 'solid-js'
 import { ScreepsClient, PasswordAuth, TokenAuth, GuestAuth, IndexedDBStorage } from 'screeps-connectivity'
 import type { AuthStrategy, StorageAdapter, UserInfo, ServerVersion, WorldInfo, WorldStatus, ApiRoomDecorationsResponse } from 'screeps-connectivity'
 import { addToast } from './toastStore.js'
@@ -212,6 +212,11 @@ export async function connect(opts: {
     })
 
     screepsClient.stores.server.on('server:disconnected', (data) => {
+      // The WebSocket's close event fires asynchronously, so this can arrive after
+      // an explicit disconnect() has already cleared the client and reset state
+      // (e.g. leaving guest mode to go back to the login screen). Ignore it once
+      // this client is no longer the active one.
+      if (untrack(client) !== screepsClient) return
       log(`server disconnected (willReconnect: ${data.willReconnect})`)
       if (!data.willReconnect) {
         worldStatusPollUntil = 0
@@ -221,6 +226,7 @@ export async function connect(opts: {
     })
 
     screepsClient.stores.server.on('server:error', (data) => {
+      if (untrack(client) !== screepsClient) return
       log('server error:', data.error.message)
       setSessionError(data.error.message)
     })
@@ -329,17 +335,15 @@ export function disconnect(): void {
   log('disconnecting')
   if (isTauri()) {
     const url = getSession(SS.url)
-    const currentAuthMethod = authMethod()
-    if (url) {
-      // For token auth the session token IS the user's login credential — keep it
-      // so the next launch can auto-connect. Password/steam logins produce a
-      // temporary session token that is safe to discard.
-      if (currentAuthMethod !== 'token') {
-        void deleteTokenForUrl(url)
-      }
-      // Server password is a static access credential, not a session token —
-      // leave it in the keychain so it survives logout.
-    }
+    // Always clear the session token used for auto-connect, even when the auth
+    // method was 'token' (where the session token doubles as the login
+    // credential) — logging out should stop auto-connecting on next launch.
+    // The credential saved from the login form (DesktopLoginForm's "save in
+    // keychain" checkbox) lives separately as savedCredential and must survive
+    // logout so the field stays pre-filled.
+    // Server password is a static access credential, not a session token —
+    // leave it in the keychain so it survives logout.
+    if (url) void deleteTokenForUrl(url)
   }
   const c = client()
   if (c) {
