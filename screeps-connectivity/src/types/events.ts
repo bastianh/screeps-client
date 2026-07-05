@@ -47,7 +47,7 @@ export interface UserStoreEvents {
 
 export interface ServerStoreEvents {
     'server:connected': Record<string, never>
-    'server:disconnected': { willReconnect: boolean }
+    'server:disconnected': { willReconnect: boolean; intentional: boolean }
     'server:error': { error: Error }
     'server:version': ServerVersion
     'server:shards': ShardInfo[]

@@ -217,8 +217,12 @@ export async function connect(opts: {
     })
 
     screepsClient.stores.server.on('server:disconnected', (data) => {
-      log(`server disconnected (willReconnect: ${data.willReconnect})`)
-      if (!data.willReconnect) {
+      log(`server disconnected (willReconnect: ${data.willReconnect}, intentional: ${data.intentional})`)
+      // An intentional close (user logged out or a guest hit Login) fires the
+      // socket's async onclose after disconnect() has already torn the session
+      // down. Treating that as a fatal error would pop the "Connection lost"
+      // modal over the login screen — so only surface genuinely lost sessions.
+      if (!data.willReconnect && !data.intentional) {
         worldStatusPollUntil = 0
         updateWorldStatusPolling(null)
         setSessionError('Lost connection to the server.')

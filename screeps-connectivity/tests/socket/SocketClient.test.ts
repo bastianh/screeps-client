@@ -141,4 +141,15 @@ describe('SocketClient', () => {
     client.disconnect()
     expect(willReconnect).toBe(false)
   })
+
+  it('disconnected event is flagged intentional when disconnect() is called', async () => {
+    const client = makeClient()
+    const _ws = await connectClient(client)
+    let intentional: boolean | undefined
+    client.on('disconnected', (data) => {
+      intentional = (data as { intentional: boolean }).intentional
+    })
+    client.disconnect()
+    expect(intentional).toBe(true)
+  })
 })

@@ -29,8 +29,8 @@ export class ServerStore extends TypedStore<ServerStoreEvents> {
       this.emit('server:connected', {})
     }))
     this.socketSubs.push(socket.on('disconnected', (data) => {
-      const d = data as { willReconnect: boolean }
-      this.emit('server:disconnected', { willReconnect: d.willReconnect })
+      const d = data as { willReconnect: boolean; intentional?: boolean }
+      this.emit('server:disconnected', { willReconnect: d.willReconnect, intentional: d.intentional ?? false })
     }))
     this.socketSubs.push(socket.on('socket:error', (data) => {
       this.emit('server:error', { error: data instanceof Error ? data : new Error(String(data)) })
