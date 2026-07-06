@@ -1,5 +1,5 @@
 import { createEffect, createSignal, lazy, onCleanup, onMount, Show, untrack, type JSX } from 'solid-js'
-import { Map, Code2, Settings, LogIn, LayoutDashboard, Store } from 'lucide-solid'
+import { Map, Code2, Settings, LogIn, LayoutDashboard, Store, Clock } from 'lucide-solid'
 import { ConnectionStatus } from '~/components/ConnectionStatus.js'
 import { RoomViewer } from '~/components/RoomViewer.js'
 import { ToastContainer } from '~/components/ToastContainer.js'
@@ -259,6 +259,7 @@ export function Dashboard() {
   }
 
   const openMap = (originRoom: string) => {
+    if (untrack(historyMode)) exitHistoryMode()
     setMapOriginRoom(originRoom)
     setMapMode(true)
     history.pushState(null, '', buildMapUrl(shard()))
@@ -297,6 +298,7 @@ export function Dashboard() {
     if (nav) {
       const navSub = nav.on('navigation:change', (state) => {
         if (state.room === null) return
+        if (untrack(historyMode)) exitHistoryMode()
         setRoom(state.room)
         setShard(state.shard)
         setMapMode(false)
@@ -383,6 +385,30 @@ export function Dashboard() {
         >
           <Map size={24} />
         </button>
+        <Show when={capabilities().hasHistory}>
+          <button
+            onClick={() => (historyMode() ? exitHistoryMode() : gameTime() !== null && enterHistoryMode(gameTime()!))}
+            disabled={!historyMode() && gameTime() === null}
+            title="History"
+            style={{
+              position: 'absolute',
+              top: '66px',
+              left: '8px',
+              'z-index': 5,
+              padding: '12px',
+              'border-radius': '6px',
+              border: `1px solid ${historyMode() ? '#58a6ff' : '#30363d'}`,
+              background: historyMode() ? 'rgba(31,111,235,0.85)' : 'rgba(33,38,45,0.85)',
+              color: '#c9d1d9',
+              cursor: !historyMode() && gameTime() === null ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              'align-items': 'center',
+              opacity: !historyMode() && gameTime() === null ? 0.4 : 1,
+            }}
+          >
+            <Clock size={24} />
+          </button>
+        </Show>
       </Show>
       <Show when={showMotd()}>
         <MotdOverlay text={motdText()!} onClose={() => setMotdDismissed(true)} />
