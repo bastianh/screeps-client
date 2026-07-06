@@ -12,6 +12,7 @@ import {
   getScreepsmodAuth,
   getXxscreepsModClientFeature,
   getDiscordFeature,
+  hasOfficialLike,
 } from 'screeps-connectivity'
 
 // ── shared styles ─────────────────────────────────────────────────────────────
@@ -277,6 +278,13 @@ export function LoginForm() {
       (serverVersion()?.serverData?.features ?? []).some(f => f.name === 'official-like')
   }
   const allowGuest = () => xxscreepsCaps()?.allowGuestAccess ?? true
+  // The connection ("server") password is a screepsmod-auth-only concept. xxscreeps
+  // servers (advertised via the `official-like` feature) have no such setting, so
+  // hide the field for them.
+  const showServerPassword = () => {
+    const v = serverVersion()
+    return v ? !hasOfficialLike(v) : true
+  }
 
   const steamLogin = useOAuthLogin('steam', ({ url: steamUrl, token }) => {
     setMode('login')
@@ -458,10 +466,12 @@ export function LoginForm() {
               </label>
             )}
 
-            <label style={{ display: 'flex', 'flex-direction': 'column', gap: '4px' }}>
-              <span style={{ 'font-size': '12px', color: '#8b949e' }}>Server Password <span style={{ color: '#484f58' }}>(optional)</span></span>
-              <input type="password" name="server-password" autocomplete="off" data-1p-ignore data-lpignore="true" value={serverPassword()} onInput={(e) => setServerPassword(e.currentTarget.value)} placeholder="Leave empty if not required" style={inputStyle} />
-            </label>
+            <Show when={showServerPassword()}>
+              <label style={{ display: 'flex', 'flex-direction': 'column', gap: '4px' }}>
+                <span style={{ 'font-size': '12px', color: '#8b949e' }}>Server Password <span style={{ color: '#484f58' }}>(optional)</span></span>
+                <input type="password" name="server-password" autocomplete="off" data-1p-ignore data-lpignore="true" value={serverPassword()} onInput={(e) => setServerPassword(e.currentTarget.value)} placeholder="Leave empty if not required" style={inputStyle} />
+              </label>
+            </Show>
 
             {error() && <div style={{ color: '#f85149', 'font-size': '13px' }}>{error()}</div>}
 

@@ -206,3 +206,16 @@ export function getXxscreepsModClientFeature(version: ServerVersion): XxscreepsM
 export function getDiscordFeature(version: ServerVersion): DiscordFeature | undefined {
   return getServerFeature<DiscordFeature>(version, 'discord')
 }
+
+/**
+ * Returns `true` when the server advertises the `official-like` feature — the
+ * marker xxscreeps servers publish at `/api/version`. Such servers do not
+ * implement the screepsmod-auth connection ("server") password, so the client
+ * can hide that field entirely.
+ *
+ * @example
+ * if (hasOfficialLike(version)) hideServerPasswordField()
+ */
+export function hasOfficialLike(version: ServerVersion): boolean {
+  return getServerFeature(version, 'official-like') !== undefined
+}
