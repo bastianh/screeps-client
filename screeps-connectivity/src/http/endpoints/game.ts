@@ -98,9 +98,11 @@ export function createGameEndpoints(http: HttpClient, decorationsMock?: ApiRoomD
     addObjectIntent: (id, room, name, intent, shard) => http.request('POST', '/api/game/add-object-intent', withShard({ _id: id, room, name, intent }, shard)),
     addGlobalIntent: (name, intent) => http.request('POST', '/api/game/add-global-intent', { name, intent }),
     roomHistory: (room, time, shard) =>
+      // silent: a missing chunk 404s while history is still being written; the caller
+      // handles that gracefully, so don't surface a global "request failed" toast.
       shard
-        ? http.request('GET', `/room-history/${encodeURIComponent(shard)}/${encodeURIComponent(room)}/${time}.json`)
-        : http.request('GET', '/room-history', { room, time }),
+        ? http.request('GET', `/room-history/${encodeURIComponent(shard)}/${encodeURIComponent(room)}/${time}.json`, undefined, { silent: true })
+        : http.request('GET', '/room-history', { room, time }, { silent: true }),
     setNotifyWhenAttacked: (id, enabled) => http.request('POST', '/api/game/set-notify-when-attacked', { _id: id, enabled }),
     createInvader: (room, x, y, size, type, boosted) => http.request('POST', '/api/game/create-invader', { room, x, y, size, type, ...(boosted != null ? { boosted } : {}) }),
     removeInvader: (id) => http.request('POST', '/api/game/remove-invader', { _id: id }),

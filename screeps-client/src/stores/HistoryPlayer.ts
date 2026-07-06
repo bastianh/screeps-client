@@ -6,6 +6,25 @@ interface GameHttpClient {
   }
 }
 
+/**
+ * Thrown when the requested tick has no history data on the server (the chunk
+ * returns 404 / doesn't exist). Callers should treat this as "pick another tick"
+ * rather than a hard error to surface as a failure toast.
+ */
+export class HistoryUnavailableError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'HistoryUnavailableError'
+  }
+}
+
+function isNotFound(err: unknown): boolean {
+  const status = (err as { status?: number } | null)?.status
+  if (status === 404) return true
+  const message = (err as { message?: string } | null)?.message
+  return typeof message === 'string' && message.includes('HTTP 404')
+}
+
 export class HistoryPlayer {
   private readonly chunkCache = new Map<number, RoomHistoryChunk>()
   private readonly inflight = new Map<number, Promise<RoomHistoryChunk>>()
@@ -65,11 +84,20 @@ export class HistoryPlayer {
 
     try {
       chunk = await this.loadChunk(base)
-    } catch {
+    } catch (primaryErr) {
       // Chunk not yet written — fall back to the previous one
       const prevBase = base - this.chunkSize
-      if (prevBase < 0) throw new Error(`No history data available before tick ${base}`)
-      chunk = await this.loadChunk(prevBase)
+      if (prevBase < 0) {
+        if (isNotFound(primaryErr)) throw new HistoryUnavailableError(`No history data available for tick ${tick}`)
+        throw primaryErr
+      }
+      try {
+        chunk = await this.loadChunk(prevBase)
+      } catch (prevErr) {
+        // Neither the requested chunk nor the previous one exists — genuinely no data.
+        if (isNotFound(prevErr)) throw new HistoryUnavailableError(`No history data available for tick ${tick}`)
+        throw prevErr
+      }
       base = prevBase
       // Clamp tick to the highest available tick in the previous chunk
       const available = Object.keys(chunk.ticks).map(Number).filter(t => t >= base)

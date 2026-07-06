@@ -17,8 +17,8 @@ import { parseRoomName, formatRoomName, isRoomInWorld } from '~/utils/roomName.j
 import { useRoomNavigationKeys } from '~/utils/useRoomNavigationKeys.js'
 import type { Badge, RoomTerrain, RoomObjectMap, RoomObjectDiff } from 'screeps-connectivity'
 import { SubscriptionGroup } from 'screeps-connectivity'
-import { historyMode, historyTick, historyMinTick, historyMaxTick, setHistoryMaxTick, historyLoading, setHistoryLoading, seekToTick, playbackSpeed } from '~/stores/historyStore.js'
-import { HistoryPlayer } from '~/stores/HistoryPlayer.js'
+import { historyMode, historyTick, historyMinTick, historyMaxTick, setHistoryMaxTick, historyLoading, setHistoryLoading, seekToTick, playbackSpeed, isPlaying, pausePlayback } from '~/stores/historyStore.js'
+import { HistoryPlayer, HistoryUnavailableError } from '~/stores/HistoryPlayer.js'
 import {flagDraft, roomViewMode, FLAG_COLOR_MAP, pendingTile, setPendingTile, clearPendingTile, setFlagDraft, modeHint, overlayAction, setOverlayAction, clearOverlayAction, buildDraft, confirmBuild, resetRoomViewMode, resetRoomViewModeOnNavigate} from '~/stores/roomViewStore';
 import { createLogger } from '~/utils/log.js'
 
@@ -63,6 +63,9 @@ export function RoomViewer(props: RoomViewerProps) {
   const [roomDecoration, setRoomDecoration] = createSignal<{ room: string; decoration: RoomDecoration } | null>(null)
   const [objectState, setObjectState] = createSignal<{ objects: RoomObjectMap, diff?: RoomObjectDiff, users?: Record<string, { _id: string; username: string; badge?: Badge }> } | null>(null)
   const [visualState, setVisualState] = createSignal<string>('')
+  // Set when the current history tick has no data on the server (404). Shows a
+  // "no data" hint over the room instead of a failure toast.
+  const [historyNoData, setHistoryNoData] = createSignal(false)
   const [sliderValue, setSliderValue] = createSignal(historyTick())
   createEffect(() => setSliderValue(historyTick()))
 
@@ -86,6 +89,46 @@ export function RoomViewer(props: RoomViewerProps) {
     if (r) r.destroy()
   })
 
+  // Load terrain + decorations independently of history mode. Terrain is always needed,
+  // and gating it on !historyMode() breaks a fresh page reload straight into history mode
+  // (URL carries #tick=...): entering history mode would otherwise cancel the in-flight
+  // terrain fetch before it resolves, leaving the room without terrain.
+  createEffect(() => {
+    const c = client()
+    if (!c) return
+
+    const room = props.room
+    const shard = props.shard
+
+    setTerrain(null)
+    setRoomDecoration(null)
+    setCurrentRoom(room)
+    setCurrentShard(shard)
+
+    let cancelled = false
+    c.stores.room.terrain(room, shard)
+      .then((t) => {
+        if (!cancelled) {
+          log(`terrain loaded — ${room}`)
+          setTerrain({ room, data: t })
+        }
+      })
+      .catch((err) => { if (!cancelled) error(`terrain load failed for ${room}:`, err) })
+
+    if (untrack(showRoomDecorations)) {
+      c.http.game.roomDecorations(room, shard)
+        .then((resp) => {
+          if (!cancelled) {
+            log(`decorations loaded — ${room}: ${resp.decorations.length} item(s)`)
+            setRoomDecoration({ room, decoration: parseRoomDecorations(resp) })
+          }
+        })
+        .catch((err) => { if (!cancelled) log(`no decorations for ${room}: ${err}`) })
+    }
+
+    onCleanup(() => { cancelled = true })
+  })
+
   // Subscribe to room data as soon as client is ready (no renderer dependency to avoid
   // a race where PixiJS init finishes after the initial room state arrives)
   createEffect(() => {
@@ -96,14 +139,10 @@ export function RoomViewer(props: RoomViewerProps) {
     const shard = props.shard
 
     log(`navigate → ${room} (shard=${shard ?? 'default'})`)
-    setTerrain(null)
-    setRoomDecoration(null)
     setObjectState(null)
     setVisualState('')
     setGameTime(null)
     clearSelection()
-    setCurrentRoom(room)
-    setCurrentShard(shard)
     setRoomObjectCount(null)
     setRoomOwner(null)
     setControllerLevel(null)
@@ -113,27 +152,6 @@ export function RoomViewer(props: RoomViewerProps) {
     setRoomUsers(null)
 
     const group = new SubscriptionGroup()
-
-    let terrainCancelled = false
-    c.stores.room.terrain(room, shard)
-      .then((t) => {
-        if (!terrainCancelled) {
-          log(`terrain loaded — ${room}`)
-          setTerrain({ room, data: t })
-        }
-      })
-      .catch((err) => { if (!terrainCancelled) error(`terrain load failed for ${room}:`, err) })
-
-    if (untrack(showRoomDecorations)) {
-      c.http.game.roomDecorations(room, shard)
-        .then((resp) => {
-          if (!terrainCancelled) {
-            log(`decorations loaded — ${room}: ${resp.decorations.length} item(s)`)
-            setRoomDecoration({ room, decoration: parseRoomDecorations(resp) })
-          }
-        })
-        .catch((err) => { if (!terrainCancelled) log(`no decorations for ${room}: ${err}`) })
-    }
 
     group.add(c.stores.room.subscribe(room, shard))
     group.add(c.stores.room.on('room:error', (data) => {
@@ -199,7 +217,6 @@ export function RoomViewer(props: RoomViewerProps) {
 
     onCleanup(() => {
       log(`leaving ${room}`)
-      terrainCancelled = true
       group.dispose()
     })
   })
@@ -228,6 +245,7 @@ export function RoomViewer(props: RoomViewerProps) {
         .then((state) => {
           if (cancelled) return
           setHistoryLoading(false)
+          setHistoryNoData(false)
           // If the requested chunk didn't exist yet, clamp the history range down
           if (state.clampedTo !== undefined) {
             setHistoryMaxTick(state.clampedTo)
@@ -284,11 +302,30 @@ export function RoomViewer(props: RoomViewerProps) {
         .catch((err: Error) => {
           if (cancelled) return
           setHistoryLoading(false)
+          // No data for this tick (404): show an in-room hint instead of a failure toast.
+          if (err instanceof HistoryUnavailableError) {
+            setHistoryNoData(true)
+            // While playing, don't re-fetch the same missing chunk file on every tick —
+            // skip to the start of the next chunk in one hop. Stop if there's none left.
+            if (isPlaying()) {
+              const nextBase = player.chunkBase(tick) + chunkSize
+              if (nextBase <= historyMaxTick()) {
+                seekToTick(nextBase)
+              } else {
+                pausePlayback()
+              }
+            }
+            return
+          }
+          setHistoryNoData(false)
           addToast(`History load failed for tick ${tick}: ${err.message}`, 'error', 5000)
         })
 
       onCleanup(() => { cancelled = true })
     })
+
+    // Reset the "no data" hint when leaving history mode / changing room.
+    onCleanup(() => setHistoryNoData(false))
   })
 
   // Clear and reset when renderer or room changes (worldBounds intentionally NOT tracked here
@@ -879,6 +916,32 @@ export function RoomViewer(props: RoomViewerProps) {
           Tick {gameTime()}
         </div>
       )}
+      <Show when={historyMode() && historyNoData()}>
+        <div
+          style={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            padding: '16px 22px',
+            'border-radius': '8px',
+            background: 'rgba(13, 17, 23, 0.9)',
+            border: '1px solid #30363d',
+            'text-align': 'center',
+            'max-width': '320px',
+            'pointer-events': 'none',
+            'user-select': 'none',
+            'z-index': 11,
+          }}
+        >
+          <div style={{ 'font-size': '14px', 'font-weight': 600, color: '#c9d1d9', 'margin-bottom': '4px' }}>
+            No data available for this tick
+          </div>
+          <div style={{ 'font-size': '12px', color: '#8b949e' }}>
+            Use the timeline below to choose another tick.
+          </div>
+        </div>
+      </Show>
       <Show when={historyMode()}>
         <div
           style={{

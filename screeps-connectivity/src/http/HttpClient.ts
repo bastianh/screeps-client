@@ -139,7 +139,8 @@ export class HttpClient extends EventTarget {
     if (!res.ok && res.status !== 304) {
       let body = ''
       try { body = await res.text() } catch { /* ignore */ }
-      const error = new Error(`HTTP ${res.status}: ${body}`)
+      const error = new Error(`HTTP ${res.status}: ${body}`) as Error & { status?: number }
+      error.status = res.status
       this.emit('http:error', { method, path, status: res.status, error, silent: opts.silent })
       throw error
     }

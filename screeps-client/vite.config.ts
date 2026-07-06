@@ -69,6 +69,7 @@ export default defineConfig(({ mode }) => {
         },
         ...(proxyTarget ? {
           '/api': { target: proxyTarget, changeOrigin: true, agent: debugAgent, secure: !debugAgent },
+          '/room-history': { target: proxyTarget, changeOrigin: true, agent: debugAgent, secure: !debugAgent },
           '/socket': { target: proxyTarget, changeOrigin: true, ws: true, agent: debugAgent, secure: !debugAgent },
         } : {}),
       },

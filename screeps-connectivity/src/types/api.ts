@@ -102,6 +102,13 @@ export interface ApiVersionResponse {
   users: number
   serverData: {
     historyChunkSize: number
+    /**
+     * Retention window for room history, in ticks. Non-official field added by the
+     * xxscreeps history mod. When present, the earliest replayable tick is roughly
+     * `currentTick - historyKeepTicks`; a value of `0` means history is kept forever
+     * (unbounded). Absent on servers without the mod.
+     */
+    historyKeepTicks?: number
     features: Array<{ name: string }>
     shards: string[]
     customObjectTypes?: unknown

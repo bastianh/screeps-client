@@ -143,6 +143,11 @@ export function Dashboard() {
   const savedMapZoom = getStr(LS.mapZoom)
   const [mapZoom, setMapZoom] = createSignal<number | null>(urlState.room && savedMapZoom ? Number(savedMapZoom) : null)
   const [mapSubsActive, setMapSubsActive] = createSignal<boolean | null>(null)
+  // Size of a history chunk, mirroring the fallback in RoomViewer (private servers
+  // default to 20, the official server to 100).
+  const historyChunkSize = () =>
+    serverVersion()?.serverData?.historyChunkSize ?? ((isPrivateServer() ?? true) ? 20 : 100)
+
   // Consumed once when gameTime first becomes available
   let pendingHistoryTick: number | null = urlState.tick
   createEffect(() => {
@@ -150,7 +155,7 @@ export function Dashboard() {
     if (t === null || pendingHistoryTick === null) return
     const targetTick = pendingHistoryTick
     pendingHistoryTick = null
-    enterHistoryMode(t)
+    enterHistoryMode(t, serverVersion()?.serverData?.historyKeepTicks, historyChunkSize())
     seekToTick(targetTick)
   })
 
@@ -387,7 +392,7 @@ export function Dashboard() {
         </button>
         <Show when={capabilities().hasHistory}>
           <button
-            onClick={() => (historyMode() ? exitHistoryMode() : gameTime() !== null && enterHistoryMode(gameTime()!))}
+            onClick={() => (historyMode() ? exitHistoryMode() : gameTime() !== null && enterHistoryMode(gameTime()!, serverVersion()?.serverData?.historyKeepTicks, historyChunkSize()))}
             disabled={!historyMode() && gameTime() === null}
             title="History"
             style={{
