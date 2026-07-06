@@ -778,10 +778,16 @@ export function RoomViewer(props: RoomViewerProps) {
         if (transfer) {
           animLayer.addTransfer(obj.x, obj.y, transfer.x, transfer.y, beamDuration)
         }
-        const say = actionLog.say as { message?: unknown } | null | undefined
+        const say = actionLog.say as { message?: unknown; isPublic?: boolean } | null | undefined
         if (say && typeof say.message === 'string' && say.message.length > 0) {
-          objLayer?.triggerSay(id, say.message)
-          sayingIds.add(id)
+          // Non-public sayings are only visible to the creep's owner. The server may still
+          // deliver them (private-server mods don't always filter), so guard here.
+          const myId = userInfo()?._id
+          const visible = say.isPublic === true || (myId != null && obj.user === myId)
+          if (visible) {
+            objLayer?.triggerSay(id, say.message)
+            sayingIds.add(id)
+          }
         }
       }
     }
