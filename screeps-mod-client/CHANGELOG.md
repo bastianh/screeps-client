@@ -1,5 +1,16 @@
 # screepsmod-client-new
 
+## 0.2.21
+
+### Patch Changes
+
+- 76902c0: Bundle the updated screeps-client build (non-public saying visibility fix).
+- Updated dependencies [661a53f]
+- Updated dependencies [96de46b]
+- Updated dependencies [9bc39f8]
+- Updated dependencies [76902c0]
+  - screeps-client@0.14.2
+
 ## 0.2.20
 
 ### Patch Changes
