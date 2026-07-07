@@ -7,8 +7,9 @@ import { buildRoomUrl } from '~/utils/gameRoutes.js'
 // Profile (public, any user) vs. Market vs. the game view.
 export type Route = 'user' | 'profile' | 'game' | 'market'
 
-// Sub-view within the User hub: the overview stats page or the power creeps manager.
-export type UserView = 'overview' | 'power'
+// Sub-view within the User hub: the overview stats page, the power creeps
+// manager, or the messages inbox. Exactly one is active at a time.
+export type UserView = 'overview' | 'power' | 'messages'
 
 // Sub-view within the Market section: the resource index (all-orders), a single
 // resource's order book (resource), your own orders, or the credit history.
@@ -31,6 +32,10 @@ function userPowerPath(): string {
 
 function userPowerPrefix(): string {
   return `${basePath()}/user/power/`
+}
+
+function userMessagesPath(): string {
+  return `${basePath()}/user/messages`
 }
 
 function profilePrefix(): string {
@@ -60,6 +65,7 @@ function parseRoute(): Route {
 function parseUserView(): UserView {
   const p = window.location.pathname
   if (p === userPowerPath() || p.startsWith(userPowerPrefix())) return 'power'
+  if (p === userMessagesPath()) return 'messages'
   return 'overview'
 }
 
@@ -120,6 +126,15 @@ export function goToUser(): void {
   rememberGamePath()
   history.pushState(null, '', userPath())
   setUserView('overview')
+  setPowerView('list')
+  setPowerCreepId(null)
+  setRoute('user')
+}
+
+export function goToUserMessages(): void {
+  rememberGamePath()
+  history.pushState(null, '', userMessagesPath())
+  setUserView('messages')
   setPowerView('list')
   setPowerCreepId(null)
   setRoute('user')

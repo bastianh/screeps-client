@@ -3,7 +3,7 @@ import { X, Zap, Mail } from 'lucide-solid'
 import type { ApiUserOverviewTotals, ApiPowerCreep } from 'screeps-connectivity'
 import { client, userInfo } from '~/stores/clientStore.js'
 import { capabilities } from '~/stores/capabilities.js'
-import { goToGame, goToRoom, goToUser, goToUserPower, goToUserPowerNew, goToUserPowerCreep, userView, powerView, powerCreepId } from '~/stores/routeStore.js'
+import { goToGame, goToRoom, goToUser, goToUserMessages, goToUserPower, goToUserPowerNew, goToUserPowerCreep, userView, powerView, powerCreepId } from '~/stores/routeStore.js'
 import { Messages } from '~/components/Messages.js'
 import { RankRing, GCL_RING, GCL_TEXT, GPL_RING, GPL_TEXT } from '~/components/RankRing.js'
 import { PlayerBadge } from '~/components/PlayerBadge.js'
@@ -32,7 +32,6 @@ const TEXT = '#c9d1d9'
 const MUTED = '#8b949e'
 
 export function Overview() {
-  const [showMessages, setShowMessages] = createSignal(false)
   const [totals, setTotals] = createSignal<ApiUserOverviewTotals | null>(null)
   const [rooms, setRooms] = createSignal<OwnedRoom[]>([])
 
@@ -112,6 +111,7 @@ export function Overview() {
   })
 
   const togglePower = () => userView() === 'power' ? goToUser() : goToUserPower()
+  const toggleMessages = () => userView() === 'messages' ? goToUser() : goToUserMessages()
 
   const powerCtx: PowerContext = {
     creeps,
@@ -127,7 +127,7 @@ export function Overview() {
   }
 
   const title = () => {
-    if (showMessages()) return 'Messages'
+    if (userView() === 'messages') return 'Messages'
     if (userView() === 'power') return 'Power Creeps'
     return 'Overview'
   }
@@ -144,13 +144,13 @@ export function Overview() {
           <div style={{ flex: 1 }} />
           <Show when={capabilities().hasMessaging}>
             <button
-              onClick={() => setShowMessages((v) => !v)}
-              title={showMessages() ? 'Back to overview' : 'Messages'}
+              onClick={toggleMessages}
+              title={userView() === 'messages' ? 'Back to overview' : 'Messages'}
               style={{
                 display: 'flex', 'align-items': 'center', padding: '7px', 'border-radius': '4px', cursor: 'pointer',
-                border: showMessages() ? '1px solid #388bfd' : `1px solid ${BORDER}`,
-                background: showMessages() ? '#1f3158' : '#21262d',
-                color: showMessages() ? '#58a6ff' : TEXT,
+                border: userView() === 'messages' ? '1px solid #388bfd' : `1px solid ${BORDER}`,
+                background: userView() === 'messages' ? '#1f3158' : '#21262d',
+                color: userView() === 'messages' ? '#58a6ff' : TEXT,
               }}
             >
               <Mail size={16} />
@@ -177,15 +177,27 @@ export function Overview() {
           </button>
         </div>
 
-        <Show when={showMessages()}>
-          <Messages />
-        </Show>
+        <Switch>
+          <Match when={userView() === 'messages'}>
+            <Messages />
+          </Match>
 
-        <Show when={!showMessages()}>
-          <Show
-            when={userView() === 'power'}
-            fallback={
-              <>
+          <Match when={userView() === 'power'}>
+            <Switch>
+              <Match when={powerView() === 'list'}>
+                <PowerCreepList ctx={powerCtx} loading={powerLoading()} nav={powerNav} />
+              </Match>
+              <Match when={powerView() === 'new'}>
+                <PowerCreepCreate ctx={powerCtx} nav={powerNav} />
+              </Match>
+              <Match when={powerView() === 'detail'}>
+                <PowerCreepDetail ctx={powerCtx} id={powerCreepId()} nav={powerNav} />
+              </Match>
+            </Switch>
+          </Match>
+
+          <Match when={userView() === 'overview'}>
+            <>
                 {/* GCL / GPL cards */}
                 <div style={{ display: 'flex', gap: '16px', 'margin-bottom': '16px' }}>
                   <div style={cardStyle}>
@@ -230,21 +242,8 @@ export function Overview() {
                   </div>
                 </Show>
               </>
-            }
-          >
-            <Switch>
-              <Match when={powerView() === 'list'}>
-                <PowerCreepList ctx={powerCtx} loading={powerLoading()} nav={powerNav} />
-              </Match>
-              <Match when={powerView() === 'new'}>
-                <PowerCreepCreate ctx={powerCtx} nav={powerNav} />
-              </Match>
-              <Match when={powerView() === 'detail'}>
-                <PowerCreepDetail ctx={powerCtx} id={powerCreepId()} nav={powerNav} />
-              </Match>
-            </Switch>
-          </Show>
-        </Show>
+          </Match>
+        </Switch>
     </OverlayPage>
   )
 }
