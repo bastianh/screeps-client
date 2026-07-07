@@ -112,6 +112,19 @@ export function Overview() {
 
   const togglePower = () => userView() === 'power' ? goToUser() : goToUserPower()
 
+  // Group owned rooms by shard for the minimap grid. Multishard servers key
+  // rooms by shard; single-shard servers report shard: null, which collapses to
+  // one unlabeled group. Sort shards by name so the order is stable.
+  const roomsByShard = (): [string | null, OwnedRoom[]][] => {
+    const groups = new Map<string | null, OwnedRoom[]>()
+    for (const r of rooms()) {
+      const arr = groups.get(r.shard)
+      if (arr) arr.push(r)
+      else groups.set(r.shard, [r])
+    }
+    return [...groups.entries()].sort(([a], [b]) => (a ?? '').localeCompare(b ?? ''))
+  }
+
   const powerCtx: PowerContext = {
     creeps,
     free: () => freePowerLevels(userInfo()?.power, creeps()),
@@ -222,15 +235,24 @@ export function Overview() {
                 {/* Lifetime stat tiles */}
                 <StatTileRow totals={totals()} />
 
-                {/* Owned-room minimaps */}
+                {/* Owned-room minimaps, grouped by shard */}
                 <Show when={rooms().length}>
                   <div style={{ 'margin-top': '24px' }}>
                     <div style={{ color: MUTED, 'font-size': '11px', 'text-transform': 'uppercase', 'margin-bottom': '12px' }}>Rooms</div>
-                    <div style={{ display: 'flex', 'flex-wrap': 'wrap', gap: '16px' }}>
-                      <For each={rooms()}>
-                        {(r) => <RoomPreviewTile room={r.room} shard={r.shard} onClick={() => goToRoom(r.room, r.shard)} />}
-                      </For>
-                    </div>
+                    <For each={roomsByShard()}>
+                      {([shard, list]) => (
+                        <div style={{ 'margin-bottom': '20px' }}>
+                          <Show when={shard}>
+                            <div style={{ color: TEXT, 'font-size': '13px', 'font-weight': 600, 'margin-bottom': '10px' }}>{shard}</div>
+                          </Show>
+                          <div style={{ display: 'flex', 'flex-wrap': 'wrap', gap: '16px' }}>
+                            <For each={list}>
+                              {(r) => <RoomPreviewTile room={r.room} shard={r.shard} onClick={() => goToRoom(r.room, r.shard)} />}
+                            </For>
+                          </div>
+                        </div>
+                      )}
+                    </For>
                   </div>
                 </Show>
               </>

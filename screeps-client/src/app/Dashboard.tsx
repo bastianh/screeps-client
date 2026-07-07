@@ -258,6 +258,40 @@ export function Dashboard() {
     client()?.stores.navigation.navigateTo(r, s)
   }
 
+  // Sync the room/map view signals from the current URL. Shared by the popstate
+  // handler (browser back/forward) and the route→game effect below (returning
+  // from an overlay like the Overview, where goToRoom already updated the URL
+  // but not our signals).
+  const syncViewFromUrl = () => {
+    const mapState = parseMapUrl()
+    if (mapState) {
+      setMapMode(true)
+      if (mapState.shard !== null) setShard(mapState.shard)
+      if (untrack(historyMode)) exitHistoryMode()
+      return
+    }
+    const { room: r, shard: s, tick: t } = parseRoomUrl()
+    if (r) {
+      setRoom(r)
+      setShard(s)
+      setMapMode(false)
+      if (t !== null) {
+        pendingHistoryTick = t
+      } else if (untrack(historyMode)) {
+        exitHistoryMode()
+      }
+    }
+  }
+
+  // Clicking a room in an overlay route (Overview, Profile, …) pushes the new
+  // /room URL and flips route back to 'game', but leaves our view signals stale.
+  // Re-read the URL on that transition so the correct room actually loads.
+  createEffect((prev) => {
+    const r = route()
+    if (r === 'game' && prev !== undefined && prev !== 'game') syncViewFromUrl()
+    return r
+  })
+
   const handleShardChange = (s: string) => {
     setShard(s)
     setStr(LS.shard, s)
@@ -277,28 +311,8 @@ export function Dashboard() {
       history.replaceState(null, '', buildMapUrl(shard()))
     }
 
-    const onPopState = () => {
-      const mapState = parseMapUrl()
-      if (mapState) {
-        setMapMode(true)
-        if (mapState.shard !== null) setShard(mapState.shard)
-        if (untrack(historyMode)) exitHistoryMode()
-        return
-      }
-      const { room: r, shard: s, tick: t } = parseRoomUrl()
-      if (r) {
-        setRoom(r)
-        setShard(s)
-        setMapMode(false)
-        if (t !== null) {
-          pendingHistoryTick = t
-        } else if (untrack(historyMode)) {
-          exitHistoryMode()
-        }
-      }
-    }
-    window.addEventListener('popstate', onPopState)
-    onCleanup(() => window.removeEventListener('popstate', onPopState))
+    window.addEventListener('popstate', syncViewFromUrl)
+    onCleanup(() => window.removeEventListener('popstate', syncViewFromUrl))
 
     const nav = client()?.stores.navigation
     if (nav) {
