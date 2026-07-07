@@ -5,6 +5,7 @@ import { client, userInfo } from '~/stores/clientStore.js'
 import { capabilities } from '~/stores/capabilities.js'
 import { goToGame, goToRoom, goToUser, goToUserMessages, goToUserPower, goToUserPowerNew, goToUserPowerCreep, userView, powerView, powerCreepId } from '~/stores/routeStore.js'
 import { Messages } from '~/components/Messages.js'
+import { UserLink } from '~/components/UserLink.js'
 import { RankRing, GCL_RING, GCL_TEXT, GPL_RING, GPL_TEXT } from '~/components/RankRing.js'
 import { PlayerBadge } from '~/components/PlayerBadge.js'
 import { RoomPreviewTile } from '~/components/RoomPreviewTile.js'
@@ -140,7 +141,7 @@ export function Overview() {
           <h1 style={{ margin: 0, 'font-size': '22px', 'font-weight': 600, color: TEXT }}>
             {title()}
           </h1>
-          <span style={{ color: MUTED, 'font-size': '14px' }}>{userInfo()?.username}</span>
+          <UserLink username={userInfo()?.username} color={MUTED} style={{ 'font-size': '14px' }} />
           <div style={{ flex: 1 }} />
           <Show when={capabilities().hasMessaging}>
             <button

@@ -2,8 +2,8 @@ import { createResource, createSignal, For, Show } from 'solid-js'
 import { X } from 'lucide-solid'
 import { OverlayPage } from '~/components/OverlayPage.js'
 import type { ApiLeaderboardFindResponse } from 'screeps-connectivity'
-import { client } from '~/stores/clientStore.js'
-import { profileUsername, goToGame, goToRoom } from '~/stores/routeStore.js'
+import { client, userInfo } from '~/stores/clientStore.js'
+import { profileUsername, goToGame, goToRoom, goToUser } from '~/stores/routeStore.js'
 import { GCL_RING, GCL_TEXT, GPL_RING, GPL_TEXT } from '~/components/RankRing.js'
 import { PlayerBadge } from '~/components/PlayerBadge.js'
 import { RoomPreviewTile } from '~/components/RoomPreviewTile.js'
@@ -141,6 +141,14 @@ export function Profile() {
     },
   )
 
+  // Whether this public profile is the logged-in player's own account — drives
+  // the shortcut link over to their private overview.
+  const isOwnProfile = () => {
+    const me = userInfo()?.username?.toLowerCase()
+    const name = user()?.username?.toLowerCase()
+    return !!me && me === name
+  }
+
   const gclProg = (): LevelProgress => gclProgress(user()?.gcl ?? 0)
   const gplProg = (): LevelProgress => gplProgress(user()?.power ?? 0)
   const tooltip = (p: LevelProgress) => `Next level: ${Math.floor(p.current).toLocaleString()} / ${Math.floor(p.total).toLocaleString()}`
@@ -166,6 +174,17 @@ export function Profile() {
                 <div style={{ display: 'flex', 'align-items': 'center', gap: '10px', padding: '0 0 14px', 'border-bottom': `1px solid ${BORDER}`, 'margin-bottom': '24px' }}>
                   <PlayerBadge badge={u().badge} size={28} />
                   <h1 style={{ margin: 0, 'font-size': '22px', 'font-weight': 600, color: TEXT }}>{u().username}</h1>
+                  <Show when={isOwnProfile()}>
+                    <span
+                      title="Your account overview"
+                      onClick={goToUser}
+                      onMouseEnter={(e) => (e.currentTarget.style.color = '#58a6ff')}
+                      onMouseLeave={(e) => (e.currentTarget.style.color = MUTED)}
+                      style={{ color: MUTED, cursor: 'pointer', 'font-size': '13px' }}
+                    >
+                      Overview
+                    </span>
+                  </Show>
                   <div style={{ flex: 1 }} />
                   <RankStat label="GCL" value={gclProg().level} color={GCL_TEXT} border={GCL_RING} tooltip={tooltip(gclProg())} />
                   <RankStat label="GPL" value={gplProg().level} color={GPL_TEXT} border={GPL_RING} tooltip={tooltip(gplProg())} />
