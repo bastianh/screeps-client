@@ -494,10 +494,10 @@ export function Dashboard() {
         </Show>
         <div style={{ flex: 1 }} />
         <HeaderButton
-          title={route() === 'user' || route() === 'profile' ? 'Close overview' : 'Overview'}
-          active={route() === 'user' || route() === 'profile'}
-          disabled={isGuest() && route() !== 'user' && route() !== 'profile'}
-          onClick={() => (route() === 'user' || route() === 'profile') ? goToGame() : goToUser()}
+          title={route() === 'user' ? 'Close overview' : 'Overview'}
+          active={route() === 'user'}
+          disabled={isGuest()}
+          onClick={() => route() === 'user' ? goToGame() : goToUser()}
         >
           <LayoutDashboard size={16} />
         </HeaderButton>
