@@ -271,10 +271,14 @@ export interface ApiUserFindResponse {
   }
 }
 
-/** Response of GET /api/user/stats?id=&interval=. `stats` maps a metric to per-tick buckets; consumers sum the bucket values over the interval. */
+/**
+ * Response of GET /api/user/stats?id=&interval=. `stats` maps a metric to
+ * either per-tick buckets (consumers sum the bucket values over the interval)
+ * or a single pre-summed total for the interval — servers differ on which.
+ */
 export interface ApiUserStatsResponse {
   ok: number
-  stats?: Record<string, Array<{ value: number; endTime?: number }>>
+  stats?: Record<string, number | Array<{ value: number; endTime?: number }>>
   statsMax?: Record<string, number>
 }
 

@@ -29,16 +29,20 @@ export function StatTile(props: { l1: string; l2: string; color: string; value: 
   )
 }
 
-// Collapse the per-tick buckets from /api/user/stats into the totals shape the
-// tiles consume (sum each metric over the interval). Used for public profiles,
-// where the self-only /api/user/overview totals aren't available.
+// Normalize /api/user/stats into the totals shape the tiles consume. Used for
+// public profiles, where the self-only /api/user/overview totals aren't
+// available. Servers return each metric either as per-tick buckets (sum them
+// over the interval) or as a single pre-summed total — handle both.
 export function totalsFromStats(res: ApiUserStatsResponse | null | undefined): ApiUserOverviewTotals | null {
   const stats = res?.stats
   if (!stats) return null
   const totals: Partial<ApiUserOverviewTotals> = {}
   for (const t of STAT_TILES) {
-    const buckets = stats[t.key]
-    if (buckets) totals[t.key] = buckets.reduce((sum, b) => sum + (b.value ?? 0), 0)
+    const metric = stats[t.key]
+    if (metric == null) continue
+    totals[t.key] = Array.isArray(metric)
+      ? metric.reduce((sum, b) => sum + (b?.value ?? 0), 0)
+      : Number(metric) || 0
   }
   return totals as ApiUserOverviewTotals
 }
