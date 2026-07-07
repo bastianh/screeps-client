@@ -1,9 +1,11 @@
 import { createResource, createSignal, createEffect, For, Show } from 'solid-js'
-import { ChevronLeft, ExternalLink, Send } from 'lucide-solid'
+import { ChevronLeft, ExternalLink, Send, X } from 'lucide-solid'
 import type { ApiUserMessagesIndexResponse, ApiUserMessagesListResponse } from 'screeps-connectivity'
 import { client, userInfo } from '~/stores/clientStore.js'
-import { goToProfile } from '~/stores/routeStore.js'
+import { goToGame, goToProfile, goToMessages, goToMessagesUser, messagesUsername } from '~/stores/routeStore.js'
+import { OverlayPage } from '~/components/OverlayPage.js'
 import { PlayerBadge } from '~/components/PlayerBadge.js'
+import { UserLink } from '~/components/UserLink.js'
 
 const BORDER = '#30363d'
 const TEXT = '#c9d1d9'
@@ -242,11 +244,55 @@ function Thread(props: { respondent: Respondent; onBack: () => void }) {
 }
 
 export function Messages() {
-  const [respondent, setRespondent] = createSignal<Respondent | null>(null)
+  // /messages/<username> → resolve the username to a { username, id } respondent
+  // (the list/send endpoints are keyed by user id). The fetcher only runs when a
+  // username is present; the bare /messages inbox leaves it unresolved.
+  const [respondent] = createResource(
+    () => messagesUsername(),
+    async (username): Promise<Respondent | null> => {
+      const c = client()
+      if (!c) return null
+      try {
+        const res = await c.http.user.find({ username })
+        return res.user ? { username: res.user.username, id: res.user._id } : null
+      } catch {
+        return null
+      }
+    },
+  )
 
   return (
-    <Show when={respondent()} fallback={<Inbox onSelect={setRespondent} />}>
-      <Thread respondent={respondent()!} onBack={() => setRespondent(null)} />
-    </Show>
+    <OverlayPage maxWidth="720px">
+      {/* Header — this is the player's own messaging hub, so it carries their identity. */}
+      <div style={{ display: 'flex', 'align-items': 'center', gap: '10px', padding: '0 0 14px', 'border-bottom': `1px solid ${BORDER}`, 'margin-bottom': '24px' }}>
+        <PlayerBadge badge={userInfo()?.badge} size={28} />
+        <h1 style={{ margin: 0, 'font-size': '22px', 'font-weight': 600, color: TEXT }}>Messages</h1>
+        <UserLink username={userInfo()?.username} color={MUTED} style={{ 'font-size': '14px' }} />
+        <div style={{ flex: 1 }} />
+        <button
+          onClick={goToGame}
+          title="Close"
+          style={{ display: 'flex', 'align-items': 'center', padding: '7px', 'border-radius': '4px', border: `1px solid ${BORDER}`, background: '#21262d', color: TEXT, cursor: 'pointer' }}
+        >
+          <X size={16} />
+        </button>
+      </div>
+
+      <Show when={messagesUsername()} fallback={<Inbox onSelect={(r) => goToMessagesUser(r.username)} />}>
+        <Show when={!respondent.loading} fallback={<div style={{ color: MUTED, padding: '24px 0', 'text-align': 'center' }}>Loading…</div>}>
+          <Show
+            when={respondent()}
+            fallback={
+              <div style={{ color: MUTED, padding: '32px 0', 'text-align': 'center' }}>
+                User not found.{' '}
+                <span onClick={goToMessages} style={{ color: '#58a6ff', cursor: 'pointer' }}>Back to inbox</span>
+              </div>
+            }
+          >
+            <Thread respondent={respondent()!} onBack={goToMessages} />
+          </Show>
+        </Show>
+      </Show>
+    </OverlayPage>
   )
 }

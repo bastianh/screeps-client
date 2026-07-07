@@ -3,8 +3,7 @@ import { X, Zap, Mail } from 'lucide-solid'
 import type { ApiUserOverviewTotals, ApiPowerCreep } from 'screeps-connectivity'
 import { client, userInfo } from '~/stores/clientStore.js'
 import { capabilities } from '~/stores/capabilities.js'
-import { goToGame, goToRoom, goToUser, goToUserMessages, goToUserPower, goToUserPowerNew, goToUserPowerCreep, userView, powerView, powerCreepId } from '~/stores/routeStore.js'
-import { Messages } from '~/components/Messages.js'
+import { goToGame, goToRoom, goToUser, goToMessages, goToUserPower, goToUserPowerNew, goToUserPowerCreep, userView, powerView, powerCreepId } from '~/stores/routeStore.js'
 import { UserLink } from '~/components/UserLink.js'
 import { RankRing, GCL_RING, GCL_TEXT, GPL_RING, GPL_TEXT } from '~/components/RankRing.js'
 import { PlayerBadge } from '~/components/PlayerBadge.js'
@@ -112,7 +111,6 @@ export function Overview() {
   })
 
   const togglePower = () => userView() === 'power' ? goToUser() : goToUserPower()
-  const toggleMessages = () => userView() === 'messages' ? goToUser() : goToUserMessages()
 
   const powerCtx: PowerContext = {
     creeps,
@@ -128,7 +126,6 @@ export function Overview() {
   }
 
   const title = () => {
-    if (userView() === 'messages') return 'Messages'
     if (userView() === 'power') return 'Power Creeps'
     return 'Overview'
   }
@@ -145,13 +142,11 @@ export function Overview() {
           <div style={{ flex: 1 }} />
           <Show when={capabilities().hasMessaging}>
             <button
-              onClick={toggleMessages}
-              title={userView() === 'messages' ? 'Back to overview' : 'Messages'}
+              onClick={goToMessages}
+              title="Messages"
               style={{
                 display: 'flex', 'align-items': 'center', padding: '7px', 'border-radius': '4px', cursor: 'pointer',
-                border: userView() === 'messages' ? '1px solid #388bfd' : `1px solid ${BORDER}`,
-                background: userView() === 'messages' ? '#1f3158' : '#21262d',
-                color: userView() === 'messages' ? '#58a6ff' : TEXT,
+                border: `1px solid ${BORDER}`, background: '#21262d', color: TEXT,
               }}
             >
               <Mail size={16} />
@@ -179,10 +174,6 @@ export function Overview() {
         </div>
 
         <Switch>
-          <Match when={userView() === 'messages'}>
-            <Messages />
-          </Match>
-
           <Match when={userView() === 'power'}>
             <Switch>
               <Match when={powerView() === 'list'}>

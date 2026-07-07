@@ -1,9 +1,10 @@
 import { createResource, createSignal, For, Show } from 'solid-js'
-import { X } from 'lucide-solid'
+import { X, Mail } from 'lucide-solid'
 import { OverlayPage } from '~/components/OverlayPage.js'
 import type { ApiLeaderboardFindResponse } from 'screeps-connectivity'
 import { client, userInfo } from '~/stores/clientStore.js'
-import { profileUsername, goToGame, goToRoom, goToUser } from '~/stores/routeStore.js'
+import { capabilities } from '~/stores/capabilities.js'
+import { profileUsername, goToGame, goToRoom, goToUser, goToMessagesUser } from '~/stores/routeStore.js'
 import { GCL_RING, GCL_TEXT, GPL_RING, GPL_TEXT } from '~/components/RankRing.js'
 import { PlayerBadge } from '~/components/PlayerBadge.js'
 import { RoomPreviewTile } from '~/components/RoomPreviewTile.js'
@@ -188,6 +189,16 @@ export function Profile() {
                   <div style={{ flex: 1 }} />
                   <RankStat label="GCL" value={gclProg().level} color={GCL_TEXT} border={GCL_RING} tooltip={tooltip(gclProg())} />
                   <RankStat label="GPL" value={gplProg().level} color={GPL_TEXT} border={GPL_RING} tooltip={tooltip(gplProg())} />
+                  {/* Message this player — only for other accounts on messaging-capable servers. */}
+                  <Show when={!isOwnProfile() && capabilities().hasMessaging}>
+                    <button
+                      onClick={() => goToMessagesUser(u().username)}
+                      title={`Message ${u().username}`}
+                      style={{ display: 'flex', 'align-items': 'center', gap: '6px', padding: '7px 12px', 'border-radius': '4px', border: '1px solid #388bfd', background: '#1f3158', color: '#58a6ff', cursor: 'pointer', 'font-size': '13px', 'margin-left': '6px' }}
+                    >
+                      <Mail size={14} /> Message
+                    </button>
+                  </Show>
                   <button
                     onClick={goToGame}
                     title="Close"

@@ -1,4 +1,4 @@
 ---
 "screeps-client": minor
 ---
-Give the User hub Messages view its own URL (`/user/messages`) so it is deep-linkable and works with browser back/forward. Messages, Power Creeps, and Overview are now mutually exclusive sub-views — switching to one deactivates the others.
+Add a top-level Messages screen with per-user conversation deep links. Messages now lives at `/messages` (moved out from under the User hub), and a specific conversation is deep-linkable at `/messages/<username>` — resolving the username to the user id for the message list/send endpoints, with browser back/forward support. Other players' profile pages gain a "Message" button (on messaging-capable servers) that opens the conversation with them, complete with the send box. The User overview's Mail button now navigates to the new route.

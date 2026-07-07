@@ -26,6 +26,7 @@ import { setRoomViewMode } from '~/stores/roomViewStore.js'
 import { route, goToUser, goToGame, goToMarket } from '~/stores/routeStore.js'
 import { Overview } from '~/components/Overview.js'
 import { Profile } from '~/components/Profile.js'
+import { Messages } from '~/components/Messages.js'
 import { Market } from '~/components/market/Market.js'
 import { BadgePickerModal } from '~/components/BadgePickerModal.js'
 import type { Badge } from 'screeps-connectivity'
@@ -573,10 +574,11 @@ export function Dashboard() {
             {sidebarArea(false)}
           </div>
         </Show>
-        <Show when={route() === 'user' || route() === 'profile' || route() === 'market' || showSettings()}>
+        <Show when={route() === 'user' || route() === 'profile' || route() === 'messages' || route() === 'market' || showSettings()}>
           <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, 'z-index': 10, overflow: 'hidden' }}>
             <Show when={route() === 'user'}><Overview /></Show>
             <Show when={route() === 'profile'}><Profile /></Show>
+            <Show when={route() === 'messages'}><Messages /></Show>
             <Show when={route() === 'market'}><Market /></Show>
             <Show when={showSettings()}><SettingsPanel onClose={() => setShowSettings(false)} /></Show>
           </div>

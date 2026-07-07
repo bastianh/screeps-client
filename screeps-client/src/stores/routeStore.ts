@@ -4,12 +4,12 @@ import { buildRoomUrl } from '~/utils/gameRoutes.js'
 
 // Top-level screen the connected app shows. The in-game Dashboard owns its own
 // /room and /map sub-routing; this store decides the User hub (/user) vs.
-// Profile (public, any user) vs. Market vs. the game view.
-export type Route = 'user' | 'profile' | 'game' | 'market'
+// Profile (public, any user) vs. Messages vs. Market vs. the game view.
+export type Route = 'user' | 'profile' | 'game' | 'market' | 'messages'
 
-// Sub-view within the User hub: the overview stats page, the power creeps
-// manager, or the messages inbox. Exactly one is active at a time.
-export type UserView = 'overview' | 'power' | 'messages'
+// Sub-view within the User hub: the overview stats page or the power creeps
+// manager. Exactly one is active at a time.
+export type UserView = 'overview' | 'power'
 
 // Sub-view within the Market section: the resource index (all-orders), a single
 // resource's order book (resource), your own orders, or the credit history.
@@ -34,8 +34,12 @@ function userPowerPrefix(): string {
   return `${basePath()}/user/power/`
 }
 
-function userMessagesPath(): string {
-  return `${basePath()}/user/messages`
+function messagesPath(): string {
+  return `${basePath()}/messages`
+}
+
+function messagesPrefix(): string {
+  return `${basePath()}/messages/`
 }
 
 function profilePrefix(): string {
@@ -58,6 +62,7 @@ function parseRoute(): Route {
   const p = window.location.pathname
   if (p === userPath() || p.startsWith(userPrefix())) return 'user'
   if (p.startsWith(profilePrefix())) return 'profile'
+  if (p === messagesPath() || p.startsWith(messagesPrefix())) return 'messages'
   if (p === marketPath() || p.startsWith(marketPrefix())) return 'market'
   return 'game'
 }
@@ -65,8 +70,17 @@ function parseRoute(): Route {
 function parseUserView(): UserView {
   const p = window.location.pathname
   if (p === userPowerPath() || p.startsWith(userPowerPrefix())) return 'power'
-  if (p === userMessagesPath()) return 'messages'
   return 'overview'
+}
+
+// The conversation partner for /messages/<username>, or null for the inbox at
+// /messages. The username is the source of truth; Messages resolves it to a
+// user id for the list/send endpoints.
+function parseMessagesUsername(): string | null {
+  const p = window.location.pathname
+  if (!p.startsWith(messagesPrefix())) return null
+  const name = decodeURIComponent(p.slice(messagesPrefix().length))
+  return name || null
 }
 
 function parseProfileUsername(): string | null {
@@ -107,12 +121,13 @@ function parsePower(): { view: PowerView; id: string | null } {
 const [route, setRoute] = createSignal<Route>(parseRoute())
 const [userView, setUserView] = createSignal<UserView>(parseUserView())
 const [profileUsername, setProfileUsername] = createSignal<string | null>(parseProfileUsername())
+const [messagesUsername, setMessagesUsername] = createSignal<string | null>(parseMessagesUsername())
 const [marketView, setMarketView] = createSignal<MarketView>(parseMarket().view)
 const [marketResourceType, setMarketResourceType] = createSignal<string | null>(parseMarket().resourceType)
 const [marketShard, setMarketShard] = createSignal<string | null>(parseMarketShard())
 const [powerView, setPowerView] = createSignal<PowerView>(parsePower().view)
 const [powerCreepId, setPowerCreepId] = createSignal<string | null>(parsePower().id)
-export { route, userView, profileUsername, marketView, marketResourceType, marketShard, powerView, powerCreepId }
+export { route, userView, profileUsername, messagesUsername, marketView, marketResourceType, marketShard, powerView, powerCreepId }
 
 // Remembered so returning to the world restores the exact game view (room +
 // shard + history tick) rather than dropping back to the default map.
@@ -131,13 +146,21 @@ export function goToUser(): void {
   setRoute('user')
 }
 
-export function goToUserMessages(): void {
+// The messages inbox (/messages), a top-level route of its own.
+export function goToMessages(): void {
   rememberGamePath()
-  history.pushState(null, '', userMessagesPath())
-  setUserView('messages')
-  setPowerView('list')
-  setPowerCreepId(null)
-  setRoute('user')
+  history.pushState(null, '', messagesPath())
+  setMessagesUsername(null)
+  setRoute('messages')
+}
+
+// A specific conversation (/messages/<username>). Messages resolves the username
+// to a user id for the list/send endpoints.
+export function goToMessagesUser(username: string): void {
+  rememberGamePath()
+  history.pushState(null, '', `${messagesPrefix()}${encodeURIComponent(username)}`)
+  setMessagesUsername(username)
+  setRoute('messages')
 }
 
 export function goToUserPower(): void {
@@ -232,6 +255,7 @@ if (typeof window !== 'undefined') {
     setRoute(parseRoute())
     setUserView(parseUserView())
     setProfileUsername(parseProfileUsername())
+    setMessagesUsername(parseMessagesUsername())
     const market = parseMarket()
     setMarketView(market.view)
     setMarketResourceType(market.resourceType)
