@@ -3,8 +3,8 @@ import { X } from 'lucide-solid'
 import { OverlayPage } from '~/components/OverlayPage.js'
 import type { ApiLeaderboardFindResponse } from 'screeps-connectivity'
 import { client } from '~/stores/clientStore.js'
-import { profileUsername, goToGame, goToRoom, goToUser } from '~/stores/routeStore.js'
-import { RankRing, GCL_RING, GCL_TEXT, GPL_RING, GPL_TEXT } from '~/components/RankRing.js'
+import { profileUsername, goToGame, goToRoom } from '~/stores/routeStore.js'
+import { GCL_TEXT, GPL_TEXT } from '~/components/RankRing.js'
 import { PlayerBadge } from '~/components/PlayerBadge.js'
 import { RoomPreviewTile } from '~/components/RoomPreviewTile.js'
 import { StatTileRow, totalsFromStats } from '~/components/AccountStatTiles.js'
@@ -44,6 +44,16 @@ function rankRecord(res: ApiLeaderboardFindResponse | null): { rank: number | nu
 
 const rankLabel = (rank: number | null) => (rank == null ? '—' : `#${(rank + 1).toLocaleString()}`)
 const scoreLabel = (score: number) => score.toLocaleString()
+
+// Compact header GCL/GPL readout — the rank rings' data colors without the ring.
+function RankStat(props: { label: string; value: number; color: string; tooltip: string }) {
+  return (
+    <div title={props.tooltip} style={{ display: 'flex', 'align-items': 'baseline', gap: '5px', 'flex-shrink': '0' }}>
+      <span style={{ color: props.color, 'font-size': '11px', 'font-weight': 300, 'letter-spacing': '0.5px' }}>{props.label}</span>
+      <span style={{ color: props.color, 'font-size': '18px', 'font-weight': 700, 'line-height': '1' }}>{props.value}</span>
+    </div>
+  )
+}
 
 function RankTile(props: { l1: string; l2: string; value: string; accent: string }) {
   return (
@@ -114,7 +124,6 @@ export function Profile() {
 
   const gclProg = (): LevelProgress => gclProgress(user()?.gcl ?? 0)
   const gplProg = (): LevelProgress => gplProgress(user()?.power ?? 0)
-  const fraction = (p: LevelProgress) => (p.total > 0 ? p.current / p.total : 0)
   const tooltip = (p: LevelProgress) => `Next level: ${Math.floor(p.current).toLocaleString()} / ${Math.floor(p.total).toLocaleString()}`
 
   return (
@@ -133,24 +142,18 @@ export function Profile() {
           >
             {(u) => (
               <>
-                {/* Header: identity + GCL/GPL rings */}
-                <div style={{ display: 'flex', 'align-items': 'center', gap: '16px', background: PANEL, border: `1px solid ${BORDER}`, 'border-radius': '6px', padding: '16px 20px', 'margin-bottom': '16px' }}>
-                  <PlayerBadge badge={u().badge} size={48} />
-                  <h1 style={{ margin: 0, 'font-size': '24px', 'font-weight': 600, color: '#ffd479' }}>{u().username}</h1>
+                {/* Header — mirrors the self Overview chrome: badge, name as title,
+                    compact GCL/GPL readout, close. */}
+                <div style={{ display: 'flex', 'align-items': 'center', gap: '10px', padding: '0 0 14px', 'border-bottom': `1px solid ${BORDER}`, 'margin-bottom': '24px' }}>
+                  <PlayerBadge badge={u().badge} size={28} />
+                  <h1 style={{ margin: 0, 'font-size': '22px', 'font-weight': 600, color: TEXT }}>{u().username}</h1>
                   <div style={{ flex: 1 }} />
-                  <button
-                    onClick={goToUser}
-                    title="Your own overview"
-                    style={{ background: 'none', border: 'none', color: '#58a6ff', cursor: 'pointer', 'font-size': '13px' }}
-                  >
-                    My overview
-                  </button>
-                  <RankRing value={gclProg().level} label="GCL" ring={GCL_RING} text={GCL_TEXT} fraction={fraction(gclProg())} tooltip={tooltip(gclProg())} />
-                  <RankRing value={gplProg().level} label="GPL" ring={GPL_RING} text={GPL_TEXT} fraction={fraction(gplProg())} tooltip={tooltip(gplProg())} />
+                  <RankStat label="GCL" value={gclProg().level} color={GCL_TEXT} tooltip={tooltip(gclProg())} />
+                  <RankStat label="GPL" value={gplProg().level} color={GPL_TEXT} tooltip={tooltip(gplProg())} />
                   <button
                     onClick={goToGame}
                     title="Close"
-                    style={{ display: 'flex', 'align-items': 'center', padding: '7px', 'border-radius': '4px', border: `1px solid ${BORDER}`, background: '#21262d', color: TEXT, cursor: 'pointer' }}
+                    style={{ display: 'flex', 'align-items': 'center', padding: '7px', 'border-radius': '4px', border: `1px solid ${BORDER}`, background: '#21262d', color: TEXT, cursor: 'pointer', 'margin-left': '6px' }}
                   >
                     <X size={16} />
                   </button>
