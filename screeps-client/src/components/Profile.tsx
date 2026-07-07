@@ -4,7 +4,7 @@ import { OverlayPage } from '~/components/OverlayPage.js'
 import type { ApiLeaderboardFindResponse } from 'screeps-connectivity'
 import { client } from '~/stores/clientStore.js'
 import { profileUsername, goToGame, goToRoom } from '~/stores/routeStore.js'
-import { GCL_TEXT, GPL_TEXT } from '~/components/RankRing.js'
+import { GCL_RING, GCL_TEXT, GPL_RING, GPL_TEXT } from '~/components/RankRing.js'
 import { PlayerBadge } from '~/components/PlayerBadge.js'
 import { RoomPreviewTile } from '~/components/RoomPreviewTile.js'
 import { StatTileRow, totalsFromStats } from '~/components/AccountStatTiles.js'
@@ -49,11 +49,18 @@ function rankRecord(res: ApiLeaderboardFindResponse | null): { rank: number | nu
 const rankLabel = (rank: number | null) => (rank == null ? '—' : `#${(rank + 1).toLocaleString()}`)
 const scoreLabel = (score: number) => score.toLocaleString()
 
-// Compact header GCL/GPL readout — the rank rings' data colors without the ring.
-function RankStat(props: { label: string; value: number; color: string; tooltip: string }) {
+// Compact header GCL/GPL readout — a thick rounded chip bordered in the rank
+// color (the ring color), with the brighter text color for the number/label.
+function RankStat(props: { label: string; value: number; color: string; border: string; tooltip: string }) {
   return (
-    <div title={props.tooltip} style={{ display: 'flex', 'align-items': 'baseline', gap: '5px', 'flex-shrink': '0' }}>
-      <span style={{ color: props.color, 'font-size': '11px', 'font-weight': 300, 'letter-spacing': '0.5px' }}>{props.label}</span>
+    <div
+      title={props.tooltip}
+      style={{
+        display: 'flex', 'align-items': 'baseline', gap: '6px', 'flex-shrink': '0',
+        padding: '5px 12px', 'border-radius': '8px', border: `2px solid ${props.border}`,
+      }}
+    >
+      <span style={{ color: props.color, 'font-size': '11px', 'font-weight': 600, 'letter-spacing': '0.5px' }}>{props.label}</span>
       <span style={{ color: props.color, 'font-size': '18px', 'font-weight': 700, 'line-height': '1' }}>{props.value}</span>
     </div>
   )
@@ -160,8 +167,8 @@ export function Profile() {
                   <PlayerBadge badge={u().badge} size={28} />
                   <h1 style={{ margin: 0, 'font-size': '22px', 'font-weight': 600, color: TEXT }}>{u().username}</h1>
                   <div style={{ flex: 1 }} />
-                  <RankStat label="GCL" value={gclProg().level} color={GCL_TEXT} tooltip={tooltip(gclProg())} />
-                  <RankStat label="GPL" value={gplProg().level} color={GPL_TEXT} tooltip={tooltip(gplProg())} />
+                  <RankStat label="GCL" value={gclProg().level} color={GCL_TEXT} border={GCL_RING} tooltip={tooltip(gclProg())} />
+                  <RankStat label="GPL" value={gplProg().level} color={GPL_TEXT} border={GPL_RING} tooltip={tooltip(gplProg())} />
                   <button
                     onClick={goToGame}
                     title="Close"
