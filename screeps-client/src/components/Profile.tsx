@@ -1,4 +1,4 @@
-import { createResource, For, Show } from 'solid-js'
+import { createResource, createSignal, For, Show } from 'solid-js'
 import { X } from 'lucide-solid'
 import { OverlayPage } from '~/components/OverlayPage.js'
 import type { ApiLeaderboardFindResponse } from 'screeps-connectivity'
@@ -22,9 +22,13 @@ const MUTED = '#8b949e'
 const GOLD = '#d9b54a'
 const RED = '#C54444'
 
-// The official client's "Last 7 days" stat interval (its dropdown maps 8 → 1 hour,
-// 180 → 24 hours, 1440 → 7 days); the tiles sum this window.
-const STAT_INTERVAL = 1440
+// The official client's stat-window dropdown: 8 → 1 hour, 180 → 24 hours,
+// 1440 → 7 days. The tiles sum whichever window is selected.
+const STAT_INTERVALS = [
+  { value: 8, label: 'Last 1 hour' },
+  { value: 180, label: 'Last 24 hours' },
+  { value: 1440, label: 'Last 7 days' },
+] as const
 
 function currentSeason(): string {
   // Seasons roll over at UTC, so derive the YYYY-MM id in UTC — a non-UTC client
@@ -95,16 +99,24 @@ export function Profile() {
     }
   })
 
-  // "Last 7 days" tiles — public stats summed into the totals shape.
-  const [totals] = createResource(userId, async (id) => {
-    const c = client()
-    if (!c) return null
-    try {
-      return totalsFromStats(await c.http.user.stats(STAT_INTERVAL, id))
-    } catch {
-      return null
-    }
-  })
+  // Stat tiles — public stats summed into the totals shape, over the interval
+  // picked in the dropdown. Refetches when either the user or interval changes.
+  const [statInterval, setStatInterval] = createSignal<number>(1440)
+  const [totals] = createResource(
+    () => {
+      const id = userId()
+      return id ? ({ id, interval: statInterval() } as const) : null
+    },
+    async ({ id, interval }) => {
+      const c = client()
+      if (!c) return null
+      try {
+        return totalsFromStats(await c.http.user.stats(interval, id))
+      } catch {
+        return null
+      }
+    },
+  )
 
   // "Current month" leaderboard ranks (by username): world = expansion + control
   // points, power = power rank + points. Best-effort; empty servers render —.
@@ -168,8 +180,14 @@ export function Profile() {
                   <RankTile l1="Power" l2="points" accent={RED} value={scoreLabel(ranks()?.power.score ?? 0)} />
                 </div>
 
-                {/* Last 7 days — stat tiles */}
-                <div style={{ color: MUTED, 'font-size': '11px', 'text-transform': 'uppercase', 'margin-bottom': '10px' }}>Last 7 days</div>
+                {/* Stat tiles — interval picked from the dropdown */}
+                <select
+                  value={statInterval()}
+                  onChange={(e) => setStatInterval(Number(e.currentTarget.value))}
+                  style={{ padding: '4px 8px', 'border-radius': '4px', border: `1px solid ${BORDER}`, background: PANEL, color: MUTED, 'font-size': '11px', 'text-transform': 'uppercase', cursor: 'pointer', 'margin-bottom': '10px' }}
+                >
+                  <For each={STAT_INTERVALS}>{(opt) => <option value={opt.value}>{opt.label}</option>}</For>
+                </select>
                 <StatTileRow totals={totals()} />
 
                 {/* Owned-room minimaps */}
