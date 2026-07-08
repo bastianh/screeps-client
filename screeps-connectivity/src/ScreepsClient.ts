@@ -41,6 +41,14 @@ export interface ScreepsClientOptions {
   tokenRefresh?: TokenRefreshOptions | false
   /** Override the /api/game/room-decorations response with static data (useful for dev/testing when the server doesn't support the endpoint). */
   decorationsMock?: ApiRoomDecorationsResponse
+  /**
+   * Enable WebSocket message compression by sending `gzip on` after auth. The
+   * server then deflates event frames (room updates, etc.) and only sends the
+   * compressed `gz:` form when it's smaller. Defaults to `false` — matching the
+   * official client, which never enables it. The `gz:` decode path is always
+   * active regardless, so enabling this is a pure opt-in bandwidth trade.
+   */
+  gzip?: boolean
 }
 
 export class ScreepsClient {
@@ -77,7 +85,7 @@ export class ScreepsClient {
     this.logger.log(`[screeps:client] init ${opts.url}`)
     this.cache = new Cache(namespace, opts.storage ?? null)
     this.http = new HttpClient({ url: opts.url, auth: opts.auth, logger: this.logger.child('http'), serverPassword: opts.serverPassword, decorationsMock: opts.decorationsMock })
-    this.socket = new SocketClient({ url: opts.url, WebSocket: opts.WebSocket, logger: this.logger.child('socket') })
+    this.socket = new SocketClient({ url: opts.url, WebSocket: opts.WebSocket, logger: this.logger.child('socket'), gzip: opts.gzip })
     const map2Storage = new Map2Storage({
       adapter: opts.storage ?? null,
       namespace,

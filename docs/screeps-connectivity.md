@@ -126,6 +126,7 @@ const client = new ScreepsClient(opts: ScreepsClientOptions)
 | `map2.maxSubscriptions` | `number` | — | Max simultaneous `roomMap2` WebSocket channels (default `500`). Excess rooms are queued on a FIFO waitlist and promoted as slots free. |
 | `map2.maxCacheEntries` | `number` | — | Max rooms to keep in the `Map2Storage` LRU cache (default `10000`). |
 | `tokenRefresh` | `{ intervalMs?: number } \| false` | — | Idle keep-alive that calls `auth/me` after `intervalMs` of HTTP inactivity to refresh the session token. Default `{ intervalMs: 30_000 }`; pass `false` to disable. See [Token lifecycle](#token-lifecycle). |
+| `gzip` | `boolean` | — | Send `gzip on` after auth so the server deflates event frames (room updates, etc.); it only sends the compressed `gz:` form when it's smaller. Defaults to `false`, matching the official client. The `gz:` decode path is always active, so this is a pure opt-in. |
 
 ### Methods
 
@@ -391,7 +392,7 @@ userStore.refreshMe(): Promise<UserInfo>
 Busts the cache and re-fetches. Use after profile changes (username, badge, etc.).
 
 ```ts
-userStore.subscribe(channel: 'cpu' | 'console' | 'code'): Subscription
+userStore.subscribe(channel: 'cpu' | 'console' | 'code' | 'set-active-branch'): Subscription
 ```
 Opens a WebSocket subscription for the given user channel. Lazily resolves the user ID if `me()` has not yet been called.
 
@@ -400,6 +401,7 @@ Opens a WebSocket subscription for the given user channel. Lazily resolves the u
 | `cpu` | `user:cpu` | `CpuStats` |
 | `console` | `user:console` | `{ messages: ConsoleMessage }` |
 | `code` | `user:code` | `{ branch: string; modules: Record<string, string> }` |
+| `set-active-branch` | `user:setActiveBranch` | `{ activeName: 'activeWorld' \| 'activeSim'; branch: string }` |
 
 #### Events
 

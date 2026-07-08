@@ -58,6 +58,31 @@ describe('SocketClient', () => {
     await expect(connectClient(client)).resolves.toBeDefined()
   })
 
+  it('does not send gzip on by default', async () => {
+    const client = makeClient()
+    const ws = await connectClient(client)
+    expect(ws.sent).not.toContain('gzip on')
+  })
+
+  it('sends gzip on when explicitly enabled, before any subscribe', async () => {
+    const client = new SocketClient({ url: 'https://screeps.com', gzip: true, WebSocket: MockWS as unknown as typeof WebSocket })
+    const connectPromise = client.connect('tok')
+    const ws = MockWS.instances[0]
+    ws.simulateOpen()
+    ws.simulateMessage('auth ok newtoken')
+    await connectPromise
+    expect(ws.sent).toContain('gzip on')
+    // gzip on must precede subscribes so the first updates already arrive as gz:
+    client.subscribe('room:shard0/W7N7')
+    expect(ws.sent.indexOf('gzip on')).toBeLessThan(ws.sent.indexOf('subscribe room:shard0/W7N7'))
+  })
+
+  it('explicit gzip:false does not send gzip on', async () => {
+    const client = new SocketClient({ url: 'https://screeps.com', gzip: false, WebSocket: MockWS as unknown as typeof WebSocket })
+    const ws = await connectClient(client)
+    expect(ws.sent).not.toContain('gzip on')
+  })
+
   it('subscribe sends subscribe message when authed', async () => {
     const client = makeClient()
     const ws = await connectClient(client)

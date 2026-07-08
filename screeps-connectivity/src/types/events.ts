@@ -40,6 +40,7 @@ export interface UserStoreEvents {
     'user:cpu': CpuStats
     'user:console': { messages: ConsoleMessage }
     'user:code': { branch: string; modules: Record<string, string> }
+    'user:setActiveBranch': { activeName: 'activeWorld' | 'activeSim'; branch: string }
     'user:stream': Record<string, unknown>
     'user:memory': { path: string; shard: string | null; value: unknown }
     'user:mapVisual': { shard: string | null; data: string }

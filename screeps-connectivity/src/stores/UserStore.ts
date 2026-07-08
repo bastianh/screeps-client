@@ -82,7 +82,7 @@ export class UserStore extends TypedStore<UserStoreEvents> {
     return this.worldStatus()
   }
 
-  subscribe(channel: 'console' | 'cpu' | 'code'): Subscription {
+  subscribe(channel: 'console' | 'cpu' | 'code' | 'set-active-branch'): Subscription {
     this.logger.log('subscribe', channel)
     let socketSub: Subscription | null = null
     let listenerSub: Subscription | null = null
@@ -115,6 +115,8 @@ export class UserStore extends TypedStore<UserStoreEvents> {
             this.emit('user:console', { messages: msg })
           } else if (channel === 'code') {
             this.emit('user:code', data as { branch: string; modules: Record<string, string> })
+          } else if (channel === 'set-active-branch') {
+            this.emit('user:setActiveBranch', data as { activeName: 'activeWorld' | 'activeSim'; branch: string })
           }
         })
       } catch (err) {

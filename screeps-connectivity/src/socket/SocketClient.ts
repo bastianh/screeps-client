@@ -8,6 +8,7 @@ export class SocketClient {
   private readonly wsUrl: string
   private readonly WS: WsConstructor
   private readonly logger: Logger
+  private readonly gzip: boolean
   private ws: WebSocket | null = null
   private token: string | null = null
   private authed = false
@@ -22,11 +23,14 @@ export class SocketClient {
   private readonly MAX_DELAY_MS = 60_000
   private _intentionalClose = false
 
-  constructor(opts: { url: string; WebSocket?: WsConstructor; logger?: Logger }) {
+  constructor(opts: { url: string; WebSocket?: WsConstructor; logger?: Logger; gzip?: boolean }) {
     const base = opts.url.replace(/^http/, 'ws').replace(/\/$/, '')
     this.wsUrl = `${base}/socket/websocket`
     this.WS = opts.WebSocket ?? globalThis.WebSocket
     this.logger = opts.logger ?? Logger.create()
+    // Off by default — matches the official client, which never sends `gzip on`.
+    // The decode path is always available; opt in explicitly to enable it.
+    this.gzip = opts.gzip ?? false
   }
 
   get isConnected(): boolean {
@@ -64,6 +68,11 @@ export class SocketClient {
               this.token = cmd.token
               this.emit('socket:tokenRefresh', { token: cmd.token })
             }
+            // Ask the server to deflate outbound event frames before any
+            // subscribe is flushed, so the first updates already arrive as gz:.
+            // The server only sends the compressed form when it's actually
+            // smaller, so this never enlarges small control frames.
+            if (this.gzip) this.rawSend('gzip on')
             while (this.queue.length) this.rawSend(this.queue.shift()!)
             this.emit('connected', {})
             resolve()
