@@ -58,17 +58,17 @@ function normalizeMount(input) {
 const mountPath = normalizeMount(process.env.SCREEPS_MOD_CLIENT_MOUNT_PATH ?? '/')
 const rootRedirect = readBool('SCREEPS_MOD_CLIENT_ROOT_REDIRECT', mountPath !== '/')
 
-// Paths that should never be handled by the client mod, even when mounted at '/'.
-// Can be overridden via SCREEPS_MOD_CLIENT_EXCLUDE (comma-separated prefixes).
-// Note: /assets/ is reserved by the game server; the client bundle uses /_client/ instead.
-// Do NOT exclude /map/ — it's a client-side SPA route (/map/<shard>). xxscreeps has no
-// HTTP route there (map-stats is under /api/, map render assets under /assets/, the map
-// renderer is a websocket), and the await-next()-then-404-fallback below already leaves
-// any real server route untouched.
-const DEFAULT_EXCLUDES = ['/api/', '/socket', '/backend/', '/auth/', '/assets/']
-const excludePrefixes = process.env.SCREEPS_MOD_CLIENT_EXCLUDE
-  ? process.env.SCREEPS_MOD_CLIENT_EXCLUDE.split(',').map(s => s.trim()).filter(Boolean)
-  : DEFAULT_EXCLUDES
+// Top-level client SPA routes. A path that isn't a real file in dist/ but matches
+// one of these is a client-side deep link (or a reload of one) and gets the SPA
+// shell; every other path is handed to xxscreeps, so its API/website routes are
+// never shadowed and genuinely-unknown paths get a real 404 instead of the shell.
+// Mirrors the route table in screeps-client/src/stores/routeStore.ts +
+// utils/gameRoutes.ts — keep in sync when the client gains a new top-level route.
+const SPA_ROUTES = ['/user', '/profile', '/messages', '/market', '/room-overview', '/map', '/room']
+
+function isSpaRoute(relPath) {
+  return SPA_ROUTES.some(prefix => relPath === prefix || relPath.startsWith(prefix + '/'))
+}
 
 function resolveFile(relPath) {
   const rel = relPath.replace(/^\/+/, '')
@@ -135,9 +135,6 @@ hooks.register('middleware', koa => {
 
   const mountDisplay = mountPath === '/' ? '/' : mountPath + '/'
   console.log(`[xxscreeps-mod-client] serving client at ${mountDisplay} (rootRedirect=${rootRedirect})`)
-  if (mountPath === '/') {
-    console.log(`[xxscreeps-mod-client] excluded prefixes: ${excludePrefixes.join(', ')}`)
-  }
 
   koa.use(async (ctx, next) => {
     if (ctx.method !== 'GET' && ctx.method !== 'HEAD') return next()
@@ -149,8 +146,6 @@ hooks.register('middleware', koa => {
 
     let relPath
     if (mountPath === '/') {
-      // When mounted at root, skip paths that belong to the game server.
-      if (excludePrefixes.some(p => ctx.path.startsWith(p))) return next()
       relPath = ctx.path
     } else if (ctx.path === mountPath || ctx.path === mountPath + '/') {
       relPath = '/'
@@ -172,14 +167,13 @@ hooks.register('middleware', koa => {
       return
     }
 
-    // Otherwise let xxscreeps handle the request. If it 404s and the path
-    // looks like an SPA route (no file extension on the last segment),
-    // fall back to index.html so client-side routing can take over.
-    await next()
-    if (ctx.status !== 404) return
-    const last = relPath.split('/').pop() ?? ''
-    if (last.includes('.')) return
-    ctx.status = 200
-    sendInjectedIndex(ctx)
+    // Not a real file: claim only the client's own SPA routes (deep links and
+    // reloads) with the index shell, and leave every other path to xxscreeps.
+    if (isSpaRoute(relPath)) {
+      sendInjectedIndex(ctx)
+      return
+    }
+
+    return next()
   })
 })
