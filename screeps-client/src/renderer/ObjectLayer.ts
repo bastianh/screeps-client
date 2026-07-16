@@ -488,31 +488,39 @@ function updateTowerFill(visual: ContainerWithTarget, level: number): void {
 
 // ── Storage helpers ────────────────────────────────────────────────────────
 // Geometry follows the official client's storage art: a rounded "barrel" shell
-// (dark fill, owner-tinted outline) over a grey inner box, bands on top. The shell
-// and inner box come from storage-border.svg / storage.svg, authored in a 177.15
-// viewBox rendered at 200px on a 100px tile — so one SVG unit is 0.0112897 tiles.
-const SVG_U = TILE_SIZE * 0.0112897
+// (dark fill, owner-tinted outline) over a grey inner box, bands on top. Upstream
+// draws it at 200px on a 100px tile, so it overhangs by half a tile in each
+// direction (1.54 × 1.94 tiles). We keep that silhouette but scale it down to just
+// over a tile — the one knob for the structure's overall size.
+const STORAGE_SCALE = 0.65
+
+// The shell and inner box come from storage-border.svg / storage.svg, authored in a
+// 177.15 viewBox rendered at 200px — one SVG unit is 0.0112897 tiles before scaling.
+const STORAGE_SVG_U = TILE_SIZE * 0.0112897 * STORAGE_SCALE
+
+// Upstream's metadata sizes the fill bars in tile pixels rather than SVG units.
+const STORAGE_PX_U = TILE_SIZE * 0.01 * STORAGE_SCALE
 
 // Shell arc endpoints span a 120×140 box around the tile centre; the caps (r=120)
 // bulge outward top/bottom, the sides (r=300) bulge left/right.
-const STORAGE_SHELL_HW = 60 * SVG_U
-const STORAGE_SHELL_HH = 70 * SVG_U
-const STORAGE_SHELL_CAP_R = 120 * SVG_U
-const STORAGE_SHELL_SIDE_R = 300 * SVG_U
-const STORAGE_SHELL_STROKE = 7 * SVG_U
+const STORAGE_SHELL_HW = 60 * STORAGE_SVG_U
+const STORAGE_SHELL_HH = 70 * STORAGE_SVG_U
+const STORAGE_SHELL_CAP_R = 120 * STORAGE_SVG_U
+const STORAGE_SHELL_SIDE_R = 300 * STORAGE_SVG_U
+const STORAGE_SHELL_STROKE = 7 * STORAGE_SVG_U
 
 // Grey inner box: 100×120, centred on the tile.
-const STORAGE_INNER_W = 100 * SVG_U
-const STORAGE_INNER_H = 120 * SVG_U
+const STORAGE_INNER_W = 100 * STORAGE_SVG_U
+const STORAGE_INNER_H = 120 * STORAGE_SVG_U
 
-// Fill-band rect in container coords (cx = cy = TILE_SIZE/2). The official client
-// sizes its bars in tile pixels rather than SVG units: 110 wide, 140 tall at a full
-// store, floor 70 below the centre. At full store the bands therefore overhang the
-// grey box slightly top and bottom — the shell's outline absorbs it, as upstream.
-const STORAGE_BOX_X = -TILE_SIZE * 0.05
-const STORAGE_BOX_Y = -TILE_SIZE * 0.2
-const STORAGE_BOX_W = TILE_SIZE * 1.1
-const STORAGE_BOX_H = TILE_SIZE * 1.4
+// Fill-band rect in container coords (cx = cy = TILE_SIZE/2). Upstream's bars are
+// 110 wide, 140 tall at a full store, with the floor 70 below the centre. At a full
+// store they therefore overhang the grey box slightly top and bottom — the shell's
+// outline absorbs it, as upstream.
+const STORAGE_BOX_W = 110 * STORAGE_PX_U
+const STORAGE_BOX_H = 140 * STORAGE_PX_U
+const STORAGE_BOX_X = TILE_SIZE * 0.5 - STORAGE_BOX_W / 2
+const STORAGE_BOX_Y = TILE_SIZE * 0.5 + 70 * STORAGE_PX_U - STORAGE_BOX_H
 
 interface StoreBand { color: number; amount: number }
 
