@@ -13,15 +13,7 @@ export const defaultSpriteTheme: Theme = {
   id: 'default',
   name: 'Default',
   atlasUrl: `${basePath()}/themes/default/sprite-0.json${atlasQuery}`,
-  sprites: {
-    storage: {
-      layers: [
-        { frame: 'storage/shell', tint: 'owner' },
-        { frame: 'storage/fill' },
-      ],
-      tileScale: 1.75,
-    },
-  },
+  sprites: {},
   controller: {
     backgroundFrame: 'controller/background',
     segmentFrame: 'controller/segment',

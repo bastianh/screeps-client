@@ -487,11 +487,32 @@ function updateTowerFill(visual: ContainerWithTarget, level: number): void {
 }
 
 // ── Storage helpers ────────────────────────────────────────────────────────
-// Box inner rect in container coords (cx = cy = TILE_SIZE/2, so rect x = 0, rect y = -TILE_SIZE*0.1)
-const STORAGE_BOX_X = 0
-const STORAGE_BOX_Y = -TILE_SIZE * 0.1
-const STORAGE_BOX_W = TILE_SIZE * 1.0
-const STORAGE_BOX_H = TILE_SIZE * 1.2
+// Geometry follows the official client's storage art: a rounded "barrel" shell
+// (dark fill, owner-tinted outline) over a grey inner box, bands on top. The shell
+// and inner box come from storage-border.svg / storage.svg, authored in a 177.15
+// viewBox rendered at 200px on a 100px tile — so one SVG unit is 0.0112897 tiles.
+const SVG_U = TILE_SIZE * 0.0112897
+
+// Shell arc endpoints span a 120×140 box around the tile centre; the caps (r=120)
+// bulge outward top/bottom, the sides (r=300) bulge left/right.
+const STORAGE_SHELL_HW = 60 * SVG_U
+const STORAGE_SHELL_HH = 70 * SVG_U
+const STORAGE_SHELL_CAP_R = 120 * SVG_U
+const STORAGE_SHELL_SIDE_R = 300 * SVG_U
+const STORAGE_SHELL_STROKE = 7 * SVG_U
+
+// Grey inner box: 100×120, centred on the tile.
+const STORAGE_INNER_W = 100 * SVG_U
+const STORAGE_INNER_H = 120 * SVG_U
+
+// Fill-band rect in container coords (cx = cy = TILE_SIZE/2). The official client
+// sizes its bars in tile pixels rather than SVG units: 110 wide, 140 tall at a full
+// store, floor 70 below the centre. At full store the bands therefore overhang the
+// grey box slightly top and bottom — the shell's outline absorbs it, as upstream.
+const STORAGE_BOX_X = -TILE_SIZE * 0.05
+const STORAGE_BOX_Y = -TILE_SIZE * 0.2
+const STORAGE_BOX_W = TILE_SIZE * 1.1
+const STORAGE_BOX_H = TILE_SIZE * 1.4
 
 interface StoreBand { color: number; amount: number }
 
@@ -581,6 +602,21 @@ function updateContainerFill(visual: ContainerWithTarget, height: number): void 
   if (!fill) return
   fill.clear()
   drawStoreBands(fill, CONT_X, CONT_Y + CONT_H, CONT_W, height, visual.__containerBands, visual.__containerUsed ?? 0, CONT_MARGIN)
+}
+
+// Transcribed from storage-border.svg's single path: start top-left, cap across the
+// top, down the right side, cap back across the bottom, up the left side. Issued once
+// per fill and once per stroke, since either consumes the current path.
+function storageShellPath(g: Graphics, cx: number, cy: number): void {
+  const left = cx - STORAGE_SHELL_HW, right = cx + STORAGE_SHELL_HW
+  const top = cy - STORAGE_SHELL_HH, bottom = cy + STORAGE_SHELL_HH
+  const cap = STORAGE_SHELL_CAP_R, side = STORAGE_SHELL_SIDE_R
+  g.moveTo(left, top)
+  g.arcToSvg(cap, cap, 0, 0, 1, right, top)
+  g.arcToSvg(side, side, 0, 0, 1, right, bottom)
+  g.arcToSvg(cap, cap, 0, 0, 1, left, bottom)
+  g.arcToSvg(side, side, 0, 0, 1, left, top)
+  g.closePath()
 }
 
 function calcStorageFillHeight(used: number, capacity: number): number {
@@ -1735,50 +1771,12 @@ function createObjectVisual(
       break
     }
     case 'storage': {
-      const spec = theme?.sprites['storage']
-      if (spec && atlasCache) {
-        const { bands: storageBands, used: storageUsed, capacity: storageCap } = getStoreBands(obj)
-        const targetSize = TILE_SIZE * spec.tileScale
-        const applyTexture = (sprite: Sprite, tex: Texture) => {
-          sprite.texture = tex
-          sprite.width = targetSize
-          sprite.height = targetSize
-        }
-        for (const layer of spec.layers) {
-          const sprite = new Sprite()
-          sprite.anchor.set(0.5, 0.5)
-          sprite.x = cx
-          sprite.y = cy
-          if (layer.tint === 'owner') sprite.tint = outlineColor
-          container.addChild(sprite)
-          const tex = atlasCache.getTexture(theme!.atlasUrl, layer.frame)
-          if (tex) {
-            applyTexture(sprite, tex)
-          } else {
-            atlasCache.getOrLoad(theme!.atlasUrl).then(sheet => {
-              if (!sprite.destroyed) applyTexture(sprite, sheet.textures[layer.frame] ?? Texture.EMPTY)
-            }).catch(() => {})
-          }
-        }
-        const storageFillG = new Graphics()
-        container.addChild(storageFillG)
-        ;(container as ContainerWithTarget).__storageFillG = storageFillG
-        ;(container as ContainerWithTarget).__storageBands = storageBands
-        ;(container as ContainerWithTarget).__storageUsed = storageUsed
-        ;(container as ContainerWithTarget).__storageCapacity = storageCap
-        updateStorageFill(container as ContainerWithTarget, calcStorageFillHeight(storageUsed, storageCap))
-        break
-      }
       const { bands: storageBands, used: storageUsed, capacity: storageCap } = getStoreBands(obj)
-      const storagePts = spts(cx, cy, [
-        [-0.6, -0.7], [0, -0.8], [0.6, -0.7], [0.65, 0],
-        [0.6, 0.7], [0, 0.8], [-0.6, 0.7], [-0.65, 0], [-0.6, -0.7],
-      ])
-      g.poly(storagePts)
+      storageShellPath(g, cx, cy)
       g.fill(ST_DARK)
-      g.poly(storagePts)
-      g.stroke({ width: TILE_SIZE * 0.05, color: outlineColor })
-      g.rect(cx - TILE_SIZE * 0.5, cy - TILE_SIZE * 0.6, TILE_SIZE * 1.0, TILE_SIZE * 1.2)
+      storageShellPath(g, cx, cy)
+      g.stroke({ width: STORAGE_SHELL_STROKE, color: outlineColor })
+      g.rect(cx - STORAGE_INNER_W / 2, cy - STORAGE_INNER_H / 2, STORAGE_INNER_W, STORAGE_INNER_H)
       g.fill(ST_GRAY)
       container.addChild(g)
 
@@ -1789,11 +1787,6 @@ function createObjectVisual(
       ;(container as ContainerWithTarget).__storageUsed = storageUsed
       ;(container as ContainerWithTarget).__storageCapacity = storageCap
       updateStorageFill(container as ContainerWithTarget, calcStorageFillHeight(storageUsed, storageCap))
-
-      const storageBorderG = new Graphics()
-      storageBorderG.rect(cx - TILE_SIZE * 0.5, cy - TILE_SIZE * 0.6, TILE_SIZE * 1.0, TILE_SIZE * 1.2)
-      storageBorderG.stroke({ width: TILE_SIZE * 0.1, color: ST_DARK })
-      container.addChild(storageBorderG)
       break
     }
     case 'terminal': {
