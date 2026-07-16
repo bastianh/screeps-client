@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "client-dev",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "screeps-client", "dev"],
+      "port": 5173
+    },
+    {
+      "name": "client-proxy",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "screeps-client-proxy", "start"],
+      "port": 8080
+    }
+  ]
+}
