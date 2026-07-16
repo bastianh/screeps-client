@@ -35,7 +35,6 @@ export const LS = {
   roomDarkOverlay: 'screeps:settings:roomDarkOverlay',
   showRoomVisuals: 'screeps:settings:showRoomVisuals',
   smoothAnimations: 'screeps:settings:smoothAnimations',
-  spriteTheme: 'screeps:settings:spriteTheme',
   showMapVisuals: 'screeps:settings:showMapVisuals',
   hideCustomUiProtocol: 'screeps:settings:hideCustomUiProtocol',
   // Per-server prefixes — the active server URL is appended as ':<url>'.

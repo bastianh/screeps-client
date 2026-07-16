@@ -1,8 +1,9 @@
 import { Container, Graphics, GraphicsContext, Text, Ticker, Sprite, Texture, BlurFilter, FillGradient } from 'pixi.js'
 import type { RoomObject, RoomObjectMap, RoomObjectDiff, Badge } from 'screeps-connectivity'
 import { BadgeTextureCache } from './BadgeTextureCache.js'
-import type { Theme, ControllerSpec, FlagSpec } from './themes/Theme.js'
-import type { AtlasCache } from './AtlasCache.js'
+import type { ControllerSpec, FlagSpec } from './themes/Theme.js'
+import { sharedAtlasCache } from './AtlasCache.js'
+import { defaultSpriteTheme } from './themes/default.js'
 import type { LightingLayer } from './LightingLayer.js'
 
 const sharedBadgeCache = new BadgeTextureCache()
@@ -1168,12 +1169,12 @@ function npcCreepName(obj: RoomObject, users?: Record<string, { username: string
 // structures (the spawn body + progress ring then render over it) instead of popping
 // on top. Other creeps stay above structures. Re-applied on update so the born
 // transition (spawning → false) restores the normal creep tier.
-function computeZIndex(obj: RoomObject, theme?: Theme | null): number {
+function computeZIndex(obj: RoomObject): number {
   const baseZ = obj.type === 'creep' ? (obj.spawning ? -1 : 100) : obj.type === 'flag' ? 200 : 0
-  const specZ = obj.type === 'flag' ? (theme?.flag?.zIndex ?? 0)
-    : obj.type === 'controller' ? (theme?.controller?.zIndex ?? 0)
+  const specZ = obj.type === 'flag' ? (defaultSpriteTheme.flag?.zIndex ?? 0)
+    : obj.type === 'controller' ? (defaultSpriteTheme.controller?.zIndex ?? 0)
     : obj.type === 'tombstone' ? TOMBSTONE_Z_INDEX
-    : obj.type === 'mineral' ? (theme?.mineral?.zIndex ?? 0)
+    : obj.type === 'mineral' ? (defaultSpriteTheme.mineral?.zIndex ?? 0)
     : obj.type === 'extractor' ? EXTRACTOR_Z_INDEX
     : 0
   return baseZ + specZ
@@ -1186,8 +1187,6 @@ function createObjectVisual(
   _badge?: Badge,
   badgeCache?: BadgeTextureCache,
   users?: Record<string, { _id: string; username: string; badge?: Badge }>,
-  theme?: Theme | null,
-  atlasCache?: AtlasCache | null,
 ): Container {
   const container = new Container()
   const g = new Graphics()
@@ -1497,8 +1496,8 @@ function createObjectVisual(
     }
     case 'mineral': {
       const mtype = typeof obj.mineralType === 'string' ? obj.mineralType : '?'
-      const mineralSpec = theme?.mineral
-      if (mineralSpec && atlasCache) {
+      const mineralSpec = defaultSpriteTheme.mineral
+      if (mineralSpec) {
         const frame = `mineral/${mtype}`
         const targetSize = TILE_SIZE * mineralSpec.tileScale
         const applyTexture = (sprite: Sprite, tex: Texture) => {
@@ -1511,11 +1510,11 @@ function createObjectVisual(
         sprite.x = cx
         sprite.y = cy
         container.addChild(sprite)
-        const tex = atlasCache.getTexture(theme!.atlasUrl, frame)
+        const tex = sharedAtlasCache.getTexture(defaultSpriteTheme.atlasUrl, frame)
         if (tex) {
           applyTexture(sprite, tex)
         } else {
-          atlasCache.getOrLoad(theme!.atlasUrl).then(sheet => {
+          sharedAtlasCache.getOrLoad(defaultSpriteTheme.atlasUrl).then(sheet => {
             if (!sprite.destroyed) applyTexture(sprite, sheet.textures[frame] ?? Texture.EMPTY)
           }).catch(() => {})
         }
@@ -1540,8 +1539,8 @@ function createObjectVisual(
     }
     case 'deposit': {
       const depType = typeof obj.depositType === 'string' ? obj.depositType : undefined
-      const depSpec = theme?.deposit
-      if (depType && depSpec && atlasCache) {
+      const depSpec = defaultSpriteTheme.deposit
+      if (depType && depSpec) {
         const targetSize = TILE_SIZE * depSpec.tileScale
         const applyTexture = (sprite: Sprite, tex: Texture) => {
           sprite.texture = tex
@@ -1560,18 +1559,18 @@ function createObjectVisual(
           if (tintColor !== undefined) sprite.tint = tintColor
           if (isFill) sprite.alpha = DEPOSIT_FILL_ALPHA
           container.addChild(sprite)
-          const tex = atlasCache.getTexture(theme!.atlasUrl, frame)
+          const tex = sharedAtlasCache.getTexture(defaultSpriteTheme.atlasUrl, frame)
           if (tex) {
             applyTexture(sprite, tex)
           } else {
-            atlasCache.getOrLoad(theme!.atlasUrl).then(sheet => {
+            sharedAtlasCache.getOrLoad(defaultSpriteTheme.atlasUrl).then(sheet => {
               if (!sprite.destroyed) applyTexture(sprite, sheet.textures[frame] ?? Texture.EMPTY)
             }).catch(() => {})
           }
         }
         break
       }
-      // Fallback: colored rect (no theme/atlas or unknown deposit type)
+      // Fallback: colored rect (unknown deposit type)
       g.rect(2, 2, TILE_SIZE - 4, TILE_SIZE - 4)
       g.fill(color)
       container.addChild(g)
@@ -1588,8 +1587,8 @@ function createObjectVisual(
         : undefined
       const ctrlBadge = ctrlUserId ? users?.[ctrlUserId]?.badge : undefined
 
-      const ctrlSpec: ControllerSpec | undefined = theme?.controller
-      if (ctrlSpec && atlasCache) {
+      const ctrlSpec: ControllerSpec | undefined = defaultSpriteTheme.controller
+      if (ctrlSpec) {
         const targetSize = TILE_SIZE * ctrlSpec.tileScale
         const segScale = targetSize / 600
 
@@ -1615,8 +1614,8 @@ function createObjectVisual(
         ;(container as ContainerWithTarget).__ctrlSegSprites = segSprites
         updateControllerSegSprites(container as ContainerWithTarget, level, progress, progressTotal)
 
-        const loadAtlas = (): Promise<import('pixi.js').Spritesheet> => atlasCache.getOrLoad(theme!.atlasUrl)
-        const bgTex = atlasCache.getTexture(theme!.atlasUrl, ctrlSpec.backgroundFrame)
+        const loadAtlas = (): Promise<import('pixi.js').Spritesheet> => sharedAtlasCache.getOrLoad(defaultSpriteTheme.atlasUrl)
+        const bgTex = sharedAtlasCache.getTexture(defaultSpriteTheme.atlasUrl, ctrlSpec.backgroundFrame)
         if (bgTex) {
           bgSprite.texture = bgTex
         } else {
@@ -1624,7 +1623,7 @@ function createObjectVisual(
             if (!bgSprite.destroyed) bgSprite.texture = sheet.textures[ctrlSpec.backgroundFrame] ?? Texture.EMPTY
           }).catch(() => {})
         }
-        const existingSegTex = atlasCache.getTexture(theme!.atlasUrl, ctrlSpec.segmentFrame)
+        const existingSegTex = sharedAtlasCache.getTexture(defaultSpriteTheme.atlasUrl, ctrlSpec.segmentFrame)
         if (existingSegTex) {
           for (const seg of segSprites) seg.texture = existingSegTex
         } else {
@@ -1714,8 +1713,8 @@ function createObjectVisual(
     case 'tower': {
       const { energy: towerEnergy, capacity: towerCap } = getExtensionEnergy(obj)
 
-      const towerSpec = theme?.tower
-      if (towerSpec && atlasCache) {
+      const towerSpec = defaultSpriteTheme.tower
+      if (towerSpec) {
         const targetSize = TILE_SIZE * towerSpec.tileScale
 
         // Static ring (footprint, tinted by ownership)
@@ -1760,14 +1759,14 @@ function createObjectVisual(
           updateTowerFill(container as ContainerWithTarget, calcTowerFillHeight(towerEnergy, towerCap))
         }
 
-        const ringTex = atlasCache.getTexture(theme!.atlasUrl, towerSpec.ringFrame)
-        const bodyTex = atlasCache.getTexture(theme!.atlasUrl, towerSpec.bodyFrame)
+        const ringTex = sharedAtlasCache.getTexture(defaultSpriteTheme.atlasUrl, towerSpec.ringFrame)
+        const bodyTex = sharedAtlasCache.getTexture(defaultSpriteTheme.atlasUrl, towerSpec.bodyFrame)
         if (ringTex && bodyTex) {
           ring.texture = ringTex
           body.texture = bodyTex
           applyScale(bodyTex)
         } else {
-          atlasCache.getOrLoad(theme!.atlasUrl).then(sheet => {
+          sharedAtlasCache.getOrLoad(defaultSpriteTheme.atlasUrl).then(sheet => {
             if (!ring.destroyed) ring.texture = sheet.textures[towerSpec.ringFrame] ?? Texture.EMPTY
             if (!body.destroyed) {
               const t = sheet.textures[towerSpec.bodyFrame] ?? Texture.EMPTY
@@ -2093,10 +2092,10 @@ function createObjectVisual(
       const flagColor = FLAG_COLORS[colorIdx] ?? FLAG_COLORS[0]
       const secColor = FLAG_COLORS[secColorIdx] ?? FLAG_COLORS[0]
 
-      const flagSpec: FlagSpec | undefined = theme?.flag
-      if (flagSpec && atlasCache) {
+      const flagSpec: FlagSpec | undefined = defaultSpriteTheme.flag
+      if (flagSpec) {
         const targetSize = TILE_SIZE * flagSpec.tileScale
-        const loadAtlas = (): Promise<import('pixi.js').Spritesheet> => atlasCache.getOrLoad(theme!.atlasUrl)
+        const loadAtlas = (): Promise<import('pixi.js').Spritesheet> => sharedAtlasCache.getOrLoad(defaultSpriteTheme.atlasUrl)
         const applyTex = (sprite: Sprite, tex: Texture) => {
           sprite.texture = tex
           sprite.width = targetSize
@@ -2110,7 +2109,7 @@ function createObjectVisual(
         mainSprite.tint = flagColor
         container.addChild(mainSprite)
 
-        const mainTex = atlasCache.getTexture(theme!.atlasUrl, flagSpec.mainFrame)
+        const mainTex = sharedAtlasCache.getTexture(defaultSpriteTheme.atlasUrl, flagSpec.mainFrame)
         if (mainTex) {
           applyTex(mainSprite, mainTex)
         } else {
@@ -2127,7 +2126,7 @@ function createObjectVisual(
           secondSprite.tint = secColor
           container.addChild(secondSprite)
 
-          const secondTex = atlasCache.getTexture(theme!.atlasUrl, flagSpec.secondFrame)
+          const secondTex = sharedAtlasCache.getTexture(defaultSpriteTheme.atlasUrl, flagSpec.secondFrame)
           if (secondTex) {
             applyTex(secondSprite, secondTex)
           } else {
@@ -2355,7 +2354,7 @@ function createObjectVisual(
     container.addChild(label)
   }
 
-  container.zIndex = computeZIndex(obj, theme)
+  container.zIndex = computeZIndex(obj)
 
   container.position.set(obj.x * TILE_SIZE, obj.y * TILE_SIZE)
   return container
@@ -2576,8 +2575,6 @@ export class ObjectLayer {
   private badge?: Badge
   private readonly badgeCache = sharedBadgeCache
   private users?: Record<string, { _id: string; username: string; badge?: Badge }>
-  private activeTheme: Theme | null = null
-  private atlasCache: AtlasCache | null = null
   private roadColor: number = OBJ_ROAD
   private wallColor: number = ST_DARK
   private lighting: LightingLayer | null = null
@@ -2616,11 +2613,6 @@ export class ObjectLayer {
       this.tickerCallback = () => this.tick()
       ticker.add(this.tickerCallback)
     }
-  }
-
-  setTheme(theme: Theme | null, cache: AtlasCache | null): void {
-    this.activeTheme = theme
-    this.atlasCache = cache
   }
 
   setRoadColor(color: number): void {
@@ -3069,7 +3061,7 @@ export class ObjectLayer {
           this.rawObjects.set(id, obj)
           const existing = this.objects.get(id)
           if (!existing) {
-            const visual: ContainerWithTarget = createObjectVisual(obj, this.showLabels, this.currentUserId, this.badge, this.badgeCache, this.users, this.activeTheme, this.atlasCache)
+            const visual: ContainerWithTarget = createObjectVisual(obj, this.showLabels, this.currentUserId, this.badge, this.badgeCache, this.users)
             visual.__tileX = obj.x
             visual.__tileY = obj.y
             this.applyLabelScale(visual)
@@ -3110,7 +3102,7 @@ export class ObjectLayer {
                 existing.__creepCapacity = capacity
               }
               // Re-tier on the spawning → born transition (and vice-versa).
-              const cz = computeZIndex(obj, this.activeTheme)
+              const cz = computeZIndex(obj)
               if (existing.zIndex !== cz) existing.zIndex = cz
             } else if (obj.type === 'flag') {
               const newColorIdx = typeof obj.color === 'number' ? obj.color : 0
@@ -3122,7 +3114,7 @@ export class ObjectLayer {
                 this.container.removeChild(existing)
                 destroyVisual(existing)
                 this.objects.delete(id)
-                const visual: ContainerWithTarget = createObjectVisual(obj, this.showLabels, this.currentUserId, this.badge, this.badgeCache, this.users, this.activeTheme, this.atlasCache)
+                const visual: ContainerWithTarget = createObjectVisual(obj, this.showLabels, this.currentUserId, this.badge, this.badgeCache, this.users)
                 visual.__tileX = obj.x
                 visual.__tileY = obj.y
                 this.applyLabelScale(visual)
@@ -3295,7 +3287,7 @@ export class ObjectLayer {
                 this.container.removeChild(existing)
                 destroyVisual(existing)
                 this.objects.delete(id)
-                const visual: ContainerWithTarget = createObjectVisual(obj, this.showLabels, this.currentUserId, this.badge, this.badgeCache, this.users, this.activeTheme, this.atlasCache)
+                const visual: ContainerWithTarget = createObjectVisual(obj, this.showLabels, this.currentUserId, this.badge, this.badgeCache, this.users)
                 visual.__tileX = obj.x
                 visual.__tileY = obj.y
                 this.applyLabelScale(visual)
@@ -3360,7 +3352,7 @@ export class ObjectLayer {
         this.rawObjects.set(id, obj)
         const existing = this.objects.get(id)
         if (!existing) {
-          const visual: ContainerWithTarget = createObjectVisual(obj, this.showLabels, this.currentUserId, this.badge, this.badgeCache, this.users, this.activeTheme, this.atlasCache)
+          const visual: ContainerWithTarget = createObjectVisual(obj, this.showLabels, this.currentUserId, this.badge, this.badgeCache, this.users)
           visual.__tileX = obj.x
           visual.__tileY = obj.y
           this.applyLabelScale(visual)
@@ -3401,7 +3393,7 @@ export class ObjectLayer {
               existing.__creepCapacity = capacity
             }
             // Re-tier on the spawning → born transition (and vice-versa).
-            const cz = computeZIndex(obj, this.activeTheme)
+            const cz = computeZIndex(obj)
             if (existing.zIndex !== cz) existing.zIndex = cz
           } else if (obj.type === 'flag') {
             const newColorIdx = typeof obj.color === 'number' ? obj.color : 0
@@ -3413,7 +3405,7 @@ export class ObjectLayer {
               this.container.removeChild(existing)
               destroyVisual(existing)
               this.objects.delete(id)
-              const visual: ContainerWithTarget = createObjectVisual(obj, this.showLabels, this.currentUserId, this.badge, this.badgeCache, this.users, this.activeTheme, this.atlasCache)
+              const visual: ContainerWithTarget = createObjectVisual(obj, this.showLabels, this.currentUserId, this.badge, this.badgeCache, this.users)
               visual.__tileX = obj.x
               visual.__tileY = obj.y
               this.applyLabelScale(visual)
@@ -3470,7 +3462,7 @@ export class ObjectLayer {
               this.container.removeChild(existing)
               destroyVisual(existing)
               this.objects.delete(id)
-              const visual: ContainerWithTarget = createObjectVisual(obj, this.showLabels, this.currentUserId, this.badge, this.badgeCache, this.users, this.activeTheme, this.atlasCache)
+              const visual: ContainerWithTarget = createObjectVisual(obj, this.showLabels, this.currentUserId, this.badge, this.badgeCache, this.users)
               visual.__tileX = obj.x
               visual.__tileY = obj.y
               this.applyLabelScale(visual)
