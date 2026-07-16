@@ -13,7 +13,6 @@ export const defaultSpriteTheme: Theme = {
   id: 'default',
   name: 'Default',
   atlasUrl: `${basePath()}/themes/default/sprite-0.json${atlasQuery}`,
-  sprites: {},
   controller: {
     backgroundFrame: 'controller/background',
     segmentFrame: 'controller/segment',

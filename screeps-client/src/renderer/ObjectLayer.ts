@@ -1175,7 +1175,7 @@ function computeZIndex(obj: RoomObject, theme?: Theme | null): number {
     : obj.type === 'tombstone' ? TOMBSTONE_Z_INDEX
     : obj.type === 'mineral' ? (theme?.mineral?.zIndex ?? 0)
     : obj.type === 'extractor' ? EXTRACTOR_Z_INDEX
-    : (theme?.sprites[obj.type]?.zIndex ?? 0)
+    : 0
   return baseZ + specZ
 }
 
