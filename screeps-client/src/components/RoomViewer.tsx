@@ -7,9 +7,7 @@ import { ObjectLayer } from '~/renderer/ObjectLayer.js'
 import { ActionAnimationLayer } from '~/renderer/ActionAnimationLayer.js'
 import { VisualLayer } from '~/renderer/VisualLayer.js'
 import { client, gameTime, setGameTime, recordGameTime, tickDuration, worldBounds, userInfo, worldStatus, serverVersion, isPrivateServer } from '~/stores/clientStore.js'
-import { showCreepLabels, terrainEffects, showRoomVisuals, spriteTheme, showRoomDecorations, roomDarkOverlay, smoothAnimations } from '~/stores/settingsStore.js'
-import { defaultSpriteTheme } from '~/renderer/themes/default.js'
-import { sharedAtlasCache } from '~/renderer/AtlasCache.js'
+import { showCreepLabels, terrainEffects, showRoomVisuals, showRoomDecorations, roomDarkOverlay, smoothAnimations } from '~/stores/settingsStore.js'
 import { setSelection, clearSelection, selection, updateSelectionWithDiff, updateSelectionFromObjects, createSelectedObject } from '~/stores/selectionStore.js'
 import { addToast } from '~/stores/toastStore.js'
 import { setRoomObjectCount, setRoomOwner, setControllerLevel, setControllerProgress, setControllerReservation, setStructureCounts, setRoomUsers, roomUsers, setCurrentShard, setCurrentRoom } from '~/stores/roomDataStore.js'
@@ -50,11 +48,8 @@ interface RoomViewerProps {
 }
 
 export function RoomViewer(props: RoomViewerProps) {
-  const resolveTheme = (id: string) => id === 'default' ? defaultSpriteTheme : null
-
   let containerRef: HTMLDivElement | undefined
   let objLayer: ObjectLayer | null = null
-  let lastRawState: { objects: RoomObjectMap; users?: Record<string, { _id: string; username: string; badge?: Badge }> } | null = null
   let animLayer: ActionAnimationLayer | null = null
   let visualLayer: VisualLayer | null = null
   let terrainLayerRef: ReturnType<typeof createTerrainLayer> | null = null
@@ -543,7 +538,6 @@ export function RoomViewer(props: RoomViewerProps) {
     if (!objLayer) {
       log(`object layer created — ${props.room}`)
       objLayer = new ObjectLayer(r.app.ticker, showCreepLabels(), userInfo()?._id, userInfo()?.badge, users)
-      objLayer.setTheme(resolveTheme(untrack(spriteTheme)), sharedAtlasCache)
       objLayer.setInstantMode(untrack(historyMode) || !untrack(smoothAnimations))
       const dec = untrack(roomDecoration)
       if (dec?.room === props.room) {
@@ -743,7 +737,6 @@ export function RoomViewer(props: RoomViewerProps) {
 
     objLayer.setMoveDuration(moveDuration)
     objLayer.setTickDuration(tickMs)
-    lastRawState = { objects: objs, users }
     objLayer.update(objs, effectiveDiff, users, gameTime() ?? undefined)
     objLayer.setShowLabels(untrack(showCreepLabels))
 
@@ -861,17 +854,6 @@ export function RoomViewer(props: RoomViewerProps) {
     r.darkOverlay.visible = enabled
     r.lightLayer.visible = enabled
     if (!enabled) r.clearLighting()
-  })
-
-  // Rebuild object layer when sprite theme changes
-  createEffect(() => {
-    const theme = resolveTheme(spriteTheme())
-    if (!objLayer) return
-    objLayer.setTheme(theme, sharedAtlasCache)
-    if (lastRawState) {
-      objLayer.clear()
-      objLayer.update(lastRawState.objects, undefined, lastRawState.users)
-    }
   })
 
   return (

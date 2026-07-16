@@ -7,7 +7,6 @@ import {
   showRoomDecorations, setShowRoomDecorations,
   roomDarkOverlay, setRoomDarkOverlay,
   smoothAnimations, setSmoothAnimations,
-  spriteTheme, setSpriteTheme,
   hideCustomUiProtocol, setHideCustomUiProtocol,
 } from '~/stores/settingsStore.js'
 import { clientVersion, embeddedModInfo } from '~/utils/embedded.js'
@@ -267,17 +266,6 @@ export function SettingsPanel(props: { onClose: () => void }) {
               value={smoothAnimations()}
               onChange={setSmoothAnimations}
             />
-            <div style={{ display: 'flex', 'flex-direction': 'column', gap: '4px' }}>
-              <label style={{ 'font-size': '13px', 'font-weight': '500' }}>Structure theme</label>
-              <select
-                value={spriteTheme()}
-                onChange={e => setSpriteTheme(e.currentTarget.value)}
-                style={{ background: '#2a2a2a', color: '#eee', border: '1px solid #444', 'border-radius': '4px', padding: '4px 8px', 'font-size': '13px' }}
-              >
-                <option value="vector">Vector (procedural)</option>
-                <option value="default">Default (sprites)</option>
-              </select>
-            </div>
           </Section>
 
           <Show when={!isGuest()}>

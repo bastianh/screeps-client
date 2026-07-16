@@ -7,12 +7,6 @@ function boolSetting(key: string, defaultVal: boolean): [() => boolean, (v: bool
   return [val, (v: boolean) => { setVal(v); localStorage.setItem(key, String(v)) }]
 }
 
-function strSetting(key: string, defaultVal: string): [() => string, (v: string) => void] {
-  const stored = localStorage.getItem(key)
-  const [val, setVal] = createSignal(stored ?? defaultVal)
-  return [val, (v: string) => { setVal(v); localStorage.setItem(key, v) }]
-}
-
 export const [widescreenMode, setWidescreenMode] = boolSetting(LS.widescreenMode, true)
 export const [showCreepLabels, setShowCreepLabels] = boolSetting(LS.showCreepLabels, true)
 export const [showMapRoomNames, setShowMapRoomNames] = boolSetting(LS.showMapRoomNames, false)
@@ -25,6 +19,5 @@ export const [showRoomVisuals, setShowRoomVisuals] = boolSetting(LS.showRoomVisu
 // pulses) snap instantly instead of interpolating between ticks. Wall-clock ambient
 // pulses (source glow, tower sweep, keeper-lair glow) are unaffected.
 export const [smoothAnimations, setSmoothAnimations] = boolSetting(LS.smoothAnimations, true)
-export const [spriteTheme, setSpriteTheme] = strSetting(LS.spriteTheme, 'default')
 export const [showMapVisuals, setShowMapVisuals] = boolSetting(LS.showMapVisuals, true)
 export const [hideCustomUiProtocol, setHideCustomUiProtocol] = boolSetting(LS.hideCustomUiProtocol, true)
