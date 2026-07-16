@@ -1,5 +1,17 @@
 # xxscreeps-mod-client
 
+## 0.3.7
+
+### Patch Changes
+
+- 76dfef2: Serve the client via a route allowlist instead of a backend-path blocklist. The mod now claims only the client's own SPA routes (`/user`, `/profile`, `/messages`, `/market`, `/room-overview`, `/map`, `/room`) plus real files in `dist/`, and hands every other path straight to xxscreeps. This drops the `SCREEPS_MOD_CLIENT_EXCLUDE` env var and the `await next()`-then-intercept-404 fallback, so new backend routes can never be swallowed into the SPA shell and unknown paths get a real 404. Mirrors the standalone `screeps-client-proxy` change.
+- Updated dependencies [e83d9da]
+- Updated dependencies [06a2c65]
+- Updated dependencies [cafe90b]
+- Updated dependencies [0abba53]
+- Updated dependencies [3a68c21]
+  - screeps-client@0.17.1
+
 ## 0.3.6
 
 ### Patch Changes

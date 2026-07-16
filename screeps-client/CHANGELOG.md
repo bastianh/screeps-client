@@ -1,5 +1,15 @@
 # screeps-client
 
+## 0.17.1
+
+### Patch Changes
+
+- e83d9da: Repack the sprite atlas without the storage and tombstone frames, which no longer have any code behind them. The spritesheet drops from 25 frames to 21 and gets a little smaller.
+- 06a2c65: Remove the "Structure theme" setting. The default theme was the only complete one — the alternative, "Vector (procedural)", dropped every sprite-backed object down to a plain fallback — so the default becomes the only rendering path and the room view now looks the same for everyone.
+- cafe90b: Draw storage procedurally instead of from the spritesheet. The shape now follows the official client's art — a rounded "barrel" shell with an owner-tinted outline over a grey inner box — replacing the old octagon, with the arcs transcribed from upstream's `storage-border.svg`. Resource bands are unchanged. The structure is scaled down to just over one tile rather than upstream's half-tile overhang in every direction, via a single `STORAGE_SCALE` constant.
+- 0abba53: Redraw the terminal to follow the official client's art. The light inner octagon is replaced by the four arrows it stood in for, the plate is now a dark frame around a grey face, and the octagon outline picks up upstream's proportions. On send cooldown the arrows dim and the ring between octagon and plate pulses, rather than the arrow tabs glowing. The store fill is unchanged, but now fills the grey face exactly at capacity. Sized to just over a tile, matching storage.
+- 3a68c21: Draw tombstones procedurally instead of from the spritesheet, and drop the black backing so the terrain shows through the headstone — only the outline and its mark remain. Tombstones now also fade out over their lifetime, from full opacity at death to nothing when they decay, on servers that report those times.
+
 ## 0.17.0
 
 ### Minor Changes
