@@ -1,7 +1,7 @@
 import { Container, Graphics, GraphicsContext, Text, Ticker, Sprite, Texture, BlurFilter, FillGradient } from 'pixi.js'
 import type { RoomObject, RoomObjectMap, RoomObjectDiff, Badge } from 'screeps-connectivity'
 import { BadgeTextureCache } from './BadgeTextureCache.js'
-import type { Theme, ControllerSpec, FlagSpec, TombstoneSpec } from './themes/Theme.js'
+import type { Theme, ControllerSpec, FlagSpec } from './themes/Theme.js'
 import type { AtlasCache } from './AtlasCache.js'
 import type { LightingLayer } from './LightingLayer.js'
 
@@ -161,6 +161,7 @@ const EXTRACTOR_RING_R = TILE_SIZE * 0.975  // 0.75 × the original ~2.6-tile fo
 const EXTRACTOR_RING_W = Math.max(1, TILE_SIZE * 0.18)
 const EXTRACTOR_GAP    = Math.PI / 3  // rad gap; equals the segment arc (3 segments + 3 gaps = 2π)
 const EXTRACTOR_Z_INDEX = 1    // ring spins above the mineral
+const TOMBSTONE_Z_INDEX = 4    // sits above roads and containers, below creeps
 
 function drawExtractorRing(g: Graphics, color: number): void {
   g.clear()
@@ -794,6 +795,18 @@ function cooldownEnd(obj: RoomObject): number {
   return typeof obj.cooldownTime === 'number' ? obj.cooldownTime : 0
 }
 
+// Tombstones fade out over their lifetime, as vanilla does: full alpha at deathTime,
+// gone at decayTime. Both are absolute ticks, so the ticker compares them against the
+// live game clock rather than caching a fraction. Neither field is declared on
+// RoomObject (the server's payload is untyped) and servers may omit them entirely —
+// without a sane pair the tombstone just stays fully opaque.
+function tombstoneDecay(obj: RoomObject): { death: number; decay: number } | undefined {
+  const death = typeof obj.deathTime === 'number' ? obj.deathTime : undefined
+  const decay = typeof obj.decayTime === 'number' ? obj.decayTime : undefined
+  if (death === undefined || decay === undefined || decay <= death) return undefined
+  return { death, decay }
+}
+
 function getLabContents(obj: RoomObject): {
   energy: number; energyCap: number; mineralType: string | null; mineral: number; mineralCap: number
 } {
@@ -1159,7 +1172,7 @@ function computeZIndex(obj: RoomObject, theme?: Theme | null): number {
   const baseZ = obj.type === 'creep' ? (obj.spawning ? -1 : 100) : obj.type === 'flag' ? 200 : 0
   const specZ = obj.type === 'flag' ? (theme?.flag?.zIndex ?? 0)
     : obj.type === 'controller' ? (theme?.controller?.zIndex ?? 0)
-    : obj.type === 'tombstone' ? (theme?.tombstone?.zIndex ?? 0)
+    : obj.type === 'tombstone' ? TOMBSTONE_Z_INDEX
     : obj.type === 'mineral' ? (theme?.mineral?.zIndex ?? 0)
     : obj.type === 'extractor' ? EXTRACTOR_Z_INDEX
     : (theme?.sprites[obj.type]?.zIndex ?? 0)
@@ -2213,76 +2226,36 @@ function createObjectVisual(
       const isMine = tsUser !== undefined && tsUser === currentUserId
       const tsColor = isMine ? CS_OWN : OBJ_FOREIGN
 
-      const tsSpec: TombstoneSpec | undefined = theme?.tombstone
-      if (tsSpec && atlasCache) {
-        const targetSize = TILE_SIZE * tsSpec.tileScale
-        const loadAtlas = (): Promise<import('pixi.js').Spritesheet> => atlasCache.getOrLoad(theme!.atlasUrl)
+      const w = TILE_SIZE * 0.62
+      const h = TILE_SIZE * 0.82
+      const x0 = cx - w / 2
+      const y0 = cy - h / 2
+      const r = w / 2
 
-        const shellSprite = new Sprite()
-        shellSprite.anchor.set(0.5, 0.5)
-        shellSprite.x = cx
-        shellSprite.y = cy
-        shellSprite.width = targetSize
-        shellSprite.height = targetSize
-        container.addChild(shellSprite)
+      // Outline only — the terrain shows through the headstone, as vanilla's does.
+      const tg = new Graphics()
+      tg.moveTo(x0, y0 + r)
+      tg.arc(cx, y0 + r, r, Math.PI, 0, false)
+      tg.lineTo(x0 + w, y0 + h)
+      tg.lineTo(x0, y0 + h)
+      tg.closePath()
+      tg.stroke({ width: TILE_SIZE * 0.07, color: tsColor, alpha: 0.9 })
+      container.addChild(tg)
 
-        const crossSprite = new Sprite()
-        crossSprite.anchor.set(0.5, 0.5)
-        crossSprite.x = cx
-        crossSprite.y = cy
-        crossSprite.width = targetSize
-        crossSprite.height = targetSize
-        crossSprite.tint = tsColor
-        container.addChild(crossSprite)
+      const xR = TILE_SIZE * 0.18
+      const xMark = new Graphics()
+      xMark.moveTo(cx - xR, cy - xR * 0.6)
+      xMark.lineTo(cx + xR, cy + xR * 0.6)
+      xMark.moveTo(cx + xR, cy - xR * 0.6)
+      xMark.lineTo(cx - xR, cy + xR * 0.6)
+      xMark.stroke({ width: TILE_SIZE * 0.09, color: tsColor, cap: 'round' })
+      container.addChild(xMark)
 
-        const shellTex = atlasCache.getTexture(theme!.atlasUrl, tsSpec.shellFrame)
-        if (shellTex) {
-          shellSprite.texture = shellTex
-        } else {
-          loadAtlas().then(sheet => {
-            if (!shellSprite.destroyed) shellSprite.texture = sheet.textures[tsSpec.shellFrame] ?? Texture.EMPTY
-          }).catch(() => {})
-        }
-
-        const crossTex = atlasCache.getTexture(theme!.atlasUrl, tsSpec.crossFrame)
-        if (crossTex) {
-          crossSprite.texture = crossTex
-        } else {
-          loadAtlas().then(sheet => {
-            if (!crossSprite.destroyed) crossSprite.texture = sheet.textures[tsSpec.crossFrame] ?? Texture.EMPTY
-          }).catch(() => {})
-        }
-      } else {
-        // Graphics fallback
-        const w = TILE_SIZE * 0.62
-        const h = TILE_SIZE * 0.82
-        const x0 = cx - w / 2
-        const y0 = cy - h / 2
-        const r = w / 2
-
-        const tg = new Graphics()
-        tg.moveTo(x0, y0 + r)
-        tg.arc(cx, y0 + r, r, Math.PI, 0, false)
-        tg.lineTo(x0 + w, y0 + h)
-        tg.lineTo(x0, y0 + h)
-        tg.closePath()
-        tg.fill(ST_DARK)
-        tg.moveTo(x0, y0 + r)
-        tg.arc(cx, y0 + r, r, Math.PI, 0, false)
-        tg.lineTo(x0 + w, y0 + h)
-        tg.lineTo(x0, y0 + h)
-        tg.closePath()
-        tg.stroke({ width: TILE_SIZE * 0.07, color: tsColor, alpha: 0.9 })
-        container.addChild(tg)
-
-        const xR = TILE_SIZE * 0.18
-        const xMark = new Graphics()
-        xMark.moveTo(cx - xR, cy - xR * 0.6)
-        xMark.lineTo(cx + xR, cy + xR * 0.6)
-        xMark.moveTo(cx + xR, cy - xR * 0.6)
-        xMark.lineTo(cx - xR, cy + xR * 0.6)
-        xMark.stroke({ width: TILE_SIZE * 0.09, color: tsColor, cap: 'round' })
-        container.addChild(xMark)
+      const tsDecay = tombstoneDecay(obj)
+      if (tsDecay) {
+        const tsVisual = container as ContainerWithTarget
+        tsVisual.__tombstoneDeath = tsDecay.death
+        tsVisual.__tombstoneDecayTime = tsDecay.decay
       }
       break
     }
@@ -2428,6 +2401,8 @@ type ContainerWithTarget = Container & {
   __terminalDominant?: string
   __terminalUsed?: number
   __terminalCapacity?: number
+  __tombstoneDeath?: number
+  __tombstoneDecayTime?: number        // absolute tick the tombstone vanishes; alpha ramps down from __tombstoneDeath
   __terminalArrowsG?: Graphics
   __terminalCooldownG?: Graphics
   __terminalCooldownTime?: number      // absolute tick the send cooldown ends; pulse runs while > gameTime
@@ -2773,6 +2748,13 @@ export class ObjectLayer {
       if (visual.__labCooldownG) {
         const onCd = (visual.__labCooldownTime ?? 0) > this.currentGameTime
         visual.__labCooldownG.alpha = onCd ? cooldownPulse : 0
+      }
+      // Tombstone decay: fades from full at deathTime to nothing at decayTime, matching vanilla.
+      // Only set when the server sent a sane pair (see tombstoneDecay), so elsewhere it stays opaque.
+      if (visual.__tombstoneDecayTime !== undefined) {
+        const death = visual.__tombstoneDeath ?? 0
+        const span = visual.__tombstoneDecayTime - death
+        visual.alpha = Math.min(1, Math.max(0, 1 - (this.currentGameTime - death) / span))
       }
       // Terminal cooldown: the arrow ring breathes once per game tick (same tick-aligned pulse
       // as the lab) and the arrows dim under it, while the absolute cooldownTime is still ahead
