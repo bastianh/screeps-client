@@ -657,8 +657,42 @@ function calcSpawnFillRadius(energy: number, capacity: number): number {
   return SPAWN_INNER_R * calcCenterFillFraction(energy, capacity)
 }
 
+// ── Terminal ───────────────────────────────────────────────────────────────
+// Geometry follows the official client's terminal art (terminal-border.svg,
+// terminal.svg, terminal-arrows.svg, terminal-highlight.svg): an owner-outlined
+// octagon over four arrows around a dark plate with a grey face. Those are authored
+// in a 200 viewBox rendered at 200px on a 100px tile, so one unit is 0.01 tiles and
+// upstream's terminal spans 1.7 tiles. Scaled to just over a tile, as storage is.
+const TERMINAL_SCALE = 0.75
+const TERMINAL_U = TILE_SIZE * 0.01 * TERMINAL_SCALE
+
+// Converts terminal reference-art coords (tile centre = origin, 1 unit = TERMINAL_U px)
+function tpts(cx: number, cy: number, pts: ReadonlyArray<readonly [number, number]>): number[] {
+  return pts.flatMap(([rx, ry]) => [cx + rx * TERMINAL_U, cy + ry * TERMINAL_U])
+}
+
+// Octagon: corners at ±85 on the axes, ±55 diagonally.
+const TERMINAL_OCTAGON: ReadonlyArray<readonly [number, number]> = [
+  [85, 0], [55, -55], [0, -85], [-55, -55], [-85, 0], [-55, 55], [0, 85], [55, 55],
+]
+const TERMINAL_STROKE = 7 * TERMINAL_U
+const TERMINAL_PLATE = 90 * TERMINAL_U  // dark plate; the grey face insets 7 inside it
+const TERMINAL_FACE = 76 * TERMINAL_U
+
+// Four arrows pointing out from behind the plate: tips at ±67, bases at ±48 (just
+// clear of the plate's ±45 edge) and 70 wide.
+const TERMINAL_ARROWS: ReadonlyArray<ReadonlyArray<readonly [number, number]>> = [
+  [[0, -67], [-35, -48], [35, -48]],  // up
+  [[67, 0], [48, -35], [48, 35]],     // right
+  [[0, 67], [35, 48], [-35, 48]],     // down
+  [[-67, 0], [-48, 35], [-48, -35]],  // left
+]
+const TERMINAL_ARROW_COLOR = 0xCCCCCC
+const TERMINAL_ARROW_CD_ALPHA = 0.1  // arrows dim while on send cooldown
+
 // Terminal: a square that grows from the plate centre, tinted by the dominant resource.
-const TERMINAL_FILL_HALF = TILE_SIZE * 0.35
+// Upstream sizes its (nested, per-resource) squares off the same 76 face.
+const TERMINAL_FILL_HALF = TERMINAL_FACE / 2
 function updateTerminalFill(visual: ContainerWithTarget, fraction: number): void {
   const fill = visual.__terminalFillG
   if (!fill) return
@@ -671,24 +705,18 @@ function updateTerminalFill(visual: ContainerWithTarget, fraction: number): void
   }
 }
 
-// Terminal cooldown pulse: vanilla breathes a highlight over the terminal's four cardinal
-// triangles once per tick while on send cooldown. Our terminal already forms those triangles
-// where the light inner octagon (apex at ±0.65) shows around the grey plate (±0.45); we overlay
-// a white highlight on exactly those four tabs, drawn once at peak and alpha-pulsed by the
-// ticker (0 → peak → 0), matching the lab idiom.
+// Terminal cooldown pulse: vanilla breathes a white highlight over the ring between the
+// octagon and the plate — the band the arrows sit in — once per tick while on send
+// cooldown, and dims the arrows underneath it. The plate is cut out so the grey face and
+// the resource fill don't flash with it. Drawn once at peak and alpha-pulsed by the ticker
+// (0 → peak → 0), matching the lab idiom.
 const TERMINAL_GLOW_COLOR = 0xFFFFFF
 const TERMINAL_GLOW_ALPHA = 0.55   // peak; the ticker scales it by the per-tick pulse
-const TERMINAL_TRIANGLES: ReadonlyArray<ReadonlyArray<readonly [number, number]>> = [
-  [[0, -0.65], [-0.45, -0.45], [0.45, -0.45]],  // top
-  [[0.65, 0], [0.45, -0.45], [0.45, 0.45]],     // right
-  [[0, 0.65], [0.45, 0.45], [-0.45, 0.45]],     // bottom
-  [[-0.65, 0], [-0.45, 0.45], [-0.45, -0.45]],  // left
-]
 function drawTerminalCooldownGlow(g: Graphics, cx: number, cy: number): void {
-  for (const tri of TERMINAL_TRIANGLES) {
-    g.poly(spts(cx, cy, tri))
-    g.fill({ color: TERMINAL_GLOW_COLOR, alpha: TERMINAL_GLOW_ALPHA })
-  }
+  g.poly(tpts(cx, cy, TERMINAL_OCTAGON))
+  g.fill({ color: TERMINAL_GLOW_COLOR, alpha: TERMINAL_GLOW_ALPHA })
+  g.rect(cx - TERMINAL_PLATE / 2, cy - TERMINAL_PLATE / 2, TERMINAL_PLATE, TERMINAL_PLATE)
+  g.cut()
 }
 
 // Lab: energy fills the base bar (left→right); the single stored mineral fills the bowl
@@ -1798,25 +1826,28 @@ function createObjectVisual(
       break
     }
     case 'terminal': {
-      const termOuter = spts(cx, cy, [
-        [0, -0.8], [0.55, -0.55], [0.8, 0], [0.55, 0.55],
-        [0, 0.8], [-0.55, 0.55], [-0.8, 0], [-0.55, -0.55], [0, -0.8],
-      ])
-      const termInner = spts(cx, cy, [
-        [0, -0.65], [0.45, -0.45], [0.65, 0], [0.45, 0.45],
-        [0, 0.65], [-0.45, 0.45], [-0.65, 0], [-0.45, -0.45], [0, -0.65],
-      ])
-      g.poly(termOuter)
+      const termOctagon = tpts(cx, cy, TERMINAL_OCTAGON)
+      g.poly(termOctagon)
       g.fill(ST_DARK)
-      g.poly(termOuter)
-      g.stroke({ width: TILE_SIZE * 0.05, color: outlineColor })
-      g.poly(termInner)
-      g.fill(ST_LIGHT)
-      g.rect(cx - TILE_SIZE * 0.45, cy - TILE_SIZE * 0.45, TILE_SIZE * 0.9, TILE_SIZE * 0.9)
-      g.fill(ST_GRAY)
-      g.rect(cx - TILE_SIZE * 0.45, cy - TILE_SIZE * 0.45, TILE_SIZE * 0.9, TILE_SIZE * 0.9)
-      g.stroke({ width: TILE_SIZE * 0.1, color: ST_DARK })
+      g.poly(termOctagon)
+      g.stroke({ width: TERMINAL_STROKE, color: outlineColor })
       container.addChild(g)
+
+      // Arrows sit between the octagon and the plate, and dim on send cooldown — so they
+      // need their own Graphics for the ticker to alpha (see __terminalArrowsG).
+      const termArrowsG = new Graphics()
+      for (const arrow of TERMINAL_ARROWS) {
+        termArrowsG.poly(tpts(cx, cy, arrow))
+        termArrowsG.fill(TERMINAL_ARROW_COLOR)
+      }
+      container.addChild(termArrowsG)
+
+      const termPlateG = new Graphics()
+      termPlateG.rect(cx - TERMINAL_PLATE / 2, cy - TERMINAL_PLATE / 2, TERMINAL_PLATE, TERMINAL_PLATE)
+      termPlateG.fill(ST_DARK)
+      termPlateG.rect(cx - TERMINAL_FACE / 2, cy - TERMINAL_FACE / 2, TERMINAL_FACE, TERMINAL_FACE)
+      termPlateG.fill(ST_GRAY)
+      container.addChild(termPlateG)
 
       // Store fill: a square that grows from the centre, tinted by the dominant resource,
       // animated each tick via the shared fill-tween loop (see startTerminalFillAnimation).
@@ -1831,13 +1862,15 @@ function createObjectVisual(
       termVisual.__terminalCapacity = termCap
       updateTerminalFill(termVisual, calcCenterFillFraction(termUsed, termCap))
 
-      // Cooldown pulse: a white highlight over the four triangles, alpha-pulsed by the ticker
-      // while on send cooldown. cooldownTime is absolute, so store it and compare against the
-      // live game clock each frame (see cooldownEnd) instead of caching a boolean.
+      // Cooldown pulse: a white highlight over the arrow ring, alpha-pulsed by the ticker
+      // while on send cooldown, with the arrows dimmed under it. cooldownTime is absolute,
+      // so store it and compare against the live game clock each frame (see cooldownEnd)
+      // instead of caching a boolean.
       const termCooldownG = new Graphics()
       drawTerminalCooldownGlow(termCooldownG, cx, cy)
       termCooldownG.alpha = 0
       container.addChild(termCooldownG)
+      termVisual.__terminalArrowsG = termArrowsG
       termVisual.__terminalCooldownG = termCooldownG
       termVisual.__terminalCooldownTime = cooldownEnd(obj)
       break
@@ -2395,6 +2428,7 @@ type ContainerWithTarget = Container & {
   __terminalDominant?: string
   __terminalUsed?: number
   __terminalCapacity?: number
+  __terminalArrowsG?: Graphics
   __terminalCooldownG?: Graphics
   __terminalCooldownTime?: number      // absolute tick the send cooldown ends; pulse runs while > gameTime
   __labMineralG?: Graphics
@@ -2740,11 +2774,13 @@ export class ObjectLayer {
         const onCd = (visual.__labCooldownTime ?? 0) > this.currentGameTime
         visual.__labCooldownG.alpha = onCd ? cooldownPulse : 0
       }
-      // Terminal cooldown pulse: the four triangles breathe once per game tick (same tick-aligned
-      // pulse as the lab) while the absolute cooldownTime is still ahead of the live game clock.
+      // Terminal cooldown: the arrow ring breathes once per game tick (same tick-aligned pulse
+      // as the lab) and the arrows dim under it, while the absolute cooldownTime is still ahead
+      // of the live game clock.
       if (visual.__terminalCooldownG) {
         const onCd = (visual.__terminalCooldownTime ?? 0) > this.currentGameTime
         visual.__terminalCooldownG.alpha = onCd ? cooldownPulse : 0
+        if (visual.__terminalArrowsG) visual.__terminalArrowsG.alpha = onCd ? TERMINAL_ARROW_CD_ALPHA : 1
       }
       // Keeper-lair pulse: expand-and-fade glow on a free-running wall-clock cycle, offset per lair
       // so neighbours don't ping in lockstep. Pure scale + alpha on the shared glow sprite; the sin
