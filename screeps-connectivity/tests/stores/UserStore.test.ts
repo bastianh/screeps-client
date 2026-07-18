@@ -133,4 +133,49 @@ describe('UserStore', () => {
     sub.dispose()
     expect(mockDispose).toHaveBeenCalled()
   })
+
+  it('multiple console subscribers share one socket listener and do not double output', async () => {
+    const { store, socket } = makeStore()
+    await store.me()
+    const handlers: Array<(data: unknown) => void> = []
+    ;(socket.on as ReturnType<typeof vi.fn>).mockImplementation((_ch: string, cb: (data: unknown) => void) => {
+      handlers.push(cb)
+      return { dispose: vi.fn() }
+    })
+    const eventSpy = vi.fn()
+    store.on('user:console', eventSpy)
+
+    // Two independent parts of the app subscribe to the same channel (e.g. the console panel and the
+    // custom-UI store). Regression: this used to install two socket listeners, doubling every frame.
+    store.subscribe('console')
+    store.subscribe('console')
+    await new Promise(r => setTimeout(r, 0))
+
+    // Exactly one socket listener and one server subscription regardless of caller count.
+    expect(handlers).toHaveLength(1)
+    expect(socket.subscribe).toHaveBeenCalledTimes(1)
+
+    // One incoming frame produces exactly one console entry and one event.
+    handlers[0]!({ messages: { log: ['line1'], results: [] } })
+    expect(store.console).toHaveLength(1)
+    expect(eventSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('console socket subscription is ref-counted and dropped only after the last subscriber', async () => {
+    const { store, socket } = makeStore()
+    await store.me()
+    const mockDispose = vi.fn()
+    ;(socket.subscribe as ReturnType<typeof vi.fn>).mockReturnValue({ dispose: mockDispose })
+
+    const a = store.subscribe('console')
+    const b = store.subscribe('console')
+    await new Promise(r => setTimeout(r, 0))
+    expect(socket.subscribe).toHaveBeenCalledTimes(1)
+
+    a.dispose()
+    expect(mockDispose).not.toHaveBeenCalled() // second subscriber still active
+
+    b.dispose()
+    expect(mockDispose).toHaveBeenCalledTimes(1)
+  })
 })
