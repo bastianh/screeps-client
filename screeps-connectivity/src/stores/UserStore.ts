@@ -22,6 +22,15 @@ export class UserStore extends TypedStore<UserStoreEvents> {
   private _worldStatus: WorldStatus | null = null
   get worldStatusValue(): WorldStatus | null { return this._worldStatus }
   private _mePromise: Promise<UserInfo> | null = null
+  // Ref-counted store-level fan-out, keyed by channel. SocketClient.subscribe() already ref-counts the
+  // server subscription, but SocketClient.on() installs one listener per call — so a shared listener
+  // must be installed once and reused, otherwise N callers process (and re-emit) every frame N times.
+  private readonly channelSubs = new Map<string, {
+    refCount: number
+    disposed: boolean
+    socketSub: Subscription | null
+    listenerSub: Subscription | null
+  }>()
 
   constructor(http: HttpClient, socket: SocketClient, cache: Cache, logger?: Logger, maxConsoleSize = 100) {
     super(logger)
@@ -84,56 +93,70 @@ export class UserStore extends TypedStore<UserStoreEvents> {
 
   subscribe(channel: 'console' | 'cpu' | 'code' | 'set-active-branch'): Subscription {
     this.logger.log('subscribe', channel)
-    let socketSub: Subscription | null = null
-    let listenerSub: Subscription | null = null
-    let disposed = false
 
-    const setup = async () => {
-      try {
-        const uid = this._userId ?? (await this.me())._id
-        if (disposed) return
-        const fullChannel = `user:${uid}/${channel}`
-        socketSub = this.socket.subscribe(fullChannel)
-        listenerSub = this.socket.on(fullChannel, (data) => {
-          if (channel === 'cpu') {
-            this._cpu = data as CpuStats
-            this.emit('user:cpu', this._cpu)
-          } else if (channel === 'console') {
-            const raw = data as { messages?: ConsoleMessage, error?: string }
-            const msg: ConsoleMessage = {
-              log: raw.messages?.log ?? [],
-              results: raw.messages?.results ?? [],
-              error: raw.messages?.error ?? [],
+    // First caller for this channel installs the shared socket subscription + listener; later callers
+    // only bump the ref count so the frame is processed and re-emitted exactly once.
+    let entry = this.channelSubs.get(channel)
+    if (entry) {
+      entry.refCount++
+    } else {
+      entry = { refCount: 1, disposed: false, socketSub: null, listenerSub: null }
+      this.channelSubs.set(channel, entry)
+      const created = entry
+      const setup = async () => {
+        try {
+          const uid = this._userId ?? (await this.me())._id
+          if (created.disposed) return
+          const fullChannel = `user:${uid}/${channel}`
+          created.socketSub = this.socket.subscribe(fullChannel)
+          created.listenerSub = this.socket.on(fullChannel, (data) => {
+            if (channel === 'cpu') {
+              this._cpu = data as CpuStats
+              this.emit('user:cpu', this._cpu)
+            } else if (channel === 'console') {
+              const raw = data as { messages?: ConsoleMessage, error?: string }
+              const msg: ConsoleMessage = {
+                log: raw.messages?.log ?? [],
+                results: raw.messages?.results ?? [],
+                error: raw.messages?.error ?? [],
+              }
+              if (raw.error) {
+                msg.error.push(raw.error)
+              }
+              this.console.push(msg)
+              if (this.console.length > this.maxConsoleSize) {
+                this.console.splice(0, this.console.length - this.maxConsoleSize)
+              }
+              this.emit('user:console', { messages: msg })
+            } else if (channel === 'code') {
+              this.emit('user:code', data as { branch: string; modules: Record<string, string> })
+            } else if (channel === 'set-active-branch') {
+              this.emit('user:setActiveBranch', data as { activeName: 'activeWorld' | 'activeSim'; branch: string })
             }
-            if (raw.error) {
-              msg.error.push(raw.error)
-            }
-            this.console.push(msg)
-            if (this.console.length > this.maxConsoleSize) {
-              this.console.splice(0, this.console.length - this.maxConsoleSize)
-            }
-            this.emit('user:console', { messages: msg })
-          } else if (channel === 'code') {
-            this.emit('user:code', data as { branch: string; modules: Record<string, string> })
-          } else if (channel === 'set-active-branch') {
-            this.emit('user:setActiveBranch', data as { activeName: 'activeWorld' | 'activeSim'; branch: string })
+          })
+        } catch (err) {
+          if (!created.disposed) {
+            this.dispatchEvent(new ErrorEvent('error', { error: err instanceof Error ? err : new Error(String(err)) }))
           }
-        })
-      } catch (err) {
-        if (!disposed) {
-          this.dispatchEvent(new ErrorEvent('error', { error: err instanceof Error ? err : new Error(String(err)) }))
         }
       }
+      void setup()
     }
 
-    void setup()
-
+    let disposed = false
     return {
       dispose: () => {
-        this.logger.log('unsubscribe', channel)
+        if (disposed) return
         disposed = true
-        socketSub?.dispose()
-        listenerSub?.dispose()
+        this.logger.log('unsubscribe', channel)
+        const current = this.channelSubs.get(channel)
+        if (!current) return
+        if (--current.refCount <= 0) {
+          current.disposed = true
+          current.socketSub?.dispose()
+          current.listenerSub?.dispose()
+          this.channelSubs.delete(channel)
+        }
       },
     }
   }
