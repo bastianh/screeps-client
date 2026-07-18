@@ -53,18 +53,26 @@ const EXT_INNER_R = TILE_SIZE * 0.30
 const EXT_STROKE_W = Math.max(1, TILE_SIZE * 0.08)
 
 // ── Mineral helpers ────────────────────────────────────────────────────────
-// Mineral disc fill colours come from the shared RESOURCE_COLORS palette (colors.ts),
-// so a mineral reads the same as a deposit disc and as a structure store-fill band.
-// Letter color: dark for very light discs (H, O), white otherwise.
-const MINERAL_TEXT_COLORS: Record<string, number> = {
-  H: 0x222222,
-  O: 0x222222,
+// Room-view minerals render as the reference client does: a colour-tinted disc
+// (bright stroked ring + dark fill) with the mineral's letter in the ring colour.
+// The map overlay keeps the spritesheet sprite (see MapRenderer); only the room
+// view uses this vector disc, so it stays crisp at every zoom level.
+const MINERAL_DISC: Record<string, { stroke: number; fill: number }> = {
+  H: { stroke: 0xcccccc, fill: 0x4d4d4d },
+  O: { stroke: 0xcccccc, fill: 0x4d4d4d },
+  U: { stroke: 0x88d6f7, fill: 0x1b617f },
+  L: { stroke: 0x89f4a5, fill: 0x3f6147 },
+  K: { stroke: 0x9370ff, fill: 0x331a80 },
+  Z: { stroke: 0xf2d28b, fill: 0x594d33 },
+  X: { stroke: 0xff7a7a, fill: 0x4f2626 },
 }
+const MINERAL_DISC_DEFAULT = { stroke: OBJ_CYAN, fill: 0x333333 }
 // Fill layer is kept mostly transparent so the rock shape reads through it.
 const DEPOSIT_FILL_ALPHA = 0.2
-const MINERAL_R = TILE_SIZE * 0.42
+const MINERAL_R = TILE_SIZE * 0.58
+const MINERAL_STROKE_W = MINERAL_R / 6          // reference: stroke-width 10 vs radius 60
 const MINERAL_GLYPH_FONT = 32
-const MINERAL_GLYPH_SCALE = 9 / MINERAL_GLYPH_FONT  // glyph ~9px tall in tile space
+const MINERAL_GLYPH_SCALE = (MINERAL_R * 1.4) / MINERAL_GLYPH_FONT  // letter roughly fills the ring
 
 // Source: a fixed dark base ("rock") with a golden energy core that shrinks as the
 // source is mined, revealing a dark ring. When exhausted the gold is gone (black
@@ -1495,46 +1503,23 @@ function createObjectVisual(
       break
     }
     case 'mineral': {
+      // Room view: a colour-tinted disc + letter glyph (reference-client style).
+      // Spritesheet mineral frames are reserved for the map overlay.
       const mtype = typeof obj.mineralType === 'string' ? obj.mineralType : '?'
-      const mineralSpec = defaultSpriteTheme.mineral
-      if (mineralSpec) {
-        const frame = `mineral/${mtype}`
-        const targetSize = TILE_SIZE * mineralSpec.tileScale
-        const applyTexture = (sprite: Sprite, tex: Texture) => {
-          sprite.texture = tex
-          sprite.width = targetSize
-          sprite.height = targetSize
-        }
-        const sprite = new Sprite()
-        sprite.anchor.set(0.5, 0.5)
-        sprite.x = cx
-        sprite.y = cy
-        container.addChild(sprite)
-        const tex = sharedAtlasCache.getTexture(defaultSpriteTheme.atlasUrl, frame)
-        if (tex) {
-          applyTexture(sprite, tex)
-        } else {
-          sharedAtlasCache.getOrLoad(defaultSpriteTheme.atlasUrl).then(sheet => {
-            if (!sprite.destroyed) applyTexture(sprite, sheet.textures[frame] ?? Texture.EMPTY)
-          }).catch(() => {})
-        }
-      } else {
-        // Fallback: colored disc + letter glyph
-        const mcolor = RESOURCE_COLORS[mtype] ?? OBJ_CYAN
-        const textColor = MINERAL_TEXT_COLORS[mtype] ?? 0xFFFFFF
-        const discG = new Graphics()
-        discG.circle(cx, cy, MINERAL_R)
-        discG.fill(mcolor)
-        container.addChild(discG)
-        const glyph = new Text({
-          text: mtype,
-          style: { fontSize: MINERAL_GLYPH_FONT, fill: textColor, fontWeight: 'bold' },
-        })
-        glyph.anchor.set(0.5, 0.5)
-        glyph.scale.set(MINERAL_GLYPH_SCALE)
-        glyph.position.set(cx, cy)
-        container.addChild(glyph)
-      }
+      const disc = MINERAL_DISC[mtype] ?? MINERAL_DISC_DEFAULT
+      const discG = new Graphics()
+      discG.circle(cx, cy, MINERAL_R)
+      discG.fill(disc.fill)
+      discG.stroke({ width: MINERAL_STROKE_W, color: disc.stroke })
+      container.addChild(discG)
+      const glyph = new Text({
+        text: mtype,
+        style: { fontSize: MINERAL_GLYPH_FONT, fill: disc.stroke, fontWeight: 'bold' },
+      })
+      glyph.anchor.set(0.5, 0.5)
+      glyph.scale.set(MINERAL_GLYPH_SCALE)
+      glyph.position.set(cx, cy)
+      container.addChild(glyph)
       break
     }
     case 'deposit': {
