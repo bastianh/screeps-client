@@ -27,7 +27,7 @@ import { client, disconnect, isGuest, userInfo, gameTime, isPrivateServer, serve
 import { capabilities } from '~/stores/capabilities.js'
 import { historyMode, historyTick, enterHistoryMode, exitHistoryMode, seekToTick } from '~/stores/historyStore.js'
 import { widescreenMode } from '~/stores/settingsStore.js'
-import { toggleShowLog, toggleShowConsole, toggleShowMemory, showSegments, setShowSegments, showCustomUiEditor, setShowCustomUiEditor } from '~/stores/consoleStore.js'
+import { showSegments, setShowSegments, showCustomUiEditor, setShowCustomUiEditor } from '~/stores/consoleStore.js'
 import { setRoomViewMode } from '~/stores/roomViewStore.js'
 import { initCustomUi, disposeCustomUi } from '~/stores/customUiStore.js'
 import { route, goToUser, goToGame, goToMarket, goToRoomOverview } from '~/stores/routeStore.js'
@@ -365,15 +365,6 @@ export function Dashboard() {
         setShowCode((v) => !v)
         setShowSettings(false)
         return
-      }
-      if (e.key === 'l' || e.key === 'L') {
-        toggleShowLog()
-      }
-      if (e.key === 'c' || e.key === 'C') {
-        toggleShowConsole()
-      }
-      if (e.key === 'y' || e.key === 'Y') {
-        toggleShowMemory()
       }
       if (!mapMode()) {
         if (e.key === '1') setRoomViewMode('view')
