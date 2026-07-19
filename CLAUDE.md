@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-pnpm workspace — four published packages plus docs.
+pnpm workspace — five published packages, a private desktop app, plus docs.
 
 ## Codebase Navigation — MANDATORY
 
@@ -13,8 +13,6 @@ You MUST use codebase-index MCP tools FIRST when exploring or navigating the cod
 - If you catch yourself reaching for Glob/Grep/Read to find or understand code, STOP and use
   codebase-index instead
 
-pnpm workspace — four published packages plus docs.
-
 ## Packages
 
 | Directory | Published as | Role |
@@ -22,9 +20,11 @@ pnpm workspace — four published packages plus docs.
 | `screeps-connectivity/` | `screeps-connectivity` | Core TS library: HTTP, WebSocket, stores, cache, storage. **→ read `docs/claude/connectivity.md`** |
 | `screeps-client/` | `screeps-client` | SolidJS + PixiJS browser frontend. **→ read `docs/claude/client.md`** |
 | `screeps-mod-client/` | `screepsmod-client-new` | Screeps server mod — serves embedded client at `/client` |
-| `xxscreeps-mod-client/` | — | xxscreeps mod — serves and wires up embedded client |
+| `xxscreeps-mod-client/` | `xxscreeps-mod-client` | xxscreeps mod — serves and wires up embedded client |
+| `screeps-client-proxy/` | `screeps-client-proxy` | Standalone proxy server: wraps any backend, serves the client with a server-list login |
+| `screeps-desktop/` | — (private) | Tauri desktop app: OS keychain credentials + server list; released via manual Actions workflow |
 
-Other: `docs/screeps-connectivity.md` (full API ref), `docs/superpowers/` (design specs — do not edit), `test-live.mjs` (ad-hoc integration test).
+Other: `docs/screeps-connectivity.md` (full API ref), `docs/claude/` (per-package architecture notes).
 
 ## Commands
 
