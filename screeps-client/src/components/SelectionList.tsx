@@ -13,6 +13,8 @@ import { CONTROLLER_DOWNGRADE, CONTROLLER_LEVEL_TOTAL } from '~/utils/gameConsta
 import { ColorPicker } from '~/components/ColorPicker.js'
 import { UserLink } from '~/components/UserLink.js'
 import { CustomObjectActions } from '~/components/Sidebar/CustomObjectActions.js'
+import { MeterBar, HitsBar } from '~/components/MeterBar.js'
+import { formatLargeNumber } from '~/utils/formatNumber.js'
 import type { SelectedObject } from '~/stores/selectionStore.js'
 
 const { log, error } = createLogger('SelectionList')
@@ -123,18 +125,6 @@ function formatValue(value: unknown): string | null {
   return null
 }
 
-function formatLargeNumber(n: number): string {
-  if (n >= 1_000_000) {
-    const m = n / 1_000_000
-    return `${parseFloat(m.toFixed(2))}M`
-  }
-  if (n >= 1_000) {
-    const k = n / 1_000
-    return `${parseFloat(k.toFixed(1))}K`
-  }
-  return String(n)
-}
-
 const kvCell = (muted = false): Record<string, string> => ({
   padding: '3px 8px',
   background: '#0d1117',
@@ -153,6 +143,8 @@ const kvGrid: Record<string, string> = {
 }
 
 function DefaultDetails(props: { item: SelectedObject }) {
+  const hits = () => typeof (props.item.raw as Record<string, unknown>).hits === 'number' ? ((props.item.raw as Record<string, unknown>).hits as number) : null
+  const hitsMax = () => typeof (props.item.raw as Record<string, unknown>).hitsMax === 'number' ? ((props.item.raw as Record<string, unknown>).hitsMax as number) : null
   const fields = () => {
     const raw = props.item.raw as Record<string, unknown>
     const pairs: { key: string; label: string; value: string }[] = []
@@ -195,18 +187,21 @@ function DefaultDetails(props: { item: SelectedObject }) {
   }
 
   return (
-    <Show when={fields().length > 0}>
-      <div style={kvGrid}>
-        <For each={fields()}>
-          {(field) => (
-            <>
-              <div style={kvCell(true)}>{field.label}</div>
-              <div style={{ ...kvCell(), 'font-variant-numeric': 'tabular-nums' }}>{field.value}</div>
-            </>
-          )}
-        </For>
-      </div>
-    </Show>
+    <>
+      <Show when={fields().length > 0}>
+        <div style={kvGrid}>
+          <For each={fields()}>
+            {(field) => (
+              <>
+                <div style={kvCell(true)}>{field.label}</div>
+                <div style={{ ...kvCell(), 'font-variant-numeric': 'tabular-nums' }}>{field.value}</div>
+              </>
+            )}
+          </For>
+        </div>
+      </Show>
+      <HitsBar hits={hits()} max={hitsMax()} />
+    </>
   )
 }
 
@@ -331,6 +326,8 @@ function CreepDetails(props: { item: SelectedObject }) {
           </>
         </Show>
       </div>
+
+      <HitsBar hits={hits()} max={hitsMax()} />
 
       <StoreDetails store={store()} capacity={storeCapacity()} />
 
@@ -642,22 +639,7 @@ function ControllerDetails(props: { item: SelectedObject }) {
       </div>
 
       <Show when={level() > 0 && level() < 8 && progress() !== null && progressTotal() !== null}>
-        <div style={{ padding: '5px 8px', background: '#0d1117', 'border-top': '1px solid #21262d' }}>
-          <div style={{ display: 'flex', 'justify-content': 'space-between', 'font-size': '10px', 'margin-bottom': '4px' }}>
-            <span style={{ color: '#8b949e' }}>RCL {level()} → {level() + 1}</span>
-            <span style={{ color: '#c9d1d9', 'font-variant-numeric': 'tabular-nums' }}>
-              {formatLargeNumber(progress()!)} / {formatLargeNumber(progressTotal()!)} ({((progress()! / progressTotal()!) * 100).toFixed(1)}%)
-            </span>
-          </div>
-          <div style={{ height: '5px', background: '#21262d', 'border-radius': '3px', overflow: 'hidden' }}>
-            <div style={{
-              height: '100%',
-              width: `${Math.min(100, (progress()! / progressTotal()!) * 100)}%`,
-              background: '#58a6ff',
-              'border-radius': '3px',
-            }} />
-          </div>
-        </div>
+        <MeterBar label={`RCL ${level()} → ${level() + 1}`} value={progress()!} max={progressTotal()!} color="#58a6ff" format={formatLargeNumber} />
       </Show>
 
       <Show when={isMyRoom() && !historyMode()}>
@@ -736,6 +718,7 @@ function ExtensionDetails(props: { item: SelectedObject }) {
   }
 
   return (
+    <div>
     <div style={kvGrid}>
       <div style={kvCell(true)}>Energy</div>
       <div style={{ ...kvCell(), 'font-variant-numeric': 'tabular-nums' }}>
@@ -781,6 +764,8 @@ function ExtensionDetails(props: { item: SelectedObject }) {
         </>
       </Show>
     </div>
+      <HitsBar hits={hits()} max={hitsMax()} />
+    </div>
   )
 }
 
@@ -809,12 +794,6 @@ function StoreStructureDetails(props: { item: SelectedObject }) {
     return t
   }
 
-  const fillPct = () => {
-    const cap = capacity()
-    if (!cap || cap === 0) return 0
-    return Math.min(100, (total() / cap) * 100)
-  }
-
   return (
     <div>
       <Show when={hits() !== null && hitsMax() !== null}>
@@ -824,23 +803,10 @@ function StoreStructureDetails(props: { item: SelectedObject }) {
         </div>
       </Show>
 
+      <HitsBar hits={hits()} max={hitsMax()} />
+
       <Show when={capacity() !== null}>
-        <div style={{ padding: '5px 8px', background: '#0d1117', 'border-top': '1px solid #21262d' }}>
-          <div style={{ display: 'flex', 'justify-content': 'space-between', 'font-size': '10px', 'margin-bottom': '4px' }}>
-            <span style={{ color: '#8b949e' }}>Fill</span>
-            <span style={{ color: '#c9d1d9', 'font-variant-numeric': 'tabular-nums' }}>
-              {formatLargeNumber(total())} / {formatLargeNumber(capacity()!)} ({fillPct().toFixed(1)}%)
-            </span>
-          </div>
-          <div style={{ height: '5px', background: '#21262d', 'border-radius': '3px', overflow: 'hidden' }}>
-            <div style={{
-              height: '100%',
-              width: `${fillPct()}%`,
-              background: '#ffe87b',
-              'border-radius': '3px',
-            }} />
-          </div>
-        </div>
+        <MeterBar label="Fill" value={total()} max={capacity()!} color="#ffe87b" format={formatLargeNumber} />
       </Show>
 
       <StoreDetails store={store()} capacity={null} />
@@ -870,6 +836,7 @@ function PowerBankDetails(props: { item: SelectedObject }) {
   const hitsMax = () => typeof raw().hitsMax === 'number' ? (raw().hitsMax as number) : null
 
   return (
+    <div>
     <div style={kvGrid}>
       <Show when={power() !== null}>
         <>
@@ -891,6 +858,8 @@ function PowerBankDetails(props: { item: SelectedObject }) {
           <div style={{ ...kvCell(), 'font-variant-numeric': 'tabular-nums' }}>{decayCountdown()}</div>
         </>
       </Show>
+    </div>
+      <HitsBar hits={hits()} max={hitsMax()} />
     </div>
   )
 }
@@ -973,6 +942,7 @@ function RuinDetails(props: { item: SelectedObject }) {
               </>
             </Show>
           </div>
+          <HitsBar hits={structureHits()} max={structureHitsMax()} />
         </div>
       </Show>
 
