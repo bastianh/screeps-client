@@ -1,5 +1,6 @@
 import { Show } from 'solid-js'
 import { formatLargeNumber } from '~/utils/formatNumber.js'
+import { AMBER, BG, BTN, GREEN_FG, MUTED, RED, TEXT } from '~/components/theme.js'
 
 /**
  * A thin horizontal fill bar with a label + `value / max (pct%)` readout.
@@ -18,14 +19,14 @@ export function MeterBar(props: {
   const fmt = (n: number) => (props.format ? props.format(n) : String(n))
 
   return (
-    <div style={{ padding: '5px 8px', background: '#0d1117', 'border-top': '1px solid #21262d' }}>
+    <div style={{ padding: '5px 8px', background: BG, 'border-top': `1px solid ${BTN}` }}>
       <div style={{ display: 'flex', 'justify-content': 'space-between', 'font-size': '10px', 'margin-bottom': '4px' }}>
-        <span style={{ color: '#8b949e' }}>{props.label}</span>
-        <span style={{ color: '#c9d1d9', 'font-variant-numeric': 'tabular-nums' }}>
+        <span style={{ color: MUTED }}>{props.label}</span>
+        <span style={{ color: TEXT, 'font-variant-numeric': 'tabular-nums' }}>
           {fmt(props.value)} / {fmt(props.max)} ({pct().toFixed(1)}%)
         </span>
       </div>
-      <div style={{ height: '5px', background: '#21262d', 'border-radius': '3px', overflow: 'hidden' }}>
+      <div style={{ height: '5px', background: BTN, 'border-radius': '3px', overflow: 'hidden' }}>
         <div style={{ height: '100%', width: `${pct()}%`, background: props.color, 'border-radius': '3px' }} />
       </div>
     </div>
@@ -34,9 +35,9 @@ export function MeterBar(props: {
 
 /** Green when healthy, amber when hurt, red when critical — matches the palette used elsewhere. */
 export function hitsColor(ratio: number): string {
-  if (ratio > 0.66) return '#3fb950'
-  if (ratio > 0.33) return '#e3b341'
-  return '#f85149'
+  if (ratio > 0.66) return GREEN_FG
+  if (ratio > 0.33) return AMBER
+  return RED
 }
 
 /**
