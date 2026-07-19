@@ -1,5 +1,21 @@
 # screeps-client
 
+## 0.18.0
+
+### Minor Changes
+
+- 114e4b1: Render room-view minerals as a colour-tinted disc with a letter glyph (matching the reference client) instead of the spritesheet sprite: a bright stroked ring plus a dark fill and the mineral's letter in the ring colour, with per-mineral colours for H/O/U/L/K/Z/X. The spritesheet mineral frames are now used only for the map overlay, so room-view minerals stay crisp at every zoom level.
+- 3b2c531: Show a damage-graded hits bar in the object property view. When a selected creep, structure, power bank or ruin is below full health, the selection panel now renders a thin fill bar beneath the numeric hits — green above ~66%, amber in the mid range, red when critical — so damage reads at a glance instead of only from the raw `hits / hitsMax` text. Full-health objects are unchanged. The RCL and store-fill bars now share a single reusable `MeterBar` component.
+
+### Patch Changes
+
+- 8e9f7ed: Centralize the HTML UI's GitHub-dark palette in `components/theme.ts`. The market and power section themes now re-export the shared tokens (unifying the near-duplicate raised-panel tone `#1c2129`/`#1c2128` on one value) and keep only their own accents; the market's `fmtAmount`/`fmtPrice` number formatters move to `utils/formatNumber.ts` next to `formatLargeNumber`. `MeterBar` consumes the shared tokens instead of hardcoded hex.
+- 202bb3d: Remove the `l`/`c`/`y` keyboard shortcuts for the log, console, and memory panels. The `c` shortcut clashed with copy/paste; the panels remain toggleable via their toolbar buttons.
+- f218429: Embedded clients are now configured from the first frame with no `/api/version` round-trip: both the xxscreeps mod and the classic server mod prefetch the version payload and inline it into the page (`window.__SCREEPS_BOOTSTRAP__`), and the client seeds it into both the pre-login UI and the connection. `ScreepsClient` gains an `initialVersion` option and `ServerStore` a `seedVersion()` method to support this.
+- ddc2277: Deduplicate the two login screens: `components/login/shared.tsx` now holds the input styles, the password/token toggle, the server-password field, the error line, the connect button, the Steam/Discord buttons, and the shared server-capability probes (`serverHasSteam`, `serverHasDiscord`, `serverShowsServerPassword`). `LoginForm` and `DesktopLoginForm` consume these instead of carrying parallel copies. No behavior change.
+- e678c10: Split the 4200-line `renderer/ObjectLayer.ts` into per-object modules under `renderer/objects/` — one file per object type (creep, spawn, tower, storage, terminal, lab, …) plus shared helpers, types and a `createObjectVisual` dispatcher. Pure internal refactor: the rendering output, the `ObjectLayer` class API and its animation/update logic are unchanged.
+- 7cc40b4: Split the 1280-line `SelectionList.tsx` into `components/selection/` — one file per detail view (creep, flag, controller, extension, store structures, power bank, ruin, default), shared lookup tables/styles in `shared.ts`, and the type→component registry in `registry.ts`. `SelectionList.tsx` keeps only the list and item chrome. Pure internal refactor, no behavior change.
+
 ## 0.17.1
 
 ### Patch Changes
