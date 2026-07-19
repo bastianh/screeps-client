@@ -43,9 +43,27 @@ export class ServerStore extends TypedStore<ServerStoreEvents> {
     this.socketSubs.length = 0
   }
 
+  /**
+   * Seed the server version without a network request. Used when the version is
+   * already known at construction time — e.g. an embedded client whose host mod
+   * inlines the `/api/version` payload into the page, sparing the initial fetch.
+   * Does not emit `server:version` (listeners aren't attached yet at that point);
+   * the value surfaces via the cache-hit path on the first `version()` call.
+   */
+  seedVersion(version: ServerVersion): void {
+    this._version = version
+    this.cache.set('server/version', version, 5 * 60_000)
+  }
+
   async version(): Promise<ServerVersion> {
     const cached = this.cache.get<ServerVersion>('server/version')
-    if (cached) return cached
+    if (cached) {
+      // Emit on cache hits too so a seeded version (see `seedVersion`) reaches
+      // listeners that only attach after construction. Idempotent for consumers.
+      this._version = cached
+      this.emit('server:version', cached)
+      return cached
+    }
     const res = await this.http.request<ServerVersion>('GET', '/api/version')
     this._version = res
     this.cache.set('server/version', res, 5 * 60_000)

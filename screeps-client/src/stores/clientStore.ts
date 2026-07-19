@@ -2,7 +2,7 @@ import { createSignal } from 'solid-js'
 import { ScreepsClient, PasswordAuth, TokenAuth, GuestAuth, IndexedDBStorage } from 'screeps-connectivity'
 import type { AuthStrategy, StorageAdapter, UserInfo, ServerVersion, WorldInfo, WorldStatus, ApiRoomDecorationsResponse } from 'screeps-connectivity'
 import { addToast } from './toastStore.js'
-import { isEmbedded, embeddedServerUrl } from '~/utils/embedded.js'
+import { isEmbedded, embeddedServerUrl, embeddedServerVersion } from '~/utils/embedded.js'
 import { isTauri } from '~/utils/tauri.js'
 import { isProxy, toProxyUrl } from '~/utils/proxy.js'
 import { createLogger } from '~/utils/log.js'
@@ -197,6 +197,8 @@ export async function connect(opts: {
       storage: opts.storage ?? new IndexedDBStorage('screeps-client'),
       debug: false,
       serverPassword: opts.serverPassword,
+      // Embedded: seed the version the host mod inlined so connect() skips /api/version.
+      initialVersion: embeddedServerVersion() ?? undefined,
     })
 
     screepsClient.http.on('http:tokenRefresh', ({ token }) => {

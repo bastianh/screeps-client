@@ -1,3 +1,5 @@
+import type { ServerVersion } from 'screeps-connectivity'
+
 const BUILD_FLAG = import.meta.env.VITE_EMBEDDED === 'true'
 const XXSCREEPS_FLAG = import.meta.env.VITE_XXSCREEPS === 'true'
 
@@ -14,6 +16,12 @@ declare global {
 
   interface Window {
     __SCREEPS_CLIENT_EMBEDDED__?: EmbeddedModInfo
+    /**
+     * Full `/api/version` response, inlined into the page by the host mod so the
+     * client is configured from the first frame — no pre-login or post-connect
+     * fetch needed. Absent when not embedded (or if the mod couldn't prefetch it).
+     */
+    __SCREEPS_BOOTSTRAP__?: ServerVersion
   }
 }
 
@@ -38,6 +46,17 @@ export function clientVersion(): string {
 export function embeddedModInfo(): EmbeddedModInfo | null {
   if (typeof window === 'undefined') return null
   return window.__SCREEPS_CLIENT_EMBEDDED__ ?? null
+}
+
+/**
+ * The `/api/version` payload the host mod inlined into the page, or `null` when
+ * not embedded (or the mod couldn't prefetch it). Lets the client skip the
+ * initial version fetch — both pre-login (login UI) and post-connect (via
+ * `ScreepsClient`'s `initialVersion`).
+ */
+export function embeddedServerVersion(): ServerVersion | null {
+  if (typeof window === 'undefined') return null
+  return window.__SCREEPS_BOOTSTRAP__ ?? null
 }
 
 // Returns the path prefix where the app is mounted, without trailing slash.

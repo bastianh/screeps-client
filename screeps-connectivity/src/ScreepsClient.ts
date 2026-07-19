@@ -14,6 +14,7 @@ import type { AuthStrategy } from './http/auth/AuthStrategy.js'
 import type { StorageAdapter } from './storage/StorageAdapter.js'
 import type { Subscription } from './subscription/index.js'
 import type { ApiRoomDecorationsResponse } from './types/api.js'
+import type { ServerVersion } from './types/game.js'
 
 type WsConstructor = typeof globalThis.WebSocket
 
@@ -49,6 +50,12 @@ export interface ScreepsClientOptions {
    * active regardless, so enabling this is a pure opt-in bandwidth trade.
    */
   gzip?: boolean
+  /**
+   * A pre-known `/api/version` response, seeded into the server store so `connect()`
+   * skips the initial version fetch. Used by embedded clients whose host mod inlines
+   * the payload into the page. Falls back to a normal fetch if omitted.
+   */
+  initialVersion?: ServerVersion
 }
 
 export class ScreepsClient {
@@ -99,6 +106,8 @@ export class ScreepsClient {
       mapStats: new MapStatsStore(this.http, 100, 100, this.logger.child('mapStats')),
       navigation: new NavigationStore(50, this.logger.child('navigation')),
     }
+
+    if (opts.initialVersion) this.stores.server.seedVersion(opts.initialVersion)
 
     this.tokenRefreshIntervalMs = opts.tokenRefresh === false
       ? null

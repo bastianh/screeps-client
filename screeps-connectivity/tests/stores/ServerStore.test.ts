@@ -31,6 +31,18 @@ describe('ServerStore', () => {
     expect(http.request).toHaveBeenCalledOnce()
   })
 
+  it('serves a seeded version without fetching and emits server:version', async () => {
+    const { store, http } = makeStore()
+    const spy = vi.fn()
+    store.on('server:version', spy)
+    store.seedVersion({ ...mockVersion })
+    const v = await store.version()
+    expect(v.protocol).toBe(13)
+    expect(http.request).not.toHaveBeenCalled()
+    expect(spy).toHaveBeenCalledWith(expect.objectContaining({ protocol: 13 }))
+    expect(store.versionInfo?.protocol).toBe(13)
+  })
+
   it('emits server:connected when socket fires connected event', () => {
     const { socket } = makeStore()
     let connectedCb: (data: unknown) => void = () => {}
