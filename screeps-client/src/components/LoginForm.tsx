@@ -9,21 +9,19 @@ import {
   checkUsername,
   checkEmail,
   registerUser,
-  getScreepsmodAuth,
   getXxscreepsModClientFeature,
-  getDiscordFeature,
-  hasOfficialLike,
 } from 'screeps-connectivity'
-
-// ── shared styles ─────────────────────────────────────────────────────────────
-
-const inputStyle = {
-  padding: '8px 12px',
-  'border-radius': '6px',
-  border: '1px solid #30363d',
-  background: '#0d1117',
-  color: '#c9d1d9',
-}
+import {
+  inputStyle,
+  serverHasSteam,
+  serverHasDiscord,
+  serverShowsServerPassword,
+  AuthTypeToggle,
+  ServerPasswordField,
+  ErrorText,
+  ConnectButton,
+  OAuthButtons,
+} from './login/shared.js'
 
 // ── field availability check hook ─────────────────────────────────────────────
 
@@ -195,9 +193,7 @@ function RegistrationForm(props: {
           />
         </label>
 
-        {regError() && (
-          <div style={{ color: '#f85149', 'font-size': '13px' }}>{regError()}</div>
-        )}
+        <ErrorText error={regError()} />
 
         <button
           type="submit"
@@ -260,17 +256,8 @@ export function LoginForm() {
     const v = serverVersion()
     return v ? getXxscreepsModClientFeature(v) : undefined
   }
-  const hasSteam = () => {
-    const caps = xxscreepsCaps()
-    if (caps) return caps.steamLogin
-    const v = serverVersion()
-    if (!v) return true
-    return getScreepsmodAuth(v)?.authTypes?.includes('steam') ?? true
-  }
-  const hasDiscord = () => {
-    const v = serverVersion()
-    return v ? getDiscordFeature(v)?.discordLogin ?? false : false
-  }
+  const hasSteam = () => serverHasSteam(serverVersion())
+  const hasDiscord = () => serverHasDiscord(serverVersion())
   const canRegister = () => {
     const caps = xxscreepsCaps()
     if (caps) return caps.allowEmailRegistration
@@ -278,13 +265,7 @@ export function LoginForm() {
       (serverVersion()?.serverData?.features ?? []).some(f => f.name === 'official-like')
   }
   const allowGuest = () => xxscreepsCaps()?.allowGuestAccess ?? true
-  // The connection ("server") password is a screepsmod-auth-only concept. xxscreeps
-  // servers (advertised via the `official-like` feature) have no such setting, so
-  // hide the field for them.
-  const showServerPassword = () => {
-    const v = serverVersion()
-    return v ? !hasOfficialLike(v) : true
-  }
+  const showServerPassword = () => serverShowsServerPassword(serverVersion())
 
   const steamLogin = useOAuthLogin('steam', ({ url: steamUrl, token }) => {
     setMode('login')
@@ -428,14 +409,7 @@ export function LoginForm() {
             </div>
 
             <Show when={!embedded}>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button type="button" onClick={() => setAuthType('password')} style={{ flex: 1, padding: '8px', 'border-radius': '6px', border: '1px solid #30363d', background: authType() === 'password' ? '#238636' : 'transparent', color: '#fff', cursor: 'pointer' }}>
-                  Password
-                </button>
-                <button type="button" onClick={() => setAuthType('token')} style={{ flex: 1, padding: '8px', 'border-radius': '6px', border: '1px solid #30363d', background: authType() === 'token' ? '#238636' : 'transparent', color: '#fff', cursor: 'pointer' }}>
-                  Token
-                </button>
-              </div>
+              <AuthTypeToggle value={authType()} onChange={setAuthType} />
             </Show>
 
             <Show when={!embedded}>
@@ -467,39 +441,20 @@ export function LoginForm() {
             )}
 
             <Show when={showServerPassword()}>
-              <label style={{ display: 'flex', 'flex-direction': 'column', gap: '4px' }}>
-                <span style={{ 'font-size': '12px', color: '#8b949e' }}>Server Password <span style={{ color: '#484f58' }}>(optional)</span></span>
-                <input type="password" name="server-password" autocomplete="off" data-1p-ignore data-lpignore="true" value={serverPassword()} onInput={(e) => setServerPassword(e.currentTarget.value)} placeholder="Leave empty if not required" style={inputStyle} />
-              </label>
+              <ServerPasswordField value={serverPassword()} onInput={setServerPassword} />
             </Show>
 
-            {error() && <div style={{ color: '#f85149', 'font-size': '13px' }}>{error()}</div>}
+            <ErrorText error={error()} />
 
-            <button
-              type="submit"
+            <ConnectButton connecting={isConnecting()} />
+
+            <OAuthButtons
+              hasSteam={hasSteam()}
+              hasDiscord={hasDiscord()}
               disabled={isConnecting()}
-              style={{ padding: '10px', 'border-radius': '6px', border: 'none', background: '#238636', color: '#fff', 'font-weight': 600, cursor: isConnecting() ? 'not-allowed' : 'pointer', opacity: isConnecting() ? 0.6 : 1 }}
-            >
-              {isConnecting() ? 'Connecting…' : 'Connect'}
-            </button>
-
-            <Show when={hasSteam() || hasDiscord()}>
-              <div style={{ display: 'flex', 'align-items': 'center', gap: '8px', color: '#484f58', 'font-size': '12px' }}>
-                <div style={{ flex: 1, height: '1px', background: '#30363d' }} />
-                or
-                <div style={{ flex: 1, height: '1px', background: '#30363d' }} />
-              </div>
-            </Show>
-            <Show when={hasSteam()}>
-              <button type="button" disabled={isConnecting()} onClick={handleSteamLogin} style={{ padding: '10px', 'border-radius': '6px', border: 'none', background: '#1b2838', color: '#c7d5e0', 'font-weight': 600, cursor: isConnecting() ? 'not-allowed' : 'pointer', opacity: isConnecting() ? 0.6 : 1 }}>
-                Login with Steam
-              </button>
-            </Show>
-            <Show when={hasDiscord()}>
-              <button type="button" disabled={isConnecting()} onClick={handleDiscordLogin} style={{ padding: '10px', 'border-radius': '6px', border: 'none', background: '#5865F2', color: '#fff', 'font-weight': 600, cursor: isConnecting() ? 'not-allowed' : 'pointer', opacity: isConnecting() ? 0.6 : 1 }}>
-                Login with Discord
-              </button>
-            </Show>
+              onSteam={handleSteamLogin}
+              onDiscord={handleDiscordLogin}
+            />
 
             <Show when={(!embedded || xxscreeps) && allowGuest()}>
               <button
