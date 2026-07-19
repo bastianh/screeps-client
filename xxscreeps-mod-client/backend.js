@@ -90,15 +90,46 @@ function sendFile(ctx, filePath, stat) {
   ctx.body = createReadStream(filePath)
 }
 
-function renderInjectedIndex(filePath) {
+function jsonForScript(value) {
+  return JSON.stringify(value).replace(/</g, '\\u003c')
+}
+
+// The client fetches `/api/version` on load (pre-login and again post-connect) to
+// configure itself: welcome text, shards, history settings, and the auth/feature
+// gates. Since the server already has this on hand when it renders index.html, we
+// prefetch it once in-process and inline it as `window.__SCREEPS_BOOTSTRAP__`, so
+// the embedded client is configured from the first frame with zero round-trips.
+// Cached like the client's own 5-min version cache; failures just omit the global
+// and the client falls back to its normal fetch.
+const VERSION_TTL_MS = 5 * 60_000
+let versionCache = null
+
+async function bootstrapVersion(ctx) {
+  const now = Date.now()
+  if (versionCache && now < versionCache.expires) return versionCache.data
+  try {
+    const origin = `${ctx.protocol}://${ctx.host}`
+    const res = await fetch(`${origin}/api/version`)
+    if (!res.ok) return null
+    const data = await res.json()
+    versionCache = { data, expires: now + VERSION_TTL_MS }
+    return data
+  } catch (err) {
+    console.error('[xxscreeps-mod-client] failed to prefetch /api/version for bootstrap:', err)
+    return null
+  }
+}
+
+function renderInjectedIndex(filePath, version) {
   const mountDisplay = mountPath === '/' ? '/' : mountPath + '/'
   const baseTag = `<base href="${mountDisplay}">`
-  const metadata = JSON.stringify({
+  const metadata = jsonForScript({
     kind: 'xxscreeps-mod',
     packageName: pkg.name,
     version: pkg.version,
-  }).replace(/</g, '\\u003c')
-  const script = `<script>window.__SCREEPS_CLIENT_EMBEDDED__=${metadata}</script>`
+  })
+  const bootstrap = version ? `;window.__SCREEPS_BOOTSTRAP__=${jsonForScript(version)}` : ''
+  const script = `<script>window.__SCREEPS_CLIENT_EMBEDDED__=${metadata}${bootstrap}</script>`
   let html = readFileSync(filePath, 'utf8')
   // Inject base tag first so relative asset URLs resolve from the mount root,
   // not from the current SPA route (e.g. /room/E11N2).
@@ -106,10 +137,11 @@ function renderInjectedIndex(filePath) {
   return html.includes('</head>') ? html.replace('</head>', `${script}</head>`) : html + script
 }
 
-function sendInjectedIndex(ctx) {
+async function sendInjectedIndex(ctx) {
+  const version = await bootstrapVersion(ctx)
   ctx.type = 'text/html'
   ctx.set('Cache-Control', REVALIDATE_CACHE)
-  ctx.body = renderInjectedIndex(indexFile)
+  ctx.body = renderInjectedIndex(indexFile, version)
 }
 
 // Advertise the server's guest/registration/Steam settings at `/api/version` so
@@ -156,7 +188,7 @@ hooks.register('middleware', koa => {
     }
 
     if (relPath === '/' || relPath === '/index.html') {
-      sendInjectedIndex(ctx)
+      await sendInjectedIndex(ctx)
       return
     }
 
@@ -170,7 +202,7 @@ hooks.register('middleware', koa => {
     // Not a real file: claim only the client's own SPA routes (deep links and
     // reloads) with the index shell, and leave every other path to xxscreeps.
     if (isSpaRoute(relPath)) {
-      sendInjectedIndex(ctx)
+      await sendInjectedIndex(ctx)
       return
     }
 

@@ -35,13 +35,44 @@ function setStaticCacheHeaders(res, filePath) {
   res.setHeader('Cache-Control', isHashedAsset(filePath) ? IMMUTABLE_CACHE : REVALIDATE_CACHE)
 }
 
-function renderInjectedIndex(indexFile) {
-  const metadata = JSON.stringify({
+function jsonForScript(value) {
+  return JSON.stringify(value).replace(/</g, '\\u003c')
+}
+
+// The client fetches `/api/version` on load (pre-login and again post-connect) to
+// configure itself: welcome text, shards, history settings, and the auth/feature
+// gates. Since the server already has this on hand when it renders index.html, we
+// prefetch it once in-process and inline it as `window.__SCREEPS_BOOTSTRAP__`, so
+// the embedded client is configured from the first frame with zero round-trips.
+// Cached like the client's own 5-min version cache; failures just omit the global
+// and the client falls back to its normal fetch.
+const VERSION_TTL_MS = 5 * 60_000
+let versionCache = null
+
+async function bootstrapVersion(req) {
+  const now = Date.now()
+  if (versionCache && now < versionCache.expires) return versionCache.data
+  try {
+    const origin = `${req.protocol}://${req.get('host')}`
+    const res = await fetch(`${origin}/api/version`)
+    if (!res.ok) return null
+    const data = await res.json()
+    versionCache = { data, expires: now + VERSION_TTL_MS }
+    return data
+  } catch (err) {
+    console.error('[screeps-mod-client] failed to prefetch /api/version for bootstrap:', err)
+    return null
+  }
+}
+
+function renderInjectedIndex(indexFile, version) {
+  const metadata = jsonForScript({
     kind: 'screeps-mod',
     packageName: pkg.name,
     version: pkg.version,
-  }).replace(/</g, '\\u003c')
-  const script = `<script>window.__SCREEPS_CLIENT_EMBEDDED__=${metadata}</script>`
+  })
+  const bootstrap = version ? `;window.__SCREEPS_BOOTSTRAP__=${jsonForScript(version)}` : ''
+  const script = `<script>window.__SCREEPS_CLIENT_EMBEDDED__=${metadata}${bootstrap}</script>`
   const html = fs.readFileSync(indexFile, 'utf8')
   return html.includes('</head>') ? html.replace('</head>', `${script}</head>`) : script + html
 }
@@ -61,16 +92,17 @@ module.exports = function (config) {
 
   const indexFile = path.join(distDir, 'index.html')
 
-  function sendInjectedIndex(res) {
+  async function sendInjectedIndex(req, res) {
+    const version = await bootstrapVersion(req)
     res.setHeader('Cache-Control', REVALIDATE_CACHE)
-    res.type('html').send(renderInjectedIndex(indexFile))
+    res.type('html').send(renderInjectedIndex(indexFile, version))
   }
 
   config.backend.on('expressPreConfig', (app) => {
     const indexRoutes = mountPath === '/' ? ['/', '/index.html'] : [mountPath, mountPath + '/', mountPath + '/index.html']
 
-    app.get(indexRoutes, (_req, res) => {
-      sendInjectedIndex(res)
+    app.get(indexRoutes, (req, res) => {
+      void sendInjectedIndex(req, res)
     })
 
     app.use(mountPath, express.static(distDir, { fallthrough: true, index: false, setHeaders: setStaticCacheHeaders }))
@@ -93,7 +125,7 @@ module.exports = function (config) {
   config.backend.on('expressPostConfig', (app) => {
     app.use(mountPath, (req, res, next) => {
       if (req.method !== 'GET') return next()
-      sendInjectedIndex(res)
+      void sendInjectedIndex(req, res)
     })
   })
 
