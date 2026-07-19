@@ -19,54 +19,81 @@ src/
 ├── index.tsx                    # Entry: renders <App> into #root
 ├── app/
 │   ├── App.tsx                  # Root: auto-connects on mount, switches LoginForm ↔ Dashboard
-│   └── Dashboard.tsx            # Main layout: header, canvas, console, sidebar + draggable splitters
+│   └── Dashboard.tsx            # Main layout: header, canvas, console, sidebar + draggable splitters; URL routing
 ├── components/
-│   ├── Sidebar/                 # index.tsx + BuildPanel, FlagForm, RoomInfoBox
-│   ├── CodePanel.tsx            # CodeMirror editor panel
-│   ├── ConnectionStatus.tsx     # Color-coded status chip
-│   ├── ConsolePanel.tsx         # Log + Console tabs, auto-scroll, input form
-│   ├── LoginForm.tsx            # Auth: password/token mode, server URL, registration
-│   ├── MapInfoPanel.tsx         # Map-level info overlay
-│   ├── MapViewer.tsx            # World map PixiJS view
-│   ├── RoomInfoPanel.tsx        # Selected room info
-│   ├── RoomNavigator.tsx        # Room name + shard input with Load button
-│   ├── RoomViewer.tsx           # Ties RoomRenderer to store subscriptions
-│   ├── SelectionList.tsx        # Object selection list
-│   ├── SettingsPanel.tsx        # User settings UI
-│   ├── StatsBar.tsx             # Live CPU/memory stats via UserStore
+│   ├── theme.ts                 # Central GitHub-dark palette tokens for the HTML UI
+│   ├── Sidebar/                 # index.tsx + BuildPanel, FlagForm, RoomInfoBox, CustomUiPanel,
+│   │                            #   CustomObjectActions, HistoryControlPanel
+│   ├── selection/               # Per-type detail views for the selection panel + registry.ts + shared.ts
+│   ├── login/                   # shared.tsx: building blocks + capability probes for both login forms
+│   ├── market/                  # Market pages (orders, history, resource views) + section theme
+│   ├── power/                   # Power Creeps pages (list, detail, create) + section theme
+│   ├── LoginForm.tsx            # Web login: password/token mode, server URL, registration, OAuth
+│   ├── DesktopLoginForm.tsx     # Desktop/proxy login: server list + keychain-saved credentials
 │   ├── OAuthUsernameForm.tsx    # "Pick a username" step after an OAuth provider signup
-│   └── ToastContainer.tsx       # Toast display
+│   ├── CodePanel.tsx            # CodeMirror editor panel (branches, modules)
+│   ├── CustomUiEditor.tsx       # Visual editor for the Custom UI config segment
+│   ├── ConsolePanel.tsx         # Log + Console tabs, auto-scroll, input form
+│   ├── SegmentsPanel.tsx        # Memory segments viewer/editor
+│   ├── MemoryTree.tsx           # Memory path tree with watches
+│   ├── MapViewer.tsx            # World map PixiJS view
+│   ├── RoomViewer.tsx           # Ties RoomRenderer to store subscriptions
+│   ├── SelectionList.tsx        # Selection panel list + item chrome (details live in selection/)
+│   ├── MeterBar.tsx             # Shared label+fill meter (RCL/store/hits) + damage-graded HitsBar
+│   ├── Overview.tsx / Profile.tsx / Messages.tsx  # Account pages
+│   ├── StatsBar.tsx             # Live CPU/memory stats via UserStore
+│   └── …                        # RoomNavigator, RoomInfoPanel, MapInfoPanel, SettingsPanel,
+│                                #   BadgePickerModal, ToastContainer, ConnectionStatus, modals
+├── data/                        # Static game data (resources, power creeps)
+├── editor/                      # CodeMirror TS integration: tsserver worker, virtual libs, module graph
 ├── renderer/
 │   ├── RoomRenderer.ts          # PixiJS Application: drag/zoom world container, nav zones
-│   ├── MapRenderer.ts           # World map renderer
+│   ├── MapRenderer.ts           # World map renderer (owner/mineral overlays, minimap tiles)
 │   ├── TerrainLayer.ts          # Plain/Wall/Swamp tiles
-│   ├── ObjectLayer.ts           # Creeps, structures; smooth movement via ticker
+│   ├── ObjectLayer.ts           # Object lifecycle: diffs, fill tweens, movement/animation ticker
+│   ├── objects/                 # Per-object visual modules (creep, spawn, tower, …) +
+│   │                            #   createObjectVisual dispatcher, shared helpers, types
 │   ├── VisualLayer.ts           # Screeps visual primitives
+│   ├── MapVisualLayer.ts        # Map visuals (RoomVisual on the world map)
 │   ├── ActionAnimationLayer.ts  # Attack/heal/rangedAttack animations
+│   ├── LightingLayer.ts         # Owned-structure lighting
 │   ├── HoverHighlightLayer.ts   # Hover highlight overlay
 │   ├── BadgeTextureCache.ts     # Player badge texture cache
 │   ├── StructureTextureCache.ts # Structure texture cache
+│   ├── AtlasCache.ts            # Spritesheet atlas cache
 │   ├── terrainCache.ts          # Terrain tile texture cache
 │   ├── terrain.worker.ts        # Terrain decode web worker
-│   └── colors.ts                # Shared color constants
+│   ├── themes/                  # Sprite theme specs (atlas frames per structure)
+│   └── colors.ts                # Renderer color constants (PixiJS palette)
 ├── stores/
 │   ├── clientStore.ts           # Signals (client, status, error) + connect/disconnect/tryAutoConnect
 │   ├── roomViewStore.tsx        # Active room view state (name, shard, viewport)
 │   ├── roomDataStore.ts         # Room objects + terrain reactive cache
-│   ├── selectionStore.ts        # Selected game object
+│   ├── routeStore.ts            # URL ↔ view routing state
+│   ├── selectionStore.ts        # Selected game objects
 │   ├── settingsStore.ts         # Persisted user settings
-│   ├── consoleStore.ts          # Console log history
-│   ├── mapOverlayStore.ts       # World map overlay mode
+│   ├── consoleStore.ts          # Console log history + panel visibility
+│   ├── memoryStore.ts           # Memory tree watches
+│   ├── customUiStore.ts         # Custom UI panels driven by a memory segment
+│   ├── historyStore.ts + HistoryPlayer.ts  # Room history playback
+│   ├── mapOverlayStore.ts       # World map overlay mode (owner | mineral | none)
+│   ├── capabilities.ts          # Server capability flags
 │   └── toastStore.ts            # Toast notification queue
 ├── types/
 │   └── client.ts                # ClientState, RoomViewState
 └── utils/
     ├── roomName.ts              # Parse/format room names (W7N7 ↔ {x,y})
+    ├── formatNumber.ts          # Shared number formatting (formatLargeNumber, fmtAmount, fmtPrice)
+    ├── gameConstants.ts / gameRoutes.ts / levels.ts / ownedRooms.ts / formatStat.ts
+    ├── serverList.ts            # Built-in + user server configs (desktop/proxy login)
+    ├── keychain.ts              # Saved credentials: OS keychain (desktop) / localStorage (proxy)
+    ├── proxy.ts                 # screeps-client-proxy URL mapping
+    ├── tauri.ts / embedded.ts   # Desktop / embedded-mod mode detection
     ├── dom.ts                   # DOM helpers
-    ├── embedded.ts              # Embedded/mod mode detection
-    ├── log.ts                   # Logger instance
+    ├── log.ts                   # Logger factory
     ├── storage.ts               # localStorage key constants
     ├── useRoomNavigationKeys.ts # Keyboard shortcut hook
+    ├── useServerInfo.ts         # Debounced pre-login server version/feature probe
     └── useOAuthLogin.ts         # OAuth popup login (Steam, Discord, ...) + provisional-account registration flow
 ```
 
