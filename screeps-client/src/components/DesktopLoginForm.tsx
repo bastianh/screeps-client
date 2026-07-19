@@ -19,20 +19,26 @@ import {
   loadSavedCredential,
   deleteSavedCredential,
 } from '~/utils/keychain.js'
-import { getScreepsmodAuth, getXxscreepsModClientFeature, getDiscordFeature, hasOfficialLike } from 'screeps-connectivity'
 import { isProxy } from '~/utils/proxy.js'
 import { useOAuthLogin } from '~/utils/useOAuthLogin.js'
 import { useServerInfo } from '~/utils/useServerInfo.js'
 import { OAuthUsernameForm } from './OAuthUsernameForm.js'
+import {
+  inputStyle as inputStyleBase,
+  serverHasSteam,
+  serverHasDiscord,
+  serverShowsServerPassword,
+  AuthTypeToggle,
+  ServerPasswordField,
+  ErrorText,
+  ConnectButton,
+  OAuthButtons,
+} from './login/shared.js'
 
 // ── styles ─────────────────────────────────────────────────────────────────────
 
 const inputStyle = {
-  padding: '8px 12px',
-  'border-radius': '6px',
-  border: '1px solid #30363d',
-  background: '#0d1117',
-  color: '#c9d1d9',
+  ...inputStyleBase,
   width: '100%',
   'box-sizing': 'border-box',
 } as const
@@ -203,28 +209,15 @@ function ServerLoginForm(props: { server: ServerConfig }) {
 
   const showToggle = () => !props.server.forcedAuth
 
-  // The connection ("server") password is a screepsmod-auth-only concept. Hide the
-  // field when the server config opts out, or when the server advertises the
-  // `official-like` feature (xxscreeps), which has no such setting.
+  // Hide the connection-password field when the server config opts out, on top
+  // of the shared official-like heuristic.
   const showServerPassword = () => {
     if (props.server.hasServerPassword === false) return false
-    const v = serverVersion()
-    return v ? !hasOfficialLike(v) : true
+    return serverShowsServerPassword(serverVersion())
   }
 
-  const hasSteam = () => {
-    if (props.server.forcedAuth) return false
-    const v = serverVersion()
-    if (!v) return true
-    const caps = getXxscreepsModClientFeature(v)
-    if (caps) return caps.steamLogin
-    return getScreepsmodAuth(v)?.authTypes?.includes('steam') ?? true
-  }
-  const hasDiscord = () => {
-    if (props.server.forcedAuth) return false
-    const v = serverVersion()
-    return v ? getDiscordFeature(v)?.discordLogin ?? false : false
-  }
+  const hasSteam = () => !props.server.forcedAuth && serverHasSteam(serverVersion())
+  const hasDiscord = () => !props.server.forcedAuth && serverHasDiscord(serverVersion())
 
   const isConnecting = () => status() === 'connecting'
 
@@ -309,22 +302,7 @@ function ServerLoginForm(props: { server: ServerConfig }) {
       </div>
 
       <Show when={showToggle()}>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button
-            type="button"
-            onClick={() => setAuthType('password')}
-            style={{ flex: 1, padding: '8px', 'border-radius': '6px', border: '1px solid #30363d', background: authType() === 'password' ? '#238636' : 'transparent', color: '#fff', cursor: 'pointer', 'font-size': '13px' }}
-          >
-            Password
-          </button>
-          <button
-            type="button"
-            onClick={() => setAuthType('token')}
-            style={{ flex: 1, padding: '8px', 'border-radius': '6px', border: '1px solid #30363d', background: authType() === 'token' ? '#238636' : 'transparent', color: '#fff', cursor: 'pointer', 'font-size': '13px' }}
-          >
-            Token
-          </button>
-        </div>
+        <AuthTypeToggle value={authType()} onChange={setAuthType} fontSize="13px" />
       </Show>
 
       <Show when={effectiveAuth() !== 'guest'}>
@@ -381,63 +359,23 @@ function ServerLoginForm(props: { server: ServerConfig }) {
       </Show>
 
       <Show when={showServerPassword()}>
-        <label style={{ display: 'flex', 'flex-direction': 'column', gap: '4px' }}>
-          <span style={{ 'font-size': '12px', color: '#8b949e' }}>
-            Server Password <span style={{ color: '#484f58' }}>(optional)</span>
-          </span>
-          <input
-            type="password"
-            name="server-password"
-            autocomplete="off"
-            data-1p-ignore
-            data-lpignore="true"
-            value={serverPassword()}
-            onInput={(e) => setServerPassword(e.currentTarget.value)}
-            placeholder="Leave empty if not required"
-            style={inputStyle}
-          />
-        </label>
+        <ServerPasswordField value={serverPassword()} onInput={setServerPassword} />
       </Show>
 
-      <Show when={error()}>
-        <div style={{ color: '#f85149', 'font-size': '13px' }}>{error()}</div>
-      </Show>
+      <ErrorText error={error()} />
 
-      <button
-        type="submit"
+      <ConnectButton
+        connecting={isConnecting()}
+        label={effectiveAuth() === 'guest' ? 'Connect as Guest (read-only)' : undefined}
+      />
+
+      <OAuthButtons
+        hasSteam={hasSteam()}
+        hasDiscord={hasDiscord()}
         disabled={isConnecting()}
-        style={{ padding: '10px', 'border-radius': '6px', border: 'none', background: '#238636', color: '#fff', 'font-weight': 600, cursor: isConnecting() ? 'not-allowed' : 'pointer', opacity: isConnecting() ? 0.6 : 1 }}
-      >
-        {isConnecting() ? 'Connecting…' : effectiveAuth() === 'guest' ? 'Connect as Guest (read-only)' : 'Connect'}
-      </button>
-
-      <Show when={hasSteam() || hasDiscord()}>
-        <div style={{ display: 'flex', 'align-items': 'center', gap: '8px', color: '#484f58', 'font-size': '12px' }}>
-          <div style={{ flex: 1, height: '1px', background: '#30363d' }} />
-          or
-          <div style={{ flex: 1, height: '1px', background: '#30363d' }} />
-        </div>
-      </Show>
-      <Show when={hasSteam()}>
-        <button
-          type="button"
-          disabled={isConnecting()}
-          onClick={handleSteamLogin}
-          style={{ padding: '10px', 'border-radius': '6px', border: 'none', background: '#1b2838', color: '#c7d5e0', 'font-weight': 600, cursor: isConnecting() ? 'not-allowed' : 'pointer', opacity: isConnecting() ? 0.6 : 1 }}
-        >
-          Login with Steam
-        </button>
-      </Show>
-      <Show when={hasDiscord()}>
-        <button
-          type="button"
-          disabled={isConnecting()}
-          onClick={handleDiscordLogin}
-          style={{ padding: '10px', 'border-radius': '6px', border: 'none', background: '#5865F2', color: '#fff', 'font-weight': 600, cursor: isConnecting() ? 'not-allowed' : 'pointer', opacity: isConnecting() ? 0.6 : 1 }}
-        >
-          Login with Discord
-        </button>
-      </Show>
+        onSteam={handleSteamLogin}
+        onDiscord={handleDiscordLogin}
+      />
     </form>
     </Show>
   )
