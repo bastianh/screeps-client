@@ -44,7 +44,7 @@ export type {
 
 export { fetchServerVersion, fetchAuthModInfo, checkUsername, checkEmail, registerUser, fetchAuthMeWithToken, completeProviderRegistration, getServerFeature, getScreepsmodAuth, getXxscreepsModClientFeature, getDiscordFeature, hasOfficialLike } from './http/fetchServerVersion.js'
 export type { ApiAuthModInfoResponse } from './http/fetchServerVersion.js'
-export type { ApiAuthMeResponse, RoomHistoryChunk, ApiRoomDecorationsResponse, ApiRoomDecorationItem, ApiRoomDecorationDef, ApiRoomDecorationGraphic, ApiRoomDecorationActive, ApiUserOverviewResponse, ApiUserOverviewTotals, ApiRoomOverviewResponse, ApiUserRoomsResponse, ApiUserStatsResponse, ApiLeaderboardFindResponse, ApiUserMoneyHistoryResponse, ApiMarketOrder, ApiMarketOrdersIndexResponse, ApiMarketOrdersResponse, ApiMarketMyOrdersResponse, ApiMarketStat, ApiMarketStatsResponse, ApiPowerCreep, ApiPowerCreepsListResponse, ApiUserMessage, ApiUserMessagesListResponse, ApiUserMessagesIndexEntry, ApiUserMessagesIndexResponse, ApiUserMessagesUnreadCountResponse, ApiUserFindResponse } from './types/api.js'
+export type { ApiAuthMeResponse, RoomHistoryChunk, ApiRoomDecorationsResponse, ApiRoomDecorationItem, ApiRoomDecorationDef, ApiRoomDecorationGraphic, ApiRoomDecorationActive, ApiUserOverviewResponse, ApiUserOverviewTotals, ApiRoomOverviewResponse, ApiUserRoomsResponse, ApiUserStatsResponse, ApiLeaderboardFindResponse, ApiLeaderboardListResponse, ApiLeaderboardSeasonsResponse, ApiLeaderboardEntry, ApiLeaderboardUser, LeaderboardMode, ApiUserMoneyHistoryResponse, ApiMarketOrder, ApiMarketOrdersIndexResponse, ApiMarketOrdersResponse, ApiMarketMyOrdersResponse, ApiMarketStat, ApiMarketStatsResponse, ApiPowerCreep, ApiPowerCreepsListResponse, ApiUserMessage, ApiUserMessagesListResponse, ApiUserMessagesIndexEntry, ApiUserMessagesIndexResponse, ApiUserMessagesUnreadCountResponse, ApiUserFindResponse } from './types/api.js'
 export { ROOM_DECORATIONS_MOCK } from './mocks/roomDecorations.js'
 
 export { badgeToSvg } from './badge/index.js'
@@ -52,6 +52,8 @@ export { BadgeColors } from './badge/colors.js'
 export type { ColorEntry } from './badge/colors.js'
 export type { RoomStoreEvents, UserStoreEvents, ServerStoreEvents, MapStoreEvents, Map2SubscriptionStatus, HttpClientEvents } from './types/events.js'
 
+export { currentLeaderboardSeason, normalizeLeaderboardRank } from './http/endpoints/leaderboard.js'
+export type { LeaderboardEndpoints, LeaderboardListQuery, LeaderboardRank } from './http/endpoints/leaderboard.js'
 export type { UserMessagesEndpoints } from './http/endpoints/user-messages.js'
 export type { PowerCreepsEndpoints } from './http/endpoints/power-creeps.js'
 export type { RegisterEndpoints } from './http/endpoints/register.js'

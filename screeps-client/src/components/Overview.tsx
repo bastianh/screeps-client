@@ -9,6 +9,7 @@ import { RankRing, GCL_RING, GCL_TEXT, GPL_RING, GPL_TEXT } from '~/components/R
 import { PlayerBadge } from '~/components/PlayerBadge.js'
 import { RoomPreviewTile } from '~/components/RoomPreviewTile.js'
 import { StatTileRow } from '~/components/AccountStatTiles.js'
+import { LeaderboardRankTiles } from '~/components/leaderboard/RankTiles.js'
 import { OverlayPage } from '~/components/OverlayPage.js'
 import { extractOwnedRooms, type OwnedRoom } from '~/utils/ownedRooms.js'
 import { gclProgress, gplProgress, gplLevel, type LevelProgress } from '~/utils/levels.js'
@@ -231,6 +232,10 @@ export function Overview() {
                     </div>
                   </div>
                 </div>
+
+                {/* Current month — leaderboard ranks. Hidden entirely on servers
+                    that keep no rankings, rather than showing a row of dashes. */}
+                <LeaderboardRankTiles username={userInfo()?.username} hideWhenUnranked />
 
                 {/* Lifetime stat tiles */}
                 <StatTileRow totals={totals()} />

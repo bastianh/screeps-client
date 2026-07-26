@@ -963,9 +963,30 @@ http.user.worldStartRoom(shard?): Promise<unknown>
 ### `client.http.leaderboard`
 
 ```ts
-http.leaderboard.list(limit?, mode?, offset?, season?): Promise<ApiLeaderboardListResponse>
-http.leaderboard.find(username, mode?, season?): Promise<unknown>
-http.leaderboard.seasons(): Promise<ApiLeaderboardSeasonsResponse>
+http.leaderboard.list(query?: LeaderboardListQuery): Promise<ApiLeaderboardListResponse>
+http.leaderboard.find(username, mode?, season?): Promise<ApiLeaderboardFindResponse>
+http.leaderboard.seasons(mode?): Promise<ApiLeaderboardSeasonsResponse>
+
+// LeaderboardListQuery: { mode?: 'world' | 'power', season?, limit?, offset? }
+// Omit `season` and the server answers for the season it is currently ranking.
+// `rank` is 0-based in every response — render it as rank + 1.
+```
+
+All three routes are **silent**: not every private server implements the ranking
+tables, and callers are expected to render their own empty state rather than
+surface an error toast.
+
+Two helpers ship alongside them:
+
+```ts
+currentLeaderboardSeason(date?): string
+// The running season id ('YYYY-MM'), derived in UTC — seasons roll over at UTC
+// midnight, so a local-time derivation picks the wrong season near a boundary.
+
+normalizeLeaderboardRank(res): LeaderboardRank | null
+// Reduces a find() response to { rank, score, season?, user? }. Servers answer a
+// season-scoped query either with the record inline or as a one-element list;
+// an unranked player yields null.
 ```
 
 ### `client.http.experimental`
