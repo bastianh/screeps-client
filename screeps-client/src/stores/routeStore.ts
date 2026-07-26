@@ -5,7 +5,7 @@ import { buildRoomUrl, buildRoomOverviewUrl } from '~/utils/gameRoutes.js'
 // Top-level screen the connected app shows. The in-game Dashboard owns its own
 // /room and /map sub-routing; this store decides the User hub (/user) vs.
 // Profile (public, any user) vs. Messages vs. Market vs. the game view.
-export type Route = 'user' | 'profile' | 'game' | 'market' | 'messages' | 'room-overview'
+export type Route = 'user' | 'profile' | 'game' | 'market' | 'messages' | 'room-overview' | 'leaderboard'
 
 // Target of the /room-overview/<shard>/<room> page: the room to show stats for,
 // with its shard (null on single-shard servers where no shard segment is present).
@@ -24,6 +24,19 @@ export type MarketView = 'all-orders' | 'resource' | 'my-orders' | 'history'
 
 // Sub-view within the Power Creeps section (list / create / per-creep detail).
 export type PowerView = 'list' | 'new' | 'detail'
+
+// Which ranking table the Leaderboard shows. Mirrors the API's `mode`.
+export type LeaderboardMode = 'world' | 'power'
+
+// Everything the Leaderboard page reads out of the URL: the table, the season
+// (null → whichever season the server is currently ranking), the 1-based page,
+// and the username whose row should be highlighted (from "your rank" or search).
+export interface LeaderboardTarget {
+  mode: LeaderboardMode
+  season: string | null
+  page: number | null
+  highlight: string | null
+}
 
 function userPath(): string {
   return `${basePath()}/user`
@@ -57,6 +70,14 @@ function roomOverviewPrefix(): string {
   return `${basePath()}/room-overview/`
 }
 
+function leaderboardPath(): string {
+  return `${basePath()}/leaderboard`
+}
+
+function leaderboardPrefix(): string {
+  return `${basePath()}/leaderboard/`
+}
+
 function marketPath(): string {
   return `${basePath()}/market`
 }
@@ -75,8 +96,25 @@ function parseRoute(): Route {
   if (p.startsWith(profilePrefix())) return 'profile'
   if (p === messagesPath() || p.startsWith(messagesPrefix())) return 'messages'
   if (p === marketPath() || p.startsWith(marketPrefix())) return 'market'
+  if (p === leaderboardPath() || p.startsWith(leaderboardPrefix())) return 'leaderboard'
   if (p.startsWith(roomOverviewPrefix())) return 'room-overview'
   return 'game'
+}
+
+// /leaderboard/<mode>?season=&page=&highlight= — the mode is a path segment
+// (it's the identity of the table) while season/page/highlight are query params
+// so paging and searching don't mint distinct-looking pages.
+function parseLeaderboard(): LeaderboardTarget {
+  const p = window.location.pathname
+  const seg = p.startsWith(leaderboardPrefix()) ? decodeURIComponent(p.slice(leaderboardPrefix().length).split('/')[0]) : ''
+  const params = new URLSearchParams(window.location.search)
+  const page = Number(params.get('page'))
+  return {
+    mode: seg === 'power' ? 'power' : 'world',
+    season: params.get('season'),
+    page: Number.isInteger(page) && page > 0 ? page : null,
+    highlight: params.get('highlight'),
+  }
 }
 
 // { room, shard } for /room-overview/<shard>/<room> (or /room-overview/<room> on
@@ -158,7 +196,8 @@ const [marketRoom, setMarketRoom] = createSignal<string | null>(parseMarketRoom(
 const [powerView, setPowerView] = createSignal<PowerView>(parsePower().view)
 const [powerCreepId, setPowerCreepId] = createSignal<string | null>(parsePower().id)
 const [roomOverviewTarget, setRoomOverviewTarget] = createSignal<RoomOverviewTarget | null>(parseRoomOverview())
-export { route, userView, profileUsername, messagesUsername, marketView, marketResourceType, marketShard, marketRoom, powerView, powerCreepId, roomOverviewTarget }
+const [leaderboardTarget, setLeaderboardTarget] = createSignal<LeaderboardTarget>(parseLeaderboard())
+export { route, userView, profileUsername, messagesUsername, marketView, marketResourceType, marketShard, marketRoom, powerView, powerCreepId, roomOverviewTarget, leaderboardTarget }
 
 // Remembered so returning to the world restores the exact game view (room +
 // shard + history tick) rather than dropping back to the default map.
@@ -226,6 +265,35 @@ export function goToProfile(username: string): void {
   history.pushState(null, '', `${profilePrefix()}${encodeURIComponent(username)}`)
   setProfileUsername(username)
   setRoute('profile')
+}
+
+function leaderboardUrl(t: LeaderboardTarget): string {
+  const params = new URLSearchParams()
+  if (t.season) params.set('season', t.season)
+  // Written even for page 1: an absent page means "resolve one for me" (jump to
+  // the highlighted player's row), which is only the intent on first entry.
+  if (t.page) params.set('page', String(t.page))
+  if (t.highlight) params.set('highlight', t.highlight)
+  const q = params.toString()
+  return `${leaderboardPrefix()}${t.mode}${q ? `?${q}` : ''}`
+}
+
+// Navigate the Leaderboard. Fields left out of `patch` are carried over from the
+// current target while already on the page (so paging keeps the season and the
+// highlighted player) and reset to defaults when entering from elsewhere.
+// `replace` swaps the history entry instead of pushing — used for the automatic
+// jump to your own rank, which shouldn't cost a back press.
+export function goToLeaderboard(patch: Partial<LeaderboardTarget> = {}, replace = false): void {
+  const base: LeaderboardTarget = route() === 'leaderboard'
+    ? leaderboardTarget()
+    : { mode: 'world', season: null, page: null, highlight: null }
+  const next: LeaderboardTarget = { ...base, ...patch }
+  rememberGamePath()
+  const url = leaderboardUrl(next)
+  if (replace) history.replaceState(null, '', url)
+  else history.pushState(null, '', url)
+  setLeaderboardTarget(next)
+  setRoute('leaderboard')
 }
 
 function marketQuery(shard: string | null, room: string | null): string {
@@ -316,5 +384,6 @@ if (typeof window !== 'undefined') {
     setPowerView(power.view)
     setPowerCreepId(power.id)
     setRoomOverviewTarget(parseRoomOverview())
+    setLeaderboardTarget(parseLeaderboard())
   })
 }

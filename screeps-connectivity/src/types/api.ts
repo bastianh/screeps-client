@@ -146,11 +146,35 @@ export interface ApiUserBranchesResponse {
   }>
 }
 
+/** The two ranking tables the world game keeps: `world` scores control points
+ *  earned upgrading controllers, `power` scores power processed. (The official
+ *  server also ranks the retired arena/survival modes; they have no client here.) */
+export type LeaderboardMode = 'world' | 'power'
+
+/** One row of the ranking table. `rank` is 0-based — render it as `rank + 1`. */
+export interface ApiLeaderboardEntry {
+  _id: string
+  season: string
+  user: string
+  score: number
+  rank: number
+}
+
+/** The player records the ranking rows point at, keyed by user id. Private
+ *  servers may omit badge/gcl, so both are optional. */
+export interface ApiLeaderboardUser {
+  _id: string
+  username: string
+  badge?: import('./game.js').Badge
+  gcl?: number
+}
+
 export interface ApiLeaderboardListResponse {
   ok: number
-  list: Array<{ _id: string; season: string; user: string; score: number; rank: number }>
+  list: ApiLeaderboardEntry[]
+  /** Total ranked players in the season — the pager's row count, not the page length. */
   count: number
-  users: Record<string, { _id: string; username: string; badge: import('./game.js').Badge; gcl: number }>
+  users: Record<string, ApiLeaderboardUser>
 }
 
 export interface ApiLeaderboardSeasonsResponse {

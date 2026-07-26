@@ -28,6 +28,8 @@ src/
 │   ├── login/                   # shared.tsx: building blocks + capability probes for both login forms
 │   ├── market/                  # Market pages (orders, history, resource views) + section theme
 │   ├── power/                   # Power Creeps pages (list, detail, create) + section theme
+│   ├── leaderboard/             # Leaderboard page (world/power ranking tables) + mode metadata,
+│   │                            #   RankTiles.tsx: current-month rank tiles for Overview/Profile
 │   ├── LoginForm.tsx            # Web login: password/token mode, server URL, registration, OAuth
 │   ├── DesktopLoginForm.tsx     # Desktop/proxy login: server list + keychain-saved credentials
 │   ├── OAuthUsernameForm.tsx    # "Pick a username" step after an OAuth provider signup
