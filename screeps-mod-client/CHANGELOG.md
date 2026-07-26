@@ -1,5 +1,12 @@
 # screepsmod-client-new
 
+## 0.2.26
+
+### Patch Changes
+
+- Updated dependencies [6f45a4b]
+  - screeps-client@0.19.0
+
 ## 0.2.25
 
 ### Patch Changes
