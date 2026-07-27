@@ -28,12 +28,13 @@ const { log, error } = createLogger('room')
 function regenerateUniqueFlagName(
   c: NonNullable<ReturnType<typeof client>>,
   usedName: string,
+  shard: string | null,
   retries = 4,
 ): void {
-  c.http.game.genUniqueFlagName()
+  c.http.game.genUniqueFlagName(shard)
     .then((res) => {
       if (res.name === usedName && retries > 0) {
-        setTimeout(() => regenerateUniqueFlagName(c, usedName, retries - 1), 200)
+        setTimeout(() => regenerateUniqueFlagName(c, usedName, shard, retries - 1), 200)
         return
       }
       setFlagDraft((prev) => ({ ...prev, name: res.name }))
@@ -621,7 +622,7 @@ export function RoomViewer(props: RoomViewerProps) {
                     addToast(`Flag "${name}" created`, 'success')
                     clearPendingTile()
                     r.hoverLayer.clearPendingTile()
-                    regenerateUniqueFlagName(c, name)
+                    regenerateUniqueFlagName(c, name, currentShard)
                   })
                   .catch((err) => error('create flag failed:', err))
               return

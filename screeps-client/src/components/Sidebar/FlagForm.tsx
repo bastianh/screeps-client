@@ -1,6 +1,7 @@
 import { For, Show, createEffect, createSignal, untrack } from 'solid-js'
 import { flagDraft, roomViewMode, setFlagDraft, pendingTile, FLAG_COLOR_MAP } from '~/stores/roomViewStore.js'
 import { client, userFlags } from '~/stores/clientStore.js'
+import { currentShard } from '~/stores/roomDataStore.js'
 import { FLAG_COLORS as FLAG_COLOR_HEXES } from '~/renderer/colors.js'
 import { ColorPicker } from '~/components/ColorPicker.js'
 import { createLogger } from '~/utils/log.js'
@@ -22,8 +23,8 @@ export function FlagForm() {
   const [isChecking, setIsChecking] = createSignal(false)
   let checkTimeout: ReturnType<typeof setTimeout> | null = null
 
-  const generateName = (c: NonNullable<ReturnType<typeof client>>) => {
-    c.http.game.genUniqueFlagName()
+  const generateName = (c: NonNullable<ReturnType<typeof client>>, shard: string | null) => {
+    c.http.game.genUniqueFlagName(shard)
       .then((res) => {
         updateDraft({ name: res.name })
         setNameError(null)
@@ -35,28 +36,31 @@ export function FlagForm() {
 
   // When entering flag mode, ensure the draft holds a free flag name:
   // generate one if empty, otherwise verify the existing name is still
-  // available via the API and regenerate it if it has been taken. Reading
-  // the name is untracked so typing in the field doesn't re-trigger this
-  // (that path is handled by the debounced handleNameInput check).
+  // available via the API and regenerate it if it has been taken. Flag names
+  // are per-shard, so this re-runs when the shard changes. Reading the name is
+  // untracked so typing in the field doesn't re-trigger this (that path is
+  // handled by the debounced handleNameInput check).
   createEffect(() => {
     if (roomViewMode() !== 'flag') return
 
     const c = client()
     if (!c) return
 
+    const shard = currentShard()
+
     const currentName = untrack(() => flagDraft().name.trim())
     if (!currentName) {
-      generateName(c)
+      generateName(c, shard)
       return
     }
 
-    c.http.game.checkUniqueFlagName(currentName)
+    c.http.game.checkUniqueFlagName(currentName, shard)
       .then(() => {
         setNameError(null)
       })
       .catch(() => {
         // Name is no longer free — pick a fresh one.
-        generateName(c)
+        generateName(c, shard)
       })
   })
 
@@ -76,7 +80,7 @@ export function FlagForm() {
     checkTimeout = setTimeout(() => {
       const c = client()
       if (!c) { setIsChecking(false); return }
-      c.http.game.checkUniqueFlagName(trimmed)
+      c.http.game.checkUniqueFlagName(trimmed, currentShard())
         .then(() => { setNameError(null) })
         .catch((err: Error) => { setNameError(err.message) })
         .finally(() => { setIsChecking(false) })

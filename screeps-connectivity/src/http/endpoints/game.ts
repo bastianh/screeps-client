@@ -31,13 +31,14 @@ export interface GameEndpoints {
   roomStatus(room: string, shard?: string | null): Promise<{ ok: number; status: string; novice?: string }>
   roomOverview(room: string, interval?: number, shard?: string | null): Promise<ApiRoomOverviewResponse>
   time(shard?: string | null): Promise<{ ok: number; time: number }>
-  tick(): Promise<ApiGameTickResponse>
+  /** Tick duration in ms. Pass shard for official multi-shard servers; omit for private servers. */
+  tick(shard?: string | null): Promise<ApiGameTickResponse>
   worldSize(shard?: string | null): Promise<unknown>
   mapStats(rooms: string[], statName: string, shard?: string | null): Promise<ApiMapStatsResponse>
   roomsTerrain(rooms: string[], shard?: string | null): Promise<ApiGameRoomsResponse>
   createFlag(room: string, x: number, y: number, name: string, color: number, secondaryColor: number, shard?: string | null): Promise<ApiCreateFlagResponse>
-  genUniqueFlagName(): Promise<ApiGenUniqueFlagNameResponse>
-  checkUniqueFlagName(name: string): Promise<ApiCheckUniqueFlagNameResponse>
+  genUniqueFlagName(shard?: string | null): Promise<ApiGenUniqueFlagNameResponse>
+  checkUniqueFlagName(name: string, shard?: string | null): Promise<ApiCheckUniqueFlagNameResponse>
   changeFlagColor(room: string, name: string, color: number, secondaryColor: number, shard?: string | null): Promise<ApiChangeFlagColorResponse>
   removeFlag(room: string, name: string, shard?: string | null): Promise<ApiRemoveFlagResponse>
   genUniqueObjectName(type: string, shard?: string | null): Promise<ApiGenUniqueObjectNameResponse>
@@ -46,12 +47,12 @@ export interface GameEndpoints {
   createConstruction(room: string, x: number, y: number, structureType: string, name?: string, shard?: string | null): Promise<{ ok: number }>
   removeConstructionSite(room: string, ids: string[], shard?: string | null): Promise<{ ok: number }>
   addObjectIntent(id: string, room: string, name: string, intent: unknown, shard?: string | null): Promise<{ ok: number }>
-  addGlobalIntent(name: string, intent: unknown): Promise<{ ok: number }>
+  addGlobalIntent(name: string, intent: unknown, shard?: string | null): Promise<{ ok: number }>
   /** Fetch a room history chunk. Pass shard for official multi-shard servers; omit for private servers. */
   roomHistory(room: string, time: number, shard?: string | null): Promise<RoomHistoryChunk>
-  setNotifyWhenAttacked(id: string, enabled: boolean): Promise<{ ok: number }>
-  createInvader(room: string, x: number, y: number, size: number, type: string, boosted?: boolean): Promise<{ ok: number }>
-  removeInvader(id: string): Promise<{ ok: number }>
+  setNotifyWhenAttacked(id: string, enabled: boolean, shard?: string | null): Promise<{ ok: number }>
+  createInvader(room: string, x: number, y: number, size: number, type: string, boosted?: boolean, shard?: string | null): Promise<{ ok: number }>
+  removeInvader(id: string, shard?: string | null): Promise<{ ok: number }>
   powerCreeps: PowerCreepsEndpoints
   market: {
     ordersIndex(shard?: string | null): Promise<ApiMarketOrdersIndexResponse>
@@ -87,8 +88,8 @@ export function createGameEndpoints(http: HttpClient, decorationsMock?: ApiRoomD
       return http.request('POST', `/api/game/rooms?${params}`, { rooms })
     },
     createFlag: (room, x, y, name, color, secondaryColor, shard) => http.request('POST', '/api/game/create-flag', withShard({ room, x, y, name, color, secondaryColor }, shard)),
-    genUniqueFlagName: () => http.request('POST', '/api/game/gen-unique-flag-name'),
-    checkUniqueFlagName: (name) => http.request('POST', '/api/game/check-unique-flag-name', { name }),
+    genUniqueFlagName: (shard) => http.request('POST', '/api/game/gen-unique-flag-name', shard ? { shard } : undefined),
+    checkUniqueFlagName: (name, shard) => http.request('POST', '/api/game/check-unique-flag-name', withShard({ name }, shard)),
     changeFlagColor: (room, name, color, secondaryColor, shard) => http.request('POST', '/api/game/change-flag-color', withShard({ room, name, color, secondaryColor }, shard)),
     removeFlag: (room, name, shard) => http.request('POST', '/api/game/remove-flag', withShard({ room, name }, shard)),
     genUniqueObjectName: (type, shard) => http.request('POST', '/api/game/gen-unique-object-name', withShard({ type }, shard)),
@@ -97,17 +98,22 @@ export function createGameEndpoints(http: HttpClient, decorationsMock?: ApiRoomD
     createConstruction: (room, x, y, structureType, name, shard) => http.request('POST', '/api/game/create-construction', withShard({ room, x, y, structureType, ...(name ? { name } : {}) }, shard)),
     removeConstructionSite: (room, ids, shard) => http.request('POST', '/api/game/add-object-intent', withShard({ _id: 'room', room, name: 'removeConstructionSite', intent: ids.map(id => ({ id, roomName: room })) }, shard)),
     addObjectIntent: (id, room, name, intent, shard) => http.request('POST', '/api/game/add-object-intent', withShard({ _id: id, room, name, intent }, shard)),
-    addGlobalIntent: (name, intent) => http.request('POST', '/api/game/add-global-intent', { name, intent }),
+    addGlobalIntent: (name, intent, shard) => http.request('POST', '/api/game/add-global-intent', withShard({ name, intent }, shard)),
     roomHistory: (room, time, shard) =>
       // silent: a missing chunk 404s while history is still being written; the caller
       // handles that gracefully, so don't surface a global "request failed" toast.
       shard
         ? http.request('GET', `/room-history/${encodeURIComponent(shard)}/${encodeURIComponent(room)}/${time}.json`, undefined, { silent: true })
         : http.request('GET', '/room-history', { room, time }, { silent: true }),
-    setNotifyWhenAttacked: (id, enabled) => http.request('POST', '/api/game/set-notify-when-attacked', { _id: id, enabled }),
-    createInvader: (room, x, y, size, type, boosted) => http.request('POST', '/api/game/create-invader', { room, x, y, size, type, ...(boosted != null ? { boosted } : {}) }),
-    removeInvader: (id) => http.request('POST', '/api/game/remove-invader', { _id: id }),
-    tick: () => http.request('GET', '/api/game/tick'),
+    setNotifyWhenAttacked: (id, enabled, shard) => http.request('POST', '/api/game/set-notify-when-attacked', withShard({ _id: id, enabled }, shard)),
+    createInvader: (room, x, y, size, type, boosted, shard) => http.request('POST', '/api/game/create-invader', withShard({ room, x, y, size, type, ...(boosted != null ? { boosted } : {}) }, shard)),
+    removeInvader: (id, shard) => http.request('POST', '/api/game/remove-invader', withShard({ _id: id }, shard)),
+    // Official servers keep the tick duration per shard behind /game/shards/tick;
+    // private servers only have the shardless /game/tick.
+    tick: (shard) =>
+      shard
+        ? http.request('GET', '/api/game/shards/tick', { shard })
+        : http.request('GET', '/api/game/tick'),
     powerCreeps: createPowerCreepsEndpoints(http),
     market: {
       ordersIndex: (shard) => http.request('GET', '/api/game/market/orders-index', withShard({}, shard)),
