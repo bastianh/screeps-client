@@ -1,5 +1,5 @@
 import { createEffect, createSignal, lazy, onCleanup, onMount, Show, untrack, type JSX } from 'solid-js'
-import { Map, Code2, Settings, LogIn, LayoutDashboard, Store, Clock, BarChart3, Trophy } from 'lucide-solid'
+import { Map, Code2, Settings, LogIn, LayoutDashboard, Store, Clock, BarChart3, Trophy, Package } from 'lucide-solid'
 import { ConnectionStatus } from '~/components/ConnectionStatus.js'
 import { RoomViewer } from '~/components/RoomViewer.js'
 import { ToastContainer } from '~/components/ToastContainer.js'
@@ -30,13 +30,14 @@ import { widescreenMode } from '~/stores/settingsStore.js'
 import { showSegments, setShowSegments, showCustomUiEditor, setShowCustomUiEditor } from '~/stores/consoleStore.js'
 import { setRoomViewMode } from '~/stores/roomViewStore.js'
 import { initCustomUi, disposeCustomUi } from '~/stores/customUiStore.js'
-import { route, goToUser, goToGame, goToMarket, goToRoomOverview, goToLeaderboard } from '~/stores/routeStore.js'
+import { route, goToUser, goToGame, goToMarket, goToRoomOverview, goToLeaderboard, goToInventory } from '~/stores/routeStore.js'
 import { Overview } from '~/components/Overview.js'
 import { Profile } from '~/components/Profile.js'
 import { RoomOverview } from '~/components/RoomOverview.js'
 import { Messages } from '~/components/Messages.js'
 import { Market } from '~/components/market/Market.js'
 import { Leaderboard } from '~/components/leaderboard/Leaderboard.js'
+import { Inventory } from '~/components/inventory/Inventory.js'
 import { BadgePickerModal } from '~/components/BadgePickerModal.js'
 import type { Badge } from 'screeps-connectivity'
 
@@ -572,6 +573,15 @@ export function Dashboard() {
             <Store size={16} />
           </HeaderButton>
         </Show>
+        <Show when={!isGuest() && capabilities().hasInventory}>
+          <HeaderButton
+            title={route() === 'inventory' ? 'Close Inventory' : 'Inventory'}
+            active={route() === 'inventory'}
+            onClick={() => route() === 'inventory' ? goToGame() : goToInventory()}
+          >
+            <Package size={16} />
+          </HeaderButton>
+        </Show>
         {/* Rankings are public, so guests get this one too. */}
         <HeaderButton
           title={route() === 'leaderboard' ? 'Close Leaderboard' : 'Leaderboard'}
@@ -643,13 +653,14 @@ export function Dashboard() {
             {sidebarArea(false)}
           </div>
         </Show>
-        <Show when={route() === 'user' || route() === 'profile' || route() === 'messages' || route() === 'market' || route() === 'room-overview' || route() === 'leaderboard' || showSettings()}>
+        <Show when={route() === 'user' || route() === 'profile' || route() === 'messages' || route() === 'market' || route() === 'room-overview' || route() === 'leaderboard' || route() === 'inventory' || showSettings()}>
           <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, 'z-index': 10, overflow: 'hidden' }}>
             <Show when={route() === 'user'}><Overview /></Show>
             <Show when={route() === 'profile'}><Profile /></Show>
             <Show when={route() === 'messages'}><Messages /></Show>
             <Show when={route() === 'market'}><Market /></Show>
             <Show when={route() === 'leaderboard'}><Leaderboard /></Show>
+            <Show when={route() === 'inventory'}><Inventory /></Show>
             <Show when={route() === 'room-overview'}><RoomOverview /></Show>
             <Show when={showSettings()}><SettingsPanel onClose={() => setShowSettings(false)} /></Show>
           </div>

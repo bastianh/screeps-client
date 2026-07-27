@@ -1,7 +1,7 @@
 import { TypedStore } from './TypedStore.js'
 import type { Logger } from '../logger.js'
 import type { HttpClient } from '../http/HttpClient.js'
-import type { ApiMapStatsRoomStat, ApiMapStatsBadge } from '../types/api.js'
+import type { ApiMapStatsRoomStat, ApiMapStatsBadge, ApiMapStatsDecorationDef, ApiDecorationActive } from '../types/api.js'
 
 /** Fixed stat names for the map-stats API (no interval parameter). */
 export const MapStatName = {
@@ -31,11 +31,44 @@ export const MapStatInterval = {
 /** Build a parameterised stat name, e.g. `mapStat(MapStatPrefix.energyControl, MapStatInterval.hours24)` → `"energyControl180"`. */
 export const mapStat = (prefix: string, interval: number): string => `${prefix}${interval}`
 
-/** Custom terrain palette extracted from a room's active world-map decoration. */
-export interface TerrainColors {
-  plain?: string  // CSS color string, e.g. "#68DFFF"
-  swamp?: string
-  road?: string
+/**
+ * One landscape half of a room's world-map decoration, with the API's two naming schemes
+ * (`floorBackgroundColor` vs `backgroundColor`) folded onto one shape. Values are raw —
+ * the renderer owns the colour maths.
+ */
+export interface MapLandscape {
+  backgroundColor?: string
+  backgroundBrightness: number
+  /** Floor half only. */
+  swampColor?: string
+  /** Floor half only. */
+  roadsColor?: string
+  foregroundUrl?: string
+  foregroundColor?: string
+  foregroundBrightness: number
+  foregroundAlpha: number
+}
+
+/** One `wallGraffiti` on the world map. Geometry is in room cells. */
+export interface MapGraffiti {
+  x: number
+  y: number
+  width: number
+  height: number
+  tiling: boolean
+  tileScale: number
+  alpha: number
+  lighting: boolean
+  brightness: number
+  /** `color` is the *name* of a colour prop on the decoration, already resolved to its value. */
+  graphics: Array<{ url: string; color?: string }>
+}
+
+/** A room's active world-map decorations, resolved against the response's definitions. */
+export interface MapRoomDecorations {
+  floor?: MapLandscape
+  wall?: MapLandscape
+  graffiti: MapGraffiti[]
 }
 
 export interface MapStatsRoomData {
@@ -51,8 +84,113 @@ export interface MapStatsRoomData {
    * response's user map and may be absent if the signer isn't included there.
    */
   sign?: { user: string; text: string; datetime: number; username?: string; badge?: ApiMapStatsBadge }
-  /** Custom terrain colors from an active world-map decoration, if any. */
-  terrainColors?: TerrainColors
+  /** Active world-map decorations, if any. */
+  decorations?: MapRoomDecorations
+}
+
+function num(v: unknown, fallback: number): number {
+  if (v == null || v === '') return fallback
+  const n = Number(v)
+  return isNaN(n) ? fallback : n
+}
+
+function str(v: unknown): string | undefined {
+  return typeof v === 'string' && v !== '' ? v : undefined
+}
+
+function bool(v: unknown): boolean {
+  if (typeof v === 'string') return v !== '' && v !== '0' && v !== 'false'
+  return !!v
+}
+
+/**
+ * Which landscape halves does this item cover?
+ *
+ * The definition's type is authoritative when the response carried one — `landscape`
+ * covers both halves. Servers that omit the `decorations` dictionary still work: the
+ * colour props themselves say which half an item drives, and no other decoration type
+ * carries them.
+ */
+function landscapeRoles(active: ApiDecorationActive, def?: ApiMapStatsDecorationDef): { floor: boolean; wall: boolean } {
+  switch (def?.type) {
+    case 'floorLandscape': return { floor: true, wall: false }
+    case 'wallLandscape':  return { floor: false, wall: true }
+    case 'landscape':      return { floor: true, wall: true }
+    case undefined:        break
+    default:               return { floor: false, wall: false }
+  }
+  return {
+    floor: active.floorBackgroundColor != null || active.swampColor != null,
+    wall: active.backgroundColor != null,
+  }
+}
+
+function floorLandscape(active: ApiDecorationActive, def?: ApiMapStatsDecorationDef): MapLandscape {
+  return {
+    backgroundColor: str(active.floorBackgroundColor),
+    backgroundBrightness: num(active.floorBackgroundBrightness, 1),
+    swampColor: str(active.swampColor),
+    roadsColor: str(active.roadsColor),
+    foregroundUrl: str(def?.floorForegroundUrl),
+    foregroundColor: str(active.floorForegroundColor),
+    foregroundBrightness: num(active.floorForegroundBrightness, 1),
+    foregroundAlpha: num(active.floorForegroundAlpha, 1),
+  }
+}
+
+function wallLandscape(active: ApiDecorationActive, def?: ApiMapStatsDecorationDef): MapLandscape {
+  return {
+    backgroundColor: str(active.backgroundColor),
+    backgroundBrightness: num(active.backgroundBrightness, 1),
+    foregroundUrl: str(def?.foregroundUrl),
+    foregroundColor: str(active.foregroundColor),
+    foregroundBrightness: num(active.foregroundBrightness, 1),
+    foregroundAlpha: num(active.foregroundAlpha, 1),
+  }
+}
+
+function graffiti(active: ApiDecorationActive, def: ApiMapStatsDecorationDef): MapGraffiti {
+  return {
+    x: num(active.x, 0),
+    y: num(active.y, 0),
+    width: num(active.width, 1),
+    height: num(active.height, 1),
+    tiling: bool(def.tiling),
+    tileScale: num(active.tileScale, 1),
+    alpha: num(active.alpha, 1),
+    lighting: bool(active.lighting),
+    brightness: num(active.brightness, 1),
+    graphics: (def.graphics ?? [])
+      .filter(g => !g.visible || bool(active[g.visible]))
+      .map(g => ({ url: g.url, color: g.color ? str(active[g.color]) : undefined })),
+  }
+}
+
+/**
+ * Collect a room's world-map decorations. Only items flagged `world` show on the map,
+ * and — as in the reference renderer — only the first landscape of each half applies.
+ */
+export function buildRoomDecorations(
+  stat: ApiMapStatsRoomStat,
+  defs: Record<string, ApiMapStatsDecorationDef>,
+): MapRoomDecorations | undefined {
+  const items = stat.decorations?.filter(d => d.active.world)
+  if (!items?.length) return undefined
+
+  const out: MapRoomDecorations = { graffiti: [] }
+
+  for (const item of items) {
+    const def = defs[item.decoration]
+    if (def?.type === 'wallGraffiti') {
+      out.graffiti.push(graffiti(item.active, def))
+      continue
+    }
+    const roles = landscapeRoles(item.active, def)
+    if (roles.floor && !out.floor) out.floor = floorLandscape(item.active, def)
+    if (roles.wall && !out.wall) out.wall = wallLandscape(item.active, def)
+  }
+
+  return out.floor || out.wall || out.graffiti.length > 0 ? out : undefined
 }
 
 export interface MapStatsStoreEvents {
@@ -110,15 +248,16 @@ export class MapStatsStore extends TypedStore<MapStatsStoreEvents> {
     for (const [, batch] of toFlush) {
       const allRooms = [...batch.rooms]
       try {
-        const res = await this.http.request<{ ok: number; stats: Record<string, ApiMapStatsRoomStat>; users: Record<string, { _id: string; username: string; badge: ApiMapStatsBadge }> }>(
+        const res = await this.http.request<{ ok: number; stats: Record<string, ApiMapStatsRoomStat>; users: Record<string, { _id: string; username: string; badge: ApiMapStatsBadge }>; decorations?: Record<string, ApiMapStatsDecorationDef> }>(
           'POST', '/api/game/map-stats', { rooms: allRooms, statName: batch.statName, shard: batch.shard }
         )
 
         const userMap = res.users ?? {}
+        const decorationDefs = res.decorations ?? {}
 
         const shardKey = batch.shard === 'shard0' ? null : batch.shard
         for (const [room, stat] of Object.entries(res.stats)) {
-          const data = this.buildData(stat, userMap)
+          const data = this.buildData(stat, userMap, decorationDefs)
           this.emit('mapStats:room', { room, shard: shardKey, stat: data, statName: batch.statName })
         }
 
@@ -134,19 +273,15 @@ export class MapStatsStore extends TypedStore<MapStatsStoreEvents> {
     }
   }
 
-  private buildData(stat: ApiMapStatsRoomStat, userMap: Record<string, { username: string; badge: ApiMapStatsBadge }>): MapStatsRoomData {
+  private buildData(
+    stat: ApiMapStatsRoomStat,
+    userMap: Record<string, { username: string; badge: ApiMapStatsBadge }>,
+    defs: Record<string, ApiMapStatsDecorationDef>,
+  ): MapStatsRoomData {
     const mineral = stat.minerals0?.type
     const density = stat.minerals0?.density
     const ownerId = stat.own?.user
     const signUserId = stat.sign?.user
-
-    // Find the terrain-theme decoration (world=true + floor/swamp color properties).
-    const terrainDeco = stat.decorations?.find(d => d.active.world && (d.active.floorBackgroundColor || d.active.swampColor))
-    const terrainColors: TerrainColors | undefined = terrainDeco ? {
-      plain: terrainDeco.active.floorBackgroundColor,
-      swamp: terrainDeco.active.swampColor,
-      road: terrainDeco.active.roadsColor,
-    } : undefined
 
     return {
       own: stat.own,
@@ -165,7 +300,7 @@ export class MapStatsStore extends TypedStore<MapStatsStoreEvents> {
             badge: signUserId ? userMap[signUserId]?.badge : undefined,
           }
         : undefined,
-      terrainColors,
+      decorations: buildRoomDecorations(stat, defs),
     }
   }
 }

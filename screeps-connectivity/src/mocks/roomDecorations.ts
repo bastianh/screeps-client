@@ -4,7 +4,9 @@ import type { ApiRoomDecorationsResponse } from '../types/api.js'
  * Example /api/game/room-decorations response captured from the official Screeps server.
  * Use as `decorationsMock` in ScreepsClientOptions to test decoration rendering locally.
  *
- * Contains: wallLandscape (W-00031), floorLandscape (F-00065), creep overlay (C-00071).
+ * Contains: wallLandscape (W-00031), floorLandscape (F-00065), creep overlay (C-00071),
+ * plus a synthetic wallGraffiti item (see the comment on it) so the graffiti path can be
+ * exercised without owning one.
  */
 export const ROOM_DECORATIONS_MOCK: ApiRoomDecorationsResponse = {
   ok: 1,
@@ -86,6 +88,41 @@ export const ROOM_DECORATIONS_MOCK: ApiRoomDecorationsResponse = {
           '128x128': 'https://s3.amazonaws.com/static.screeps.com/decorations/3c0f0da6b41e413bdc4f66a01eed62b5b252c29.png',
           '256x256': 'https://s3.amazonaws.com/static.screeps.com/decorations/80c9978b58403e13b4a28f47ef1422e895c04fe.png',
         },
+      },
+    },
+    // Synthetic — not captured from the server. Reuses a real decoration SVG so the
+    // wallGraffiti render path (masking, tint, rotation, animation) can be tried out.
+    {
+      _id: '000000000000000000000001',
+      user: '58356f6fc8012784246abb7e',
+      active: {
+        x: 20,
+        y: 22,
+        width: 8,
+        height: 8,
+        rotation: 0,
+        alpha: 0.9,
+        brightness: 1,
+        flip: false,
+        animation: 'slow',
+        lighting: false,
+        color: '#ffdd55',
+        shard: 'shard1',
+        room: 'E2S49',
+      },
+      decoration: {
+        _id: '000000000000000000000002',
+        type: 'wallGraffiti',
+        name: 'G-SYNTHETIC',
+        tiling: false,
+        graphics: [
+          {
+            url: 'https://s3.amazonaws.com/static.screeps.com/decorations/a23d96123d27bf163babe0a29a54de003aea568.svg',
+            color: 'color',
+            alpha: '',
+            visible: '',
+          },
+        ],
       },
     },
     {

@@ -6,6 +6,9 @@ import type {
   ApiUserOverviewResponse,
   ApiUserRoomsResponse,
   ApiUserStatsResponse,
+  ApiUserDecorationsInventoryResponse,
+  ApiDecorationThemesResponse,
+  ApiRoomDecorationActive,
 } from '../../types/api.js'
 import type { NotifyPrefs } from '../../types/game.js'
 import { createUserMessagesEndpoints, type UserMessagesEndpoints } from './user-messages.js'
@@ -26,7 +29,8 @@ export interface UserEndpoints {
   }
   console(expression: string, shard?: string | null): Promise<unknown>
   stats(interval: number, id?: string): Promise<ApiUserStatsResponse>
-  rooms(id: string): Promise<ApiUserRoomsResponse>
+  /** Pass `reservation` to also get the rooms the user only reserves. */
+  rooms(id: string, reservation?: boolean): Promise<ApiUserRoomsResponse>
   overview(interval: number, statName: string): Promise<ApiUserOverviewResponse>
   worldStatus(): Promise<{ ok: number; status: 'normal' | 'lost' | 'empty' }>
   worldStartRoom(shard?: string | null): Promise<unknown>
@@ -44,6 +48,14 @@ export interface UserEndpoints {
   setSteamVisible(visible: boolean): Promise<{ ok: number }>
   /** Change the current user's password (screepsmod-auth private servers only). Pass oldPassword when the account already has a password set. */
   password(newPassword: string, oldPassword?: string): Promise<{ ok: number }>
+  decorations: {
+    /** Every decoration the user owns, activated or not. */
+    inventory(): Promise<ApiUserDecorationsInventoryResponse>
+    themes(): Promise<ApiDecorationThemesResponse>
+    /** Place a decoration. `active` carries every prop value plus the target shard/room. */
+    activate(id: string, active: ApiRoomDecorationActive): Promise<{ ok: number }>
+    deactivate(ids: string[]): Promise<{ ok: number }>
+  }
   messages: UserMessagesEndpoints
 }
 
@@ -72,7 +84,7 @@ export function createUserEndpoints(http: HttpClient): UserEndpoints {
     // Best-effort dashboard data: not every server implements these, and the
     // Overview page degrades gracefully (zeros / no tiles), so a failure here
     // shouldn't raise a user-facing error toast — mark them silent.
-    rooms: (id) => http.request('GET', '/api/user/rooms', { id }, { silent: true }),
+    rooms: (id, reservation) => http.request('GET', '/api/user/rooms', reservation ? { id, reservation: 1 } : { id }, { silent: true }),
     overview: (interval, statName) => http.request('GET', '/api/user/overview', { interval, statName }, { silent: true }),
     worldStatus: () => http.request('GET', '/api/user/world-status'),
     worldStartRoom: (shard) => http.request('GET', '/api/user/world-start-room', withShard({}, shard)),
@@ -90,5 +102,13 @@ export function createUserEndpoints(http: HttpClient): UserEndpoints {
     setSteamVisible: (visible) => http.request('POST', '/api/user/set-steam-visible', { visible }),
     password: (newPassword, oldPassword) => http.request('POST', '/api/user/password', { password: newPassword, ...(oldPassword != null ? { oldPassword } : {}) }),
     messages: createUserMessagesEndpoints(http),
+    decorations: {
+      // Silent: servers without the decoration feature answer 404, and the caller
+      // treats that as "no inventory" rather than surfacing a failure toast.
+      inventory: () => http.request('GET', '/api/user/decorations/inventory', undefined, { silent: true }),
+      themes: () => http.request('GET', '/api/user/decorations/themes', undefined, { silent: true }),
+      activate: (id, active) => http.request('POST', '/api/user/decorations/activate', { _id: id, active }),
+      deactivate: (ids) => http.request('POST', '/api/user/decorations/deactivate', { decorations: ids }),
+    },
   }
 }

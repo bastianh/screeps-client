@@ -44,7 +44,7 @@ export type {
 
 export { fetchServerVersion, fetchAuthModInfo, checkUsername, checkEmail, registerUser, fetchAuthMeWithToken, completeProviderRegistration, getServerFeature, getScreepsmodAuth, getXxscreepsModClientFeature, getDiscordFeature, hasOfficialLike } from './http/fetchServerVersion.js'
 export type { ApiAuthModInfoResponse } from './http/fetchServerVersion.js'
-export type { ApiAuthMeResponse, RoomHistoryChunk, ApiRoomDecorationsResponse, ApiRoomDecorationItem, ApiRoomDecorationDef, ApiRoomDecorationGraphic, ApiRoomDecorationActive, ApiUserOverviewResponse, ApiUserOverviewTotals, ApiRoomOverviewResponse, ApiUserRoomsResponse, ApiUserStatsResponse, ApiLeaderboardFindResponse, ApiLeaderboardListResponse, ApiLeaderboardSeasonsResponse, ApiLeaderboardEntry, ApiLeaderboardUser, LeaderboardMode, ApiUserMoneyHistoryResponse, ApiMarketOrder, ApiMarketOrdersIndexResponse, ApiMarketOrdersResponse, ApiMarketMyOrdersResponse, ApiMarketStat, ApiMarketStatsResponse, ApiPowerCreep, ApiPowerCreepsListResponse, ApiUserMessage, ApiUserMessagesListResponse, ApiUserMessagesIndexEntry, ApiUserMessagesIndexResponse, ApiUserMessagesUnreadCountResponse, ApiUserFindResponse } from './types/api.js'
+export type { ApiAuthMeResponse, RoomHistoryChunk, ApiRoomDecorationsResponse, ApiRoomDecorationItem, ApiRoomDecorationDef, ApiRoomDecorationGraphic, ApiRoomDecorationActive, ApiDecorationProp, ApiDecorationProps, ApiUserDecorationItem, ApiUserDecorationsInventoryResponse, ApiDecorationTheme, ApiDecorationThemesResponse, ApiUserOverviewResponse, ApiUserOverviewTotals, ApiRoomOverviewResponse, ApiUserRoomsResponse, ApiUserStatsResponse, ApiLeaderboardFindResponse, ApiLeaderboardListResponse, ApiLeaderboardSeasonsResponse, ApiLeaderboardEntry, ApiLeaderboardUser, LeaderboardMode, ApiUserMoneyHistoryResponse, ApiMarketOrder, ApiMarketOrdersIndexResponse, ApiMarketOrdersResponse, ApiMarketMyOrdersResponse, ApiMarketStat, ApiMarketStatsResponse, ApiPowerCreep, ApiPowerCreepsListResponse, ApiUserMessage, ApiUserMessagesListResponse, ApiUserMessagesIndexEntry, ApiUserMessagesIndexResponse, ApiUserMessagesUnreadCountResponse, ApiUserFindResponse } from './types/api.js'
 export { ROOM_DECORATIONS_MOCK } from './mocks/roomDecorations.js'
 
 export { badgeToSvg } from './badge/index.js'
@@ -65,5 +65,5 @@ export type { ServerStore } from './stores/ServerStore.js'
 export type { MapStore, Map2Subscription, MapStoreOptions } from './stores/MapStore.js'
 export type { NavigationStore, NavigationState, NavigationStoreEvents } from './stores/NavigationStore.js'
 export { MapStatName, MapStatPrefix, MapStatInterval, mapStat } from './stores/MapStatsStore.js'
-export type { MapStatsRoomData, MapStatsStoreEvents, TerrainColors } from './stores/MapStatsStore.js'
+export type { MapStatsRoomData, MapStatsStoreEvents, MapLandscape, MapGraffiti, MapRoomDecorations } from './stores/MapStatsStore.js'
 

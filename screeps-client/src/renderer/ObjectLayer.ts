@@ -3,6 +3,9 @@ import type { RoomObject, RoomObjectMap, RoomObjectDiff, Badge } from 'screeps-c
 import { BadgeTextureCache } from './BadgeTextureCache.js'
 import type { LightingLayer } from './LightingLayer.js'
 import { TILE_SIZE } from './RoomRenderer.js'
+import { DecorationAnimator } from './decorationAnimation.js'
+import { applyObjectDecorations, clearObjectDecorations } from './objectDecorations.js'
+import type { CreepDecoration, ObjectDecoration } from './roomDecorations.js'
 import { CONTROLLER_DOWNGRADE } from '~/utils/gameConstants.js'
 import { OBJ_ROAD, ST_DARK, ST_OUTLINE, ST_ENERGY, ST_RAMPART, ST_RAMPART_STROKE, ST_RAMPART_ENEMY, ST_RAMPART_ENEMY_STROKE, TERRAIN_WALL_BORDER, CS_OWN } from './colors.js'
 import {
@@ -40,6 +43,7 @@ import {
   getCreepStore,
   isForeignCreep,
   npcCreepName,
+  setCreepFacing,
   updateCreepFill,
 } from './objects/creep.js'
 import { calcExtensionFillRadius, getExtensionEnergy, updateExtensionFill } from './objects/extension.js'
@@ -120,6 +124,9 @@ export class ObjectLayer {
   private roadColor: number = OBJ_ROAD
   private wallColor: number = ST_DARK
   private lighting: LightingLayer | null = null
+  private creepDecorations: readonly CreepDecoration[] = []
+  private objectDecorations: readonly ObjectDecoration[] = []
+  private decorationAnimator: DecorationAnimator | null = null
 
   constructor(ticker?: Ticker, showLabels = true, currentUserId?: string, badge?: Badge, users?: Record<string, { _id: string; username: string; badge?: Badge }>) {
     this.showLabels = showLabels
@@ -162,7 +169,42 @@ export class ObjectLayer {
       this.ticker = ticker
       this.tickerCallback = () => this.tick()
       ticker.add(this.tickerCallback)
+      this.decorationAnimator = new DecorationAnimator(ticker)
     }
+  }
+
+  /**
+   * Set the creep and object decoration overlays. Re-applies them to every visual that
+   * already exists, so this can be called whenever the room's decorations change.
+   */
+  setDecorations(creeps: readonly CreepDecoration[], objects: readonly ObjectDecoration[]): void {
+    this.creepDecorations = creeps
+    this.objectDecorations = objects
+    for (const [id, visual] of this.objects) {
+      const obj = this.rawObjects.get(id)
+      if (obj) this.decorate(visual, obj)
+    }
+  }
+
+  /** Build an object's visual, register it and attach it to the scene. */
+  private createVisual(id: string, obj: RoomObject): ContainerWithTarget {
+    const visual: ContainerWithTarget = createObjectVisual(obj, this.showLabels, this.currentUserId, this.badge, this.badgeCache, this.users)
+    visual.__tileX = obj.x
+    visual.__tileY = obj.y
+    this.applyLabelScale(visual)
+    this.decorate(visual, obj)
+    this.objects.set(id, visual)
+    this.container.addChild(visual)
+    return visual
+  }
+
+  private decorate(visual: ContainerWithTarget, obj: RoomObject): void {
+    if (!this.decorationAnimator) return
+    if (this.creepDecorations.length === 0 && this.objectDecorations.length === 0) {
+      clearObjectDecorations(visual)
+      return
+    }
+    applyObjectDecorations(visual, obj, this.creepDecorations, this.objectDecorations, this.decorationAnimator)
   }
 
   setRoadColor(color: number): void {
@@ -617,12 +659,7 @@ export class ObjectLayer {
           this.rawObjects.set(id, obj)
           const existing = this.objects.get(id)
           if (!existing) {
-            const visual: ContainerWithTarget = createObjectVisual(obj, this.showLabels, this.currentUserId, this.badge, this.badgeCache, this.users)
-            visual.__tileX = obj.x
-            visual.__tileY = obj.y
-            this.applyLabelScale(visual)
-            this.objects.set(id, visual)
-            this.container.addChild(visual)
+            this.createVisual(id, obj)
           } else {
             const tx = obj.x * TILE_SIZE
             const ty = obj.y * TILE_SIZE
@@ -631,7 +668,7 @@ export class ObjectLayer {
               const dy = obj.y - (existing.__tileY ?? obj.y)
               if (dx !== 0 || dy !== 0) {
                 existing.__angle = Math.atan2(dy, dx)
-                if (existing.__bodyContainer) existing.__bodyContainer.rotation = existing.__angle
+                setCreepFacing(existing, existing.__angle)
               }
               existing.__tileX = obj.x
               existing.__tileY = obj.y
@@ -660,6 +697,8 @@ export class ObjectLayer {
               // Re-tier on the spawning → born transition (and vice-versa).
               const cz = computeZIndex(obj)
               if (existing.zIndex !== cz) existing.zIndex = cz
+              // Creep decorations skip spawning creeps, so that transition changes what applies.
+              if (existing.__decoSpawning !== (obj.spawning === true)) this.decorate(existing, obj)
             } else if (obj.type === 'flag') {
               const newColorIdx = typeof obj.color === 'number' ? obj.color : 0
               const newSecColorIdx = typeof obj.secondaryColor === 'number' ? obj.secondaryColor : 0
@@ -670,12 +709,7 @@ export class ObjectLayer {
                 this.container.removeChild(existing)
                 destroyVisual(existing)
                 this.objects.delete(id)
-                const visual: ContainerWithTarget = createObjectVisual(obj, this.showLabels, this.currentUserId, this.badge, this.badgeCache, this.users)
-                visual.__tileX = obj.x
-                visual.__tileY = obj.y
-                this.applyLabelScale(visual)
-                this.objects.set(id, visual)
-                this.container.addChild(visual)
+                this.createVisual(id, obj)
               } else {
                 existing.position.set(tx, ty)
               }
@@ -843,12 +877,7 @@ export class ObjectLayer {
                 this.container.removeChild(existing)
                 destroyVisual(existing)
                 this.objects.delete(id)
-                const visual: ContainerWithTarget = createObjectVisual(obj, this.showLabels, this.currentUserId, this.badge, this.badgeCache, this.users)
-                visual.__tileX = obj.x
-                visual.__tileY = obj.y
-                this.applyLabelScale(visual)
-                this.objects.set(id, visual)
-                this.container.addChild(visual)
+                this.createVisual(id, obj)
                 continue
               }
               if (existing.__ctrlLevel !== level || existing.__ctrlProgress !== progress || existing.__ctrlProgressTotal !== progressTotal) {
@@ -908,12 +937,7 @@ export class ObjectLayer {
         this.rawObjects.set(id, obj)
         const existing = this.objects.get(id)
         if (!existing) {
-          const visual: ContainerWithTarget = createObjectVisual(obj, this.showLabels, this.currentUserId, this.badge, this.badgeCache, this.users)
-          visual.__tileX = obj.x
-          visual.__tileY = obj.y
-          this.applyLabelScale(visual)
-          this.objects.set(id, visual)
-          this.container.addChild(visual)
+          this.createVisual(id, obj)
         } else {
           const tx = obj.x * TILE_SIZE
           const ty = obj.y * TILE_SIZE
@@ -922,7 +946,7 @@ export class ObjectLayer {
             const dy = obj.y - (existing.__tileY ?? obj.y)
             if (dx !== 0 || dy !== 0) {
               existing.__angle = Math.atan2(dy, dx)
-              if (existing.__bodyContainer) existing.__bodyContainer.rotation = existing.__angle
+              setCreepFacing(existing, existing.__angle)
             }
             existing.__tileX = obj.x
             existing.__tileY = obj.y
@@ -961,12 +985,7 @@ export class ObjectLayer {
               this.container.removeChild(existing)
               destroyVisual(existing)
               this.objects.delete(id)
-              const visual: ContainerWithTarget = createObjectVisual(obj, this.showLabels, this.currentUserId, this.badge, this.badgeCache, this.users)
-              visual.__tileX = obj.x
-              visual.__tileY = obj.y
-              this.applyLabelScale(visual)
-              this.objects.set(id, visual)
-              this.container.addChild(visual)
+              this.createVisual(id, obj)
             } else {
               existing.position.set(tx, ty)
             }
@@ -1018,12 +1037,7 @@ export class ObjectLayer {
               this.container.removeChild(existing)
               destroyVisual(existing)
               this.objects.delete(id)
-              const visual: ContainerWithTarget = createObjectVisual(obj, this.showLabels, this.currentUserId, this.badge, this.badgeCache, this.users)
-              visual.__tileX = obj.x
-              visual.__tileY = obj.y
-              this.applyLabelScale(visual)
-              this.objects.set(id, visual)
-              this.container.addChild(visual)
+              this.createVisual(id, obj)
               continue
             }
             if (existing.__ctrlLevel !== level || existing.__ctrlProgress !== progress || existing.__ctrlProgressTotal !== progressTotal) {
@@ -1621,7 +1635,8 @@ export class ObjectLayer {
       const size = CREEP_INNER_R * 2
       badgeSprite.width = size
       badgeSprite.height = size
-      badgeSprite.rotation = Math.PI / 2
+      // Wired up after the creep already exists, so match whatever heading it holds.
+      badgeSprite.rotation = -bodyContainer.rotation
       bodyContainer.addChild(badgeSprite)
       visual.__creepBadgeSprite = badgeSprite
       this.badgeCache.getOrCreate(creepBadge as Badge).then((texture) => {
@@ -1796,6 +1811,8 @@ export class ObjectLayer {
 
   destroy(): void {
     this.clear()
+    this.decorationAnimator?.destroy()
+    this.decorationAnimator = null
     if (this.ticker && this.tickerCallback) {
       this.ticker.remove(this.tickerCallback)
     }

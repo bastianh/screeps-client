@@ -1,6 +1,7 @@
-import { For, Show } from 'solid-js'
+import { For, Show, createMemo } from 'solid-js'
 import { gameTime } from '~/stores/clientStore.js'
-import { roomUsers } from '~/stores/roomDataStore.js'
+import { roomUsers, roomDecorationItems } from '~/stores/roomDataStore.js'
+import { parseRoomDecorations, creepMatchesDecoration } from '~/renderer/roomDecorations.js'
 import { UserLink } from '~/components/UserLink.js'
 import { HitsBar } from '~/components/MeterBar.js'
 import type { SelectedObject } from '~/stores/selectionStore.js'
@@ -49,6 +50,22 @@ export function CreepDetails(props: { item: SelectedObject }) {
     for (const part of body()) counts.set(part.type, (counts.get(part.type) ?? 0) + 1)
     return [...counts.entries()].map(([type, count]) => ({ type, count }))
   }
+
+  // Which of the room's creep decorations actually land on this creep. Same owner,
+  // same name-filter rules the renderer applies — reusing that keeps the panel from
+  // drifting away from what is drawn.
+  const decorations = createMemo(() => {
+    const name = typeof raw().name === 'string' ? (raw().name as string) : ''
+    const owner = userId()
+    if (!owner || raw().spawning === true) return []
+
+    const items = roomDecorationItems().filter(i => i.decoration.type === 'creep' && i.user === owner)
+    const definitions = new Map(items.map(i => [i._id, i.decoration]))
+    return parseRoomDecorations(items).creeps
+      .filter(d => creepMatchesDecoration(d, name))
+      .map(d => definitions.get(d.id))
+      .filter(d => d != null)
+  })
 
   return (
     <div>
@@ -127,6 +144,36 @@ export function CreepDetails(props: { item: SelectedObject }) {
                   <span style={{ color: '#8b949e' }}>{count}×</span>
                   <span style={{ color: BODY_PART_CSS[type] ?? '#484f58' }}>{type.replace('_', ' ').toUpperCase()}</span>
                 </span>
+              )}
+            </For>
+          </div>
+        </div>
+      </Show>
+
+      <Show when={decorations().length > 0}>
+        <div style={{ background: '#21262d', 'border-top': '1px solid #30363d' }}>
+          <div style={{ padding: '4px 8px', background: '#161b22', color: '#8b949e', 'font-weight': 600, 'font-size': '10px' }}>
+            Decorations ({decorations().length})
+          </div>
+          <div style={{ padding: '6px 8px', background: '#0d1117', display: 'flex', 'flex-direction': 'column', gap: '4px' }}>
+            <For each={decorations()}>
+              {(decoration) => (
+                <div style={{ display: 'flex', gap: '8px', 'align-items': 'center' }}>
+                  <Show when={decoration.preview?.['128x128'] ?? decoration.preview?.original}>
+                    {(src) => (
+                      <img src={src()} alt="" style={{
+                        width: '24px', height: '24px', 'border-radius': '4px', 'flex-shrink': 0,
+                        background: '#161b22', 'object-fit': 'cover',
+                      }} />
+                    )}
+                  </Show>
+                  <span style={{
+                    'font-size': '11px', color: '#c9d1d9',
+                    overflow: 'hidden', 'text-overflow': 'ellipsis', 'white-space': 'nowrap',
+                  }}>
+                    {decoration.name ?? 'Creep decoration'}
+                  </span>
+                </div>
               )}
             </For>
           </div>

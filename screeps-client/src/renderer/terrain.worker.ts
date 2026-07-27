@@ -1,4 +1,5 @@
 import { TerrainType } from 'screeps-connectivity'
+import { decorationTextureUrl } from './decorationTextureUrl.js'
 import {
   MINIMAP_PLAIN as TERRAIN_PLAIN,
   MINIMAP_WALL as TERRAIN_WALL,
@@ -109,16 +110,165 @@ function drawRoundedLayer(ctx: OffscreenCanvasRenderingContext2D, raw: Uint8Arra
   ctx.fill()
 }
 
+interface TextureOverlay {
+  url: string
+  tint: number
+  alpha: number
+  target: 'floor' | 'wall'
+}
+
+interface GraffitiSprite {
+  url: string
+  tint?: number
+  x: number
+  y: number
+  width: number
+  height: number
+  alpha: number
+  tiling: boolean
+  tileScale: number
+}
+
+interface DecorationMessage {
+  colors: { plain?: string; swamp?: string; wall?: string; road?: string }
+  overlays: TextureOverlay[]
+  graffiti: GraffitiSprite[]
+}
+
+// Decoration textures, shared across rooms and LODs. A rejected load is cached as null so
+// one broken URL doesn't re-hit the network for every room that references it.
+const textureCache = new Map<string, Promise<ImageBitmap | null>>()
+
+function loadTexture(url: string): Promise<ImageBitmap | null> {
+  let pending = textureCache.get(url)
+  if (!pending) {
+    pending = fetch(decorationTextureUrl(url))
+      .then(res => res.ok ? res.blob() : Promise.reject(new Error(String(res.status))))
+      .then(blob => createImageBitmap(blob))
+      .catch(() => null)
+    textureCache.set(url, pending)
+  }
+  return pending
+}
+
+/**
+ * An opaque stencil of the room's walls (`wall`) or of everything else (`floor`).
+ *
+ * Built on its own canvas rather than composited straight onto the layer: the LOD-0 path
+ * draws one rect per tile, and `destination-in` is a whole-canvas operation — applying it
+ * per rect would erase everything outside each individual tile.
+ */
+function terrainMask(size: number, raw: Uint8Array, T: number, lod: number, mode: 'floor' | 'wall'): OffscreenCanvas {
+  const canvas = new OffscreenCanvas(size, size)
+  const ctx = canvas.getContext('2d') as OffscreenCanvasRenderingContext2D
+  ctx.fillStyle = '#fff'
+  if (mode === 'floor') {
+    ctx.fillRect(0, 0, size, size)
+    ctx.globalCompositeOperation = 'destination-out'
+  }
+  if (lod >= 1) drawRoundedLayer(ctx, raw, TerrainType.Wall, T)
+  else drawFlatLayer(ctx, raw, TerrainType.Wall, T)
+  return canvas
+}
+
+/** Multiply a tint over the layer, then restore the artwork's own alpha. */
+function tintLayer(ctx: OffscreenCanvasRenderingContext2D, size: number, tint: number, redraw: () => void): void {
+  ctx.globalCompositeOperation = 'multiply'
+  ctx.fillStyle = hexToRgb(tint)
+  ctx.fillRect(0, 0, size, size)
+  ctx.globalCompositeOperation = 'destination-in'
+  redraw()
+  ctx.globalCompositeOperation = 'source-over'
+}
+
+async function drawOverlays(
+  ctx: OffscreenCanvasRenderingContext2D,
+  overlays: TextureOverlay[],
+  size: number,
+  raw: Uint8Array,
+  T: number,
+  lod: number,
+): Promise<void> {
+  for (const item of overlays) {
+    const image = await loadTexture(item.url)
+    if (!image) continue
+
+    const layer = new OffscreenCanvas(size, size)
+    const lctx = layer.getContext('2d') as OffscreenCanvasRenderingContext2D
+    const draw = () => lctx.drawImage(image, 0, 0, size, size)
+
+    draw()
+    tintLayer(lctx, size, item.tint, draw)
+
+    lctx.globalCompositeOperation = 'destination-in'
+    lctx.drawImage(terrainMask(size, raw, T, lod, item.target), 0, 0)
+
+    ctx.globalAlpha = item.alpha
+    ctx.drawImage(layer, 0, 0)
+    ctx.globalAlpha = 1
+  }
+}
+
+async function drawGraffiti(
+  ctx: OffscreenCanvasRenderingContext2D,
+  items: GraffitiSprite[],
+  size: number,
+  raw: Uint8Array,
+  T: number,
+  lod: number,
+): Promise<void> {
+  if (items.length === 0) return
+  const mask = terrainMask(size, raw, T, lod, 'wall')
+
+  for (const item of items) {
+    const image = await loadTexture(item.url)
+    if (!image) continue
+
+    const x = item.x * T
+    const y = item.y * T
+    const w = item.width * T
+    const h = item.height * T
+
+    const layer = new OffscreenCanvas(size, size)
+    const lctx = layer.getContext('2d') as OffscreenCanvasRenderingContext2D
+    const draw = () => {
+      if (item.tiling) {
+        const pattern = lctx.createPattern(image, 'repeat')
+        if (!pattern) return
+        // The reference tiles in normalised room units with `tileScale / (50 * 100)`
+        // per texture pixel; scaled to this canvas that is `tileScale * size / 5000`.
+        const scale = (item.tileScale * size) / 5000
+        pattern.setTransform(new DOMMatrix([scale, 0, 0, scale, x, y]))
+        lctx.fillStyle = pattern
+        lctx.fillRect(x, y, w, h)
+      } else {
+        lctx.drawImage(image, x, y, w, h)
+      }
+    }
+
+    draw()
+    if (item.tint != null) tintLayer(lctx, size, item.tint, draw)
+
+    lctx.globalCompositeOperation = 'destination-in'
+    lctx.drawImage(mask, 0, 0)
+
+    ctx.globalAlpha = item.alpha
+    ctx.drawImage(layer, 0, 0)
+    ctx.globalAlpha = 1
+  }
+}
+
 self.onmessage = async (e: MessageEvent) => {
-  const { id, roomName, lod, raw, shard, colors } = e.data as {
+  const { id, roomName, lod, raw, shard, decoration } = e.data as {
     id: number,
     roomName: string,
     lod: number,
     raw: Uint8Array,
     shard: string,
-    colors?: { plain?: string; swamp?: string; road?: string }
+    decoration?: DecorationMessage
   }
-  const useCustomColors = !!colors
+  const colors = decoration?.colors
+  const useCustomColors = !!decoration
 
   const size = LOD_SIZES[lod] || 128
   const T    = size / 50
@@ -130,16 +280,23 @@ self.onmessage = async (e: MessageEvent) => {
   ctx.fillStyle = colors?.plain ?? hexToRgb(TERRAIN_PLAIN)
   ctx.fillRect(0, 0, size, size)
 
+  const swampColor = colors?.swamp ?? hexToRgb(TERRAIN_SWAMP)
+  const wallColor = colors?.wall ?? hexToRgb(TERRAIN_WALL)
   if (lod >= 1) {
-    ctx.fillStyle = colors?.swamp ?? hexToRgb(TERRAIN_SWAMP)
+    ctx.fillStyle = swampColor
     drawRoundedLayer(ctx, raw, TerrainType.Swamp, T)
-    ctx.fillStyle = hexToRgb(TERRAIN_WALL)
+    ctx.fillStyle = wallColor
     drawRoundedLayer(ctx, raw, TerrainType.Wall, T)
   } else {
-    ctx.fillStyle = colors?.swamp ?? hexToRgb(TERRAIN_SWAMP)
+    ctx.fillStyle = swampColor
     drawFlatLayer(ctx, raw, TerrainType.Swamp, T)
-    ctx.fillStyle = hexToRgb(TERRAIN_WALL)
+    ctx.fillStyle = wallColor
     drawFlatLayer(ctx, raw, TerrainType.Wall, T)
+  }
+
+  if (decoration) {
+    await drawOverlays(ctx, decoration.overlays, size, raw, T, lod)
+    await drawGraffiti(ctx, decoration.graffiti, size, raw, T, lod)
   }
 
   // Deliver the baked tile immediately so it renders without waiting for the

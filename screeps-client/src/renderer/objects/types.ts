@@ -122,6 +122,8 @@ export type ContainerWithTarget = Container & {
   __powerBankRadius?: number
   __keeperGlow?: Sprite   // keeper-lair pulse glow; scale + alpha driven each frame
   __keeperPhase?: number  // per-lair ping phase offset in [0,1)
+  __decorations?: Container[]  // creep/object decoration overlays attached to this visual
+  __decoSpawning?: boolean     // spawning state the overlays were built for; creep decorations skip spawning creeps
 }
 // One generic fill tween. Channel `a` (and optional `b`, for two-channel fills like lab
 // energy+mineral or nuker energy+ghodium) eases from→to over EXT_ANIM_DURATION, then `apply`

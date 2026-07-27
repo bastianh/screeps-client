@@ -9,6 +9,8 @@ import { type ContainerWithTarget, type VisualBuildContext } from './types.js'
 export const CREEP_OUTER_R = TILE_SIZE * 0.44
 export const CREEP_INNER_R = TILE_SIZE * 0.28
 export const CREEP_MAX_BODY = 50
+// Heading of a creep that hasn't moved yet: notch up. Local angle 0 points right.
+export const CREEP_IDLE_FACING = -Math.PI / 2
 
 export const LABEL_FONT_SIZE  = 32
 export const LABEL_FONT_SCALE = 12 / LABEL_FONT_SIZE  // base scale: ~12px height at world-scale=1
@@ -190,7 +192,7 @@ export function buildCreepBody(ctx: VisualBuildContext): void {
 
   const bodyContainer = new Container()
   bodyContainer.position.set(cx, cy)
-  bodyContainer.rotation = -Math.PI / 2
+  bodyContainer.rotation = CREEP_IDLE_FACING
 
   const isForeign = isForeignCreep(obj, currentUserId)
   if (isForeign) {
@@ -295,7 +297,7 @@ export function buildCreepBody(ctx: VisualBuildContext): void {
     const size = CREEP_INNER_R * 2
     badgeSprite.width = size
     badgeSprite.height = size
-    badgeSprite.rotation = Math.PI / 2
+    badgeSprite.rotation = -CREEP_IDLE_FACING
     bodyContainer.addChild(badgeSprite)
     ;(container as ContainerWithTarget).__creepBadgeSprite = badgeSprite
     badgeCache.getOrCreate(creepBadge as Badge).then((texture) => {
@@ -338,6 +340,20 @@ export function buildCreepBody(ctx: VisualBuildContext): void {
   container.addChild(bodyContainer)
   ;(container as ContainerWithTarget).__bodyContainer = bodyContainer
 }
+/**
+ * Point a creep at `angle` (radians, 0 = right — the notch's local direction).
+ *
+ * The owner badge lives inside the rotating body container so the store fill can cover
+ * it, but a badge must read upright at any heading, so it counter-rotates. Anything else
+ * that must stay level belongs here too.
+ */
+export function setCreepFacing(visual: ContainerWithTarget, angle: number): void {
+  const body = visual.__bodyContainer
+  if (!body) return
+  body.rotation = angle
+  if (visual.__creepBadgeSprite) visual.__creepBadgeSprite.rotation = -angle
+}
+
 export function attachCreepNameLabel(ctx: VisualBuildContext): void {
   const { obj, container, cx, currentUserId, users, showLabel } = ctx
   // Label for creeps — rendered at high font size, scaled down so it stays crisp when zoomed.

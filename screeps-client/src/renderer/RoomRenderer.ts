@@ -11,6 +11,7 @@ const OVERSCROLL = 128
 // Z-index constants for world children — controls draw order independent of insertion order.
 export const Z = {
   terrain:     0,
+  decorations: 5,
   objects:    10,
   animations: 20,
   darkOverlay:30,

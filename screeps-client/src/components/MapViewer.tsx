@@ -1,5 +1,6 @@
 import { createEffect, createSignal, onCleanup, onMount } from 'solid-js'
 import { MapRenderer } from '~/renderer/MapRenderer.js'
+import { buildMapDecoration } from '~/renderer/mapDecorations.js'
 import { client, userInfo, worldBounds, setWorldBounds } from '~/stores/clientStore.js'
 import { showMapRoomNames, showUnclaimableRooms, showMapVisuals, showRoomDecorations } from '~/stores/settingsStore.js'
 import { mapOverlayMode } from '~/stores/mapOverlayStore.js'
@@ -470,7 +471,7 @@ export function MapViewer(props: MapViewerProps) {
           renderer?.setRoomMineral(room, existing.mineral, existing.density)
         }
 
-        renderer?.setRoomDecoration(room, stat.terrainColors)
+        renderer?.setRoomDecoration(room, stat.decorations ? buildMapDecoration(stat.decorations) : undefined)
 
         // Badge change-check: cheap string comparison, runs only on event, never per tick.
         const badgeKey = stat.badge ? JSON.stringify(stat.badge) : ''

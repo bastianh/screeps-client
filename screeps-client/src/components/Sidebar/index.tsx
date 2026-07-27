@@ -7,6 +7,7 @@ import { roomViewMode } from '~/stores/roomViewStore.js'
 import { historyMode } from '~/stores/historyStore.js'
 
 import { RoomInfoBox } from './RoomInfoBox.js'
+import { RoomDecorationsPanel } from './RoomDecorationsPanel.js'
 import { FlagForm } from './FlagForm.js'
 import { BuildPanel } from './BuildPanel.js'
 import { HistoryControlPanel } from './HistoryControlPanel.js'
@@ -139,6 +140,7 @@ export function Sidebar(props: SidebarProps) {
           when={props.mapMode}
           fallback={
             <>
+              <RoomDecorationsPanel />
               <RoomModePanel shard={props.shard} />
               <CustomUiPanel mode="room" shard={props.shard ?? null} room={props.room} />
             </>

@@ -12,6 +12,7 @@ import type {
     WorldStatus
 } from './game.js'
 import type {MapStatsRoomData} from '../stores/MapStatsStore.js'
+import type {ApiRoomDecorationItem} from './api.js'
 
 export interface RoomStoreEvents {
     'room:update': {
@@ -25,6 +26,12 @@ export interface RoomStoreEvents {
     }
     'room:terrainavailable': { room: string; shard: string | null; terrain: RoomTerrain }
     'room:error': { room: string; shard: string | null; message: string }
+    /**
+     * Decorations carried by a room tick message. These are incremental — the server
+     * sends whatever it considers current, so consumers merge them into the list they
+     * fetched from `/api/game/room-decorations`.
+     */
+    'room:decorations': { room: string; shard: string | null; decorations: ApiRoomDecorationItem[] }
 }
 
 export type Map2SubscriptionStatus = 'pending' | 'active'

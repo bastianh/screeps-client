@@ -1,7 +1,8 @@
-import { createEffect, createSignal, onCleanup, onMount, untrack, Show } from 'solid-js'
+import { createEffect, createMemo, createSignal, onCleanup, onMount, untrack, Show } from 'solid-js'
 import { RoomRenderer, Z } from '~/renderer/RoomRenderer.js'
 import { createTerrainLayer, setTerrainEffectsVisible } from '~/renderer/TerrainLayer.js'
-import { parseRoomDecorations, type RoomDecoration } from '~/renderer/roomDecorations.js'
+import { parseRoomDecorations, mergeDecorationItems, type RoomDecoration } from '~/renderer/roomDecorations.js'
+import { DecorationLayer } from '~/renderer/DecorationLayer.js'
 import { OBJ_ROAD, ST_DARK } from '~/renderer/colors.js'
 import { ObjectLayer } from '~/renderer/ObjectLayer.js'
 import { ActionAnimationLayer } from '~/renderer/ActionAnimationLayer.js'
@@ -10,10 +11,10 @@ import { client, gameTime, setGameTime, recordGameTime, tickDuration, worldBound
 import { showCreepLabels, terrainEffects, showRoomVisuals, showRoomDecorations, roomDarkOverlay, smoothAnimations } from '~/stores/settingsStore.js'
 import { setSelection, clearSelection, selection, updateSelectionWithDiff, updateSelectionFromObjects, createSelectedObject } from '~/stores/selectionStore.js'
 import { addToast } from '~/stores/toastStore.js'
-import { setRoomObjectCount, setRoomOwner, setControllerLevel, setControllerProgress, setControllerReservation, setStructureCounts, setRoomUsers, roomUsers, setCurrentShard, setCurrentRoom } from '~/stores/roomDataStore.js'
+import { setRoomObjectCount, setRoomOwner, setControllerLevel, setControllerProgress, setControllerReservation, setStructureCounts, setRoomUsers, roomUsers, setCurrentShard, setCurrentRoom, setRoomDecorationItems } from '~/stores/roomDataStore.js'
 import { parseRoomName, formatRoomName, isRoomInWorld } from '~/utils/roomName.js'
 import { useRoomNavigationKeys } from '~/utils/useRoomNavigationKeys.js'
-import type { Badge, RoomTerrain, RoomObjectMap, RoomObjectDiff } from 'screeps-connectivity'
+import type { ApiRoomDecorationItem, Badge, RoomTerrain, RoomObjectMap, RoomObjectDiff } from 'screeps-connectivity'
 import { SubscriptionGroup } from 'screeps-connectivity'
 import { historyMode, historyTick, historyMinTick, historyMaxTick, setHistoryMaxTick, historyLoading, setHistoryLoading, seekToTick, playbackSpeed, isPlaying, pausePlayback } from '~/stores/historyStore.js'
 import { HistoryPlayer, HistoryUnavailableError } from '~/stores/HistoryPlayer.js'
@@ -53,9 +54,21 @@ export function RoomViewer(props: RoomViewerProps) {
   let animLayer: ActionAnimationLayer | null = null
   let visualLayer: VisualLayer | null = null
   let terrainLayerRef: ReturnType<typeof createTerrainLayer> | null = null
+  let decorationLayerRef: DecorationLayer | null = null
   const [renderer, setRenderer] = createSignal<RoomRenderer | null>(null)
   const [terrain, setTerrain] = createSignal<{ room: string, data: RoomTerrain } | null>(null)
-  const [roomDecoration, setRoomDecoration] = createSignal<{ room: string; decoration: RoomDecoration } | null>(null)
+  // Raw items are kept so socket updates can be merged into them by `_id`; the parsed
+  // form every layer consumes is derived from that.
+  const [decorationItems, setDecorationItems] = createSignal<{ room: string; items: readonly ApiRoomDecorationItem[] } | null>(null)
+  const roomDecoration = createMemo<{ room: string; decoration: RoomDecoration } | null>(() => {
+    const raw = decorationItems()
+    return raw ? { room: raw.room, decoration: parseRoomDecorations(raw.items) } : null
+  })
+  // Publish the raw items for the sidebar and the creep properties panel.
+  createEffect(() => {
+    const raw = decorationItems()
+    setRoomDecorationItems(raw?.room === props.room ? raw.items : [])
+  })
   const [objectState, setObjectState] = createSignal<{ objects: RoomObjectMap, diff?: RoomObjectDiff, users?: Record<string, { _id: string; username: string; badge?: Badge }> } | null>(null)
   const [visualState, setVisualState] = createSignal<string>('')
   // Set when the current history tick has no data on the server (404). Shows a
@@ -80,6 +93,8 @@ export function RoomViewer(props: RoomViewerProps) {
     animLayer = null
     visualLayer?.destroy()
     visualLayer = null
+    decorationLayerRef?.destroy()
+    decorationLayerRef = null
     const r = renderer()
     if (r) r.destroy()
   })
@@ -96,7 +111,7 @@ export function RoomViewer(props: RoomViewerProps) {
     const shard = props.shard
 
     setTerrain(null)
-    setRoomDecoration(null)
+    setDecorationItems(null)
     setCurrentRoom(room)
     setCurrentShard(shard)
 
@@ -110,18 +125,58 @@ export function RoomViewer(props: RoomViewerProps) {
       })
       .catch((err) => { if (!cancelled) error(`terrain load failed for ${room}:`, err) })
 
-    if (untrack(showRoomDecorations)) {
-      c.http.game.roomDecorations(room, shard)
-        .then((resp) => {
-          if (!cancelled) {
-            log(`decorations loaded — ${room}: ${resp.decorations.length} item(s)`)
-            setRoomDecoration({ room, decoration: parseRoomDecorations(resp) })
-          }
-        })
-        .catch((err) => { if (!cancelled) log(`no decorations for ${room}: ${err}`) })
-    }
+    onCleanup(() => { cancelled = true })
+  })
+
+  // Decorations are fetched in their own effect so that switching the setting back on
+  // re-fetches immediately instead of waiting for the next room change.
+  createEffect(() => {
+    const c = client()
+    if (!c || !showRoomDecorations()) return
+
+    const room = props.room
+    const shard = props.shard
+
+    let cancelled = false
+    c.http.game.roomDecorations(room, shard)
+      .then((resp) => {
+        if (!cancelled) {
+          log(`decorations loaded — ${room}: ${resp.decorations.length} item(s)`)
+          // A room tick can land before this resolves; layer those items back on top
+          // instead of dropping them.
+          setDecorationItems((prev) => {
+            const fromSocket = prev?.room === room ? prev.items : []
+            return { room, items: mergeDecorationItems(resp.decorations, fromSocket) }
+          })
+        }
+      })
+      .catch((err) => { if (!cancelled) log(`no decorations for ${room}: ${err}`) })
 
     onCleanup(() => { cancelled = true })
+  })
+
+  // Room ticks can carry decoration changes. Merge them into whatever the HTTP fetch
+  // returned; the merge keeps the previous array when nothing actually differs, so a
+  // server that repeats the payload every tick doesn't rebuild the layer.
+  createEffect(() => {
+    const c = client()
+    if (!c || !showRoomDecorations()) return
+
+    const room = props.room
+    const shard = props.shard
+
+    const sub = c.stores.room.on('room:decorations', (data) => {
+      if (data.room !== room || data.shard !== shard) return
+      setDecorationItems((prev) => {
+        const current = prev?.room === room ? prev.items : []
+        const merged = mergeDecorationItems(current, data.decorations)
+        if (prev?.room === room && merged === current) return prev
+        log(`decorations updated via socket — ${room}: ${merged.length} item(s)`)
+        return { room, items: merged }
+      })
+    })
+
+    onCleanup(() => sub.dispose())
   })
 
   // Subscribe to room data as soon as client is ready (no renderer dependency to avoid
@@ -473,7 +528,7 @@ export function RoomViewer(props: RoomViewerProps) {
   // Clear decorations when the setting is turned off
   createEffect(() => {
     if (showRoomDecorations()) return
-    setRoomDecoration(null)
+    setDecorationItems(null)
     const r = untrack(renderer)
     const t = untrack(terrain)
     if (!r || !t || t.room !== props.room) return
@@ -485,6 +540,7 @@ export function RoomViewer(props: RoomViewerProps) {
     r.bringNavOverlayToTop()
     objLayer?.setRoadColor(OBJ_ROAD)
     objLayer?.setWallColor(ST_DARK)
+    objLayer?.setDecorations([], [])
   })
 
   // Re-apply terrain colors when decoration arrives after terrain (common async case)
@@ -509,6 +565,27 @@ export function RoomViewer(props: RoomViewerProps) {
     if (objLayer && dec.decoration.terrain?.wallFillColor != null) {
       objLayer.setWallColor(dec.decoration.terrain.wallFillColor)
     }
+    // Creep and object overlays hang off the individual object visuals, so the
+    // ObjectLayer owns them rather than a layer of our own.
+    objLayer?.setDecorations(dec.decoration.creeps, dec.decoration.objects)
+  })
+
+  // Graffiti overlay. Rebuilt whenever the decorations or the terrain change — the
+  // layer masks itself against the terrain, so it needs both.
+  createEffect(() => {
+    const r = renderer()
+    const dec = roomDecoration()
+    const t = terrain()
+
+    decorationLayerRef?.destroy()
+    decorationLayerRef = null
+
+    if (!r || !t || t.room !== props.room) return
+    if (!dec || dec.room !== props.room || dec.decoration.graffiti.length === 0) return
+
+    log(`graffiti — ${props.room}: ${dec.decoration.graffiti.length} item(s)`)
+    decorationLayerRef = new DecorationLayer(dec.decoration.graffiti, t.data, r.app.ticker)
+    r.world.addChild(decorationLayerRef.base)
   })
 
   // Render objects when they update
@@ -543,6 +620,7 @@ export function RoomViewer(props: RoomViewerProps) {
       if (dec?.room === props.room) {
         if (dec.decoration.roadColor != null) objLayer.setRoadColor(dec.decoration.roadColor)
         if (dec.decoration.terrain?.wallFillColor != null) objLayer.setWallColor(dec.decoration.terrain.wallFillColor)
+        objLayer.setDecorations(dec.decoration.creeps, dec.decoration.objects)
       }
       objLayer.setLightingLayer(r.lighting)
       objLayer.container.label = 'objects'
