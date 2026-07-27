@@ -2,13 +2,14 @@ import { createMemo, createResource, createSignal, For, Show } from 'solid-js'
 import { X, Package } from 'lucide-solid'
 import type { ApiDecorationTheme, ApiUserDecorationItem } from 'screeps-connectivity'
 import { OverlayPage } from '~/components/OverlayPage.js'
-import { client } from '~/stores/clientStore.js'
+import { client, userInfo } from '~/stores/clientStore.js'
 import { goToGame, goToRoom } from '~/stores/routeStore.js'
 import { BG, PANEL, PANEL_RAISED, BTN, BORDER, TEXT, MUTED, DIM, ACCENT } from '~/components/theme.js'
 import { DECORATION_TYPE_LABELS, rarityColor, SORTS, sortItems, type SortKey } from './sorting.js'
+import { DecorationDialog, type RoomOption } from './DecorationDialog.js'
 
-// Read-only view of every decoration the account owns. Placing and removing them
-// (activate/deactivate, pixelization, Steam transfer) is not wired up yet.
+// Every decoration the account owns. Clicking one opens the editor, which places or
+// removes it. Pixelization and Steam transfer are not wired up.
 
 const ALL = ''
 
@@ -23,7 +24,11 @@ function selectStyle() {
   }
 }
 
-function DecorationCard(props: { item: ApiUserDecorationItem; onOpenRoom: (room: string, shard: string | null) => void }) {
+function DecorationCard(props: {
+  item: ApiUserDecorationItem
+  onOpenRoom: (room: string, shard: string | null) => void
+  onEdit: () => void
+}) {
   const decoration = () => props.item.decoration
   const preview = () => decoration().preview?.['256x256'] ?? decoration().preview?.['128x128'] ?? decoration().preview?.original
   const active = () => props.item.active
@@ -39,14 +44,19 @@ function DecorationCard(props: { item: ApiUserDecorationItem; onOpenRoom: (room:
   const global = () => active() != null && room() == null
 
   return (
-    <div style={{
-      background: PANEL,
-      border: `1px solid ${BORDER}`,
-      'border-radius': '8px',
-      overflow: 'hidden',
-      display: 'flex',
-      'flex-direction': 'column',
-    }}>
+    <div
+      onClick={() => props.onEdit()}
+      title="Edit"
+      style={{
+        background: PANEL,
+        border: `1px solid ${BORDER}`,
+        'border-radius': '8px',
+        overflow: 'hidden',
+        display: 'flex',
+        'flex-direction': 'column',
+        cursor: 'pointer',
+      }}
+    >
       <div style={{
         height: '120px',
         background: BG,
@@ -81,7 +91,7 @@ function DecorationCard(props: { item: ApiUserDecorationItem; onOpenRoom: (room:
           }>
             {(name) => (
               <button
-                onClick={() => props.onOpenRoom(name(), shard())}
+                onClick={(e) => { e.stopPropagation(); props.onOpenRoom(name(), shard()) }}
                 style={{
                   background: 'transparent', border: 'none', padding: 0,
                   color: ACCENT, cursor: 'pointer', 'font-size': '11px',
@@ -103,7 +113,9 @@ export function Inventory() {
   const [room, setRoom] = createSignal('')
   const [sort, setSort] = createSignal<SortKey>('newest')
 
-  const [inventory] = createResource(async (): Promise<ApiUserDecorationItem[]> => {
+  const [editing, setEditing] = createSignal<ApiUserDecorationItem | null>(null)
+
+  const [inventory, { refetch }] = createResource(async (): Promise<ApiUserDecorationItem[]> => {
     const c = client()
     if (!c) return []
     try {
@@ -163,6 +175,29 @@ export function Inventory() {
       else byRoom.set(key, [item])
     }
     return [...byRoom.entries()].map(([label, items]) => ({ label, items }))
+  })
+
+  // Rooms the account can place a decoration in: owned first, then reserved.
+  const [rooms] = createResource(async (): Promise<RoomOption[]> => {
+    const c = client()
+    const id = userInfo()?._id
+    if (!c || !id) return []
+    try {
+      const res = await c.http.user.rooms(id, true)
+      const out: RoomOption[] = []
+      const collect = (source: Record<string, string[]> | undefined, reserved: boolean) => {
+        for (const [shard, names] of Object.entries(source ?? {})) {
+          for (const name of names) out.push({ shard, room: name, reserved })
+        }
+      }
+      collect(res.shards, false)
+      // Single-shard servers answer with a flat list instead of a shard map.
+      for (const name of res.rooms ?? []) out.push({ shard: null, room: name, reserved: false })
+      collect(res.reservations, true)
+      return out
+    } catch {
+      return []
+    }
   })
 
   const openRoom = (name: string, shard: string | null) => goToRoom(name, shard)
@@ -241,12 +276,26 @@ export function Inventory() {
                   'grid-template-columns': 'repeat(auto-fill, minmax(150px, 1fr))',
                   gap: '12px',
                 }}>
-                  <For each={group.items}>{item => <DecorationCard item={item} onOpenRoom={openRoom} />}</For>
+                  <For each={group.items}>
+                    {item => <DecorationCard item={item} onOpenRoom={openRoom} onEdit={() => setEditing(item)} />}
+                  </For>
                 </div>
               </div>
             )}
           </For>
         </Show>
+      </Show>
+
+      <Show when={editing()}>
+        {(item) => (
+          <DecorationDialog
+            item={item()}
+            inventory={inventory() ?? []}
+            rooms={rooms() ?? []}
+            onClose={() => setEditing(null)}
+            onChanged={() => void refetch()}
+          />
+        )}
       </Show>
     </OverlayPage>
   )

@@ -60,6 +60,8 @@ export interface ApiUserRoomsResponse {
   ok: number
   shards?: Record<string, string[]>
   rooms?: string[]
+  /** Only present when asking with `reservation` — rooms reserved rather than owned. */
+  reservations?: Record<string, string[]>
 }
 
 export interface ApiAuthQueryTokenResponse {
@@ -455,6 +457,38 @@ export interface ApiUserMessagesUnreadCountResponse {
   count: number
 }
 
+/**
+ * Schema of one editable property of a decoration.
+ *
+ * `default` seeds the value when the decoration is first activated. `readonly` props are
+ * still part of the active state — they just aren't offered in the editor.
+ */
+export interface ApiDecorationProp {
+  type?: 'color' | 'range' | 'boolean' | 'display' | 'string'
+  label?: string
+  readonly?: boolean
+  default?: unknown
+  /** `range` only. */
+  min?: number
+  max?: number
+  step?: number
+}
+
+/**
+ * `decoration.props` mixes two things: a descriptor per editable property, and a handful
+ * of scalar layout constraints read straight off the object (`proportional`, the
+ * width/height bounds). Index into it by prop name for the former.
+ */
+export interface ApiDecorationProps {
+  /** Force the original aspect ratio while resizing. */
+  proportional?: boolean
+  minWidth?: number
+  maxWidth?: number
+  minHeight?: number
+  maxHeight?: number
+  [name: string]: ApiDecorationProp | boolean | number | undefined
+}
+
 export interface ApiRoomDecorationGraphic {
   url: string
   color?: string
@@ -475,6 +509,8 @@ export interface ApiRoomDecorationDef {
   restricted?: boolean
   groupDescription?: string
   preview?: { original?: string; '128x128'?: string; '256x256'?: string }
+  /** Schema of the editable properties, plus the layout constraints. */
+  props?: ApiDecorationProps
   graphics?: ApiRoomDecorationGraphic[]
   foregroundUrl?: string
   floorForegroundUrl?: string
