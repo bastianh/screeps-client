@@ -1,4 +1,5 @@
 import { TerrainType } from 'screeps-connectivity'
+import { decorationTextureUrl } from './decorationTextureUrl.js'
 import {
   MINIMAP_PLAIN as TERRAIN_PLAIN,
   MINIMAP_WALL as TERRAIN_WALL,
@@ -141,7 +142,7 @@ const textureCache = new Map<string, Promise<ImageBitmap | null>>()
 function loadTexture(url: string): Promise<ImageBitmap | null> {
   let pending = textureCache.get(url)
   if (!pending) {
-    pending = fetch(url)
+    pending = fetch(decorationTextureUrl(url))
       .then(res => res.ok ? res.blob() : Promise.reject(new Error(String(res.status))))
       .then(blob => createImageBitmap(blob))
       .catch(() => null)

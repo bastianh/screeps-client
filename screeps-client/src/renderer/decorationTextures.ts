@@ -1,12 +1,5 @@
 import { Assets, type Texture } from 'pixi.js'
-
-// In dev, route Screeps S3 decoration textures through the Vite proxy to avoid CORS.
-function devProxyUrl(url: string): string {
-  if (import.meta.env.DEV && url.startsWith('https://s3.amazonaws.com/')) {
-    return url.replace('https://s3.amazonaws.com', '/__screeps_s3__')
-  }
-  return url
-}
+import { decorationTextureUrl } from './decorationTextureUrl.js'
 
 const pending = new Map<string, Promise<Texture>>()
 
@@ -16,7 +9,7 @@ const pending = new Map<string, Promise<Texture>>()
  * of replaying a rejected promise forever.
  */
 export function loadDecorationTexture(url: string): Promise<Texture> {
-  const src = devProxyUrl(url)
+  const src = decorationTextureUrl(url)
   let promise = pending.get(src)
   if (!promise) {
     promise = Assets.load<Texture>(src).catch((err) => {
