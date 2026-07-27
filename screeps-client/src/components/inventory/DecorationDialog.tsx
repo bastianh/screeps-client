@@ -117,17 +117,40 @@ export function DecorationDialog(props: DialogProps) {
 
   const canActivate = () => !busy() && (!requiresRoom() || selectedRoom() !== '')
 
+  const detail = (err: unknown) => err instanceof Error ? err.message : String(err)
+
+  /**
+   * Place the decoration, or move an already-placed one.
+   *
+   * The server rejects `activate` on a decoration that is already active, so editing one
+   * means taking it down first — the same two-step the reference client performs behind
+   * its "back edit" button. That leaves a window where the decoration is placed nowhere,
+   * so a failure in the second step has to say so rather than read as "nothing happened".
+   */
   const activate = async () => {
     const c = client()
     if (!c) return
     setBusy(true)
+    let removed = false
     try {
+      if (wasActive()) {
+        await c.http.user.decorations.deactivate([props.item._id])
+        removed = true
+      }
       await c.http.user.decorations.activate(props.item._id, active())
-      addToast('Decoration activated', 'success')
+      addToast(removed ? 'Decoration moved' : 'Decoration activated', 'success')
       props.onChanged()
       props.onClose()
     } catch (err) {
-      addToast(`Could not activate: ${err instanceof Error ? err.message : String(err)}`, 'error', 8000)
+      addToast(
+        removed
+          ? `Could not place the decoration, and it is no longer in its old spot: ${detail(err)}`
+          : `Could not activate: ${detail(err)}`,
+        'error',
+        8000,
+      )
+      // The server state may have moved either way — let the caller re-read it.
+      props.onChanged()
     } finally {
       setBusy(false)
     }
@@ -143,7 +166,7 @@ export function DecorationDialog(props: DialogProps) {
       props.onChanged()
       props.onClose()
     } catch (err) {
-      addToast(`Could not deactivate: ${err instanceof Error ? err.message : String(err)}`, 'error', 8000)
+      addToast(`Could not deactivate: ${detail(err)}`, 'error', 8000)
     } finally {
       setBusy(false)
     }
