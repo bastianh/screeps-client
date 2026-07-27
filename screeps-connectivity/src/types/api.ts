@@ -183,21 +183,34 @@ export interface ApiLeaderboardSeasonsResponse {
 }
 
 export interface ApiDecorationActive {
+  /** Set when the decoration is meant to show on the world map. */
   world?: boolean
   tileScale?: number | string
-  // terrain theme
+  // floor landscape
   floorBackgroundColor?: string
+  floorBackgroundBrightness?: number | string
   floorForegroundColor?: string
+  floorForegroundBrightness?: number | string
   floorForegroundAlpha?: string | number
   swampColor?: string
   swampStrokeColor?: string
   roadsColor?: string
   roadsBrightness?: number | string
-  // room overlay (not used on world map yet)
+  // wall landscape
   foregroundColor?: string
+  foregroundBrightness?: number | string
   foregroundAlpha?: number | string
   backgroundColor?: string
+  backgroundBrightness?: number | string
   strokeColor?: string
+  // graffiti geometry, in room cells
+  x?: number | string
+  y?: number | string
+  width?: number | string
+  height?: number | string
+  alpha?: number | string
+  brightness?: number | string
+  lighting?: boolean | string
   [key: string]: unknown
 }
 
@@ -231,12 +244,28 @@ export interface ApiGameRoomsResponse {
   }>
 }
 
+/**
+ * Reduced decoration definition, as delivered by the `decorations` dictionary of
+ * `map-stats`. Deliberately smaller than the room-view definition — the world map only
+ * needs the type, the graphics and the two landscape overlay textures.
+ */
+export interface ApiMapStatsDecorationDef {
+  type?: string
+  graphics?: ApiRoomDecorationGraphic[]
+  tiling?: boolean
+  foregroundUrl?: string
+  floorForegroundUrl?: string
+  [key: string]: unknown
+}
+
 export interface ApiMapStatsResponse {
   ok: number
   gameTime: number
   stats: Record<string, ApiMapStatsRoomStat>
   statsMax: Record<string, unknown>
   users: Record<string, { _id: string; username: string; badge: ApiMapStatsBadge }>
+  /** Definitions referenced by the `decoration` id on each `stat.decorations[]` entry. */
+  decorations?: Record<string, ApiMapStatsDecorationDef>
 }
 
 export interface ApiCreateFlagResponse {

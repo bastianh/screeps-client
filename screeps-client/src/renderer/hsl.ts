@@ -57,11 +57,22 @@ function pack(r: number, g: number, b: number): number {
   return (cr << 16) | (cg << 8) | cb
 }
 
+/**
+ * Scale a packed RGB colour's HSL saturation and lightness independently.
+ *
+ * The world-map decorations lean on this: the reference desaturates each layer by a
+ * fixed factor (0.48 for walls, 0.5 for floors, 0.75/0.35 for the overlay textures) so
+ * a room reads as a map tile rather than a scaled-down room view.
+ */
+export function scaleHsl(color: number, saturation: number, lightness: number): number {
+  const [h, s, l] = rgbToHsl((color >> 16) & 0xff, (color >> 8) & 0xff, color & 0xff)
+  const [r, g, b] = hslToRgb(h, s * saturation, l * lightness)
+  return pack(r, g, b)
+}
+
 /** Scale a packed RGB colour's HSL lightness by `brightness`. */
 export function colorBrightness(color: number, brightness: number): number {
-  const [h, s, l] = rgbToHsl((color >> 16) & 0xff, (color >> 8) & 0xff, color & 0xff)
-  const [r, g, b] = hslToRgb(h, s, l * brightness)
-  return pack(r, g, b)
+  return scaleHsl(color, 1, brightness)
 }
 
 /** Scale a packed RGB colour's channels by `factor` (used for the unlit pass). */

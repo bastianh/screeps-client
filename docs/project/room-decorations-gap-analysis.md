@@ -225,13 +225,30 @@ nichts zu überschreiben.
   Körper, aber nicht über fremde Objekte. Ein globaler Effects-Layer wäre für diesen
   Unterschied unverhältnismäßig.
 
-### Phase 4 — Weltkarte auf Referenzniveau
+### Phase 4 — Weltkarte auf Referenzniveau ✅ erledigt
 
-- `MapStatsStore`: Top-Level-`decorations`-Dictionary auswerten und pro Raum die reduzierte
-  Definition an die Item-Ebene hängen; Heuristik `active.world` durch Typprüfung ersetzen.
-- `MapRenderer`: HSL-basiertes Recoloring, Terrain-Maske, Overlay-Texturen
-  (`foregroundUrl`/`floorForegroundUrl`), Graffiti im `[0,1]`-Raum,
-  Zeichenreihenfolge Floor → Wall → Graffiti, `activatedAt`-Cache.
+- ✔ `MapStatsStore` löst das Top-Level-`decorations`-Dictionary auf und liefert
+  `MapRoomDecorations` (floor/wall/graffiti) statt der bisherigen Farb-Heuristik.
+  Fällt auf Feld-Erkennung zurück, wenn ein Server das Dictionary nicht mitschickt.
+- ✔ `renderer/mapDecorations.ts` rechnet die Referenz-HSL-Faktoren aus (Wand 0.48,
+  Boden 0.5, Overlays 0.75/0.35; Sumpf = 0.7·Plain + 0.3·rohes Swamp).
+- ✔ Wandfarbe auf der Karte — vorher gar nicht vorhanden.
+- ✔ Overlay-Texturen beider Landscapes und Graffiti, im Bake-Worker komponiert:
+  getönt, auf Wände bzw. Nicht-Wände maskiert, mit Textur-Cache.
+- ✔ Straßenfarbe wird endlich verwendet (war gespeichert, aber tot).
+- ✔ Tests: `buildRoomDecorations` (connectivity) und `buildMapDecoration` (client).
+
+**Bewusst abweichend:** Die Referenz stapelt pro Dekoration eine eingefärbte Terrain-Bitmap
+plus Maske übereinander. Wir backen ohnehin *eine* Bitmap pro Raum mit einer Farbe je
+Terraintyp — dasselbe Bild, ohne Layer-Stack und ohne `cacheAsBitmap`.
+
+**Entfallen:** der `activatedAt`-Cache. `MapRenderer.setRoomDecoration()` vergleicht bereits
+die serialisierte Dekoration und backt nur bei echter Änderung neu — dieselbe Wirkung,
+ohne auf ein Feld angewiesen zu sein, das nicht jeder Server liefert.
+
+**Risiko:** Der Worker lädt Dekorationstexturen per `fetch`. Die erste Anfrage pro URL
+kostet einen Roundtrip, bevor der Raum sichtbar wird; danach greift der Cache. Räume ohne
+Dekoration warten nie. Schlägt ein Laden fehl, wird das Overlay übersprungen.
 
 ### Phase 5 — Anzeigen & Verwalten (Read-only zuerst)
 

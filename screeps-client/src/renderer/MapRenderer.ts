@@ -1,5 +1,6 @@
 import { Application, Container, Graphics, RenderTexture, Sprite, Text, Texture } from 'pixi.js'
-import type { RoomMap2Data, Badge, TerrainColors } from 'screeps-connectivity'
+import type { RoomMap2Data, Badge } from 'screeps-connectivity'
+import type { MapDecorationRender } from './mapDecorations.js'
 import { BadgeTextureCache } from './BadgeTextureCache.js'
 import { MapVisualLayer } from './MapVisualLayer.js'
 import { sharedAtlasCache } from './AtlasCache.js'
@@ -60,6 +61,7 @@ interface RoomEntry {
   mineralSprite?: Sprite
   mineralType?: string
   mineralDensity?: number
+  roadColor?: number
 }
 
 export interface MapRendererCallbacks {
@@ -82,7 +84,7 @@ export class MapRenderer {
   private readonly terrainBaked = new Set<string>()
   private readonly terrainData  = new Map<string, Uint8Array>()  // raw bytes kept until texHi is baked
   private readonly statsApplied = new Set<string>()
-  private readonly roomDecorations = new Map<string, TerrainColors>()
+  private readonly roomDecorations = new Map<string, MapDecorationRender>()
   private showDecorations = true
   private worker: Worker
   private pendingBakes = new Map<number, { roomName: string, lod: number, resolve: (bmp: ImageBitmap) => void, reject: (err: unknown) => void }>()
@@ -244,13 +246,13 @@ export class MapRenderer {
   }
 
 
-  private async getTerrainBitmap(roomName: string, lod: number, raw: Uint8Array, colors?: TerrainColors): Promise<ImageBitmap | null> {
+  private async getTerrainBitmap(roomName: string, lod: number, raw: Uint8Array, decoration?: MapDecorationRender): Promise<ImageBitmap | null> {
     const shard = this.currentShard
     try {
       // Only hit the bitmap cache when using default colors — decorated bakes
       // must not overwrite the cached default, and we want the default restored
       // from cache instantly when decorations are removed.
-      if (!colors) {
+      if (!decoration) {
         const cachedBlob = await getTerrainCacheBlob(shard, roomName, lod)
         if (cachedBlob) {
           return await blobToImageBitmap(cachedBlob)
@@ -261,7 +263,7 @@ export class MapRenderer {
       const promise = new Promise<ImageBitmap>((resolve, reject) => {
         this.pendingBakes.set(id, { roomName, lod, resolve, reject })
       })
-      this.worker.postMessage({ id, roomName, lod, raw, shard, colors })
+      this.worker.postMessage({ id, roomName, lod, raw, shard, decoration })
 
       return await promise
     } catch (e) {
@@ -350,8 +352,8 @@ export class MapRenderer {
     }
     const raw = this.terrainData.get(roomName)
     if (!raw) return
-    const colors = this.showDecorations ? this.roomDecorations.get(roomName) : undefined
-    return this.getTerrainBitmap(roomName, hi ? 1 : 0, raw, colors).then((bitmap) => {
+    const decoration = this.showDecorations ? this.roomDecorations.get(roomName) : undefined
+    return this.getTerrainBitmap(roomName, hi ? 1 : 0, raw, decoration).then((bitmap) => {
       if (!bitmap) return
       if (!this.activeRooms.has(roomName)) { bitmap.close(); return }
       const tex = Texture.from(bitmap)
@@ -391,7 +393,7 @@ export class MapRenderer {
     for (const [x, y] of roads) {
       g.rect(x * MT, y * MT, MT, MT)
     }
-    if (roads.length) g.fill(MINIMAP_ROAD)
+    if (roads.length) g.fill(this.showDecorations ? entry.roadColor ?? MINIMAP_ROAD : MINIMAP_ROAD)
 
     // Player-built walls / ramparts — color depends on room ownership
     const walls = data.w ?? []
@@ -472,14 +474,14 @@ export class MapRenderer {
     }
   }
 
-  setRoomDecoration(roomName: string, colors: TerrainColors | undefined): void {
+  setRoomDecoration(roomName: string, decoration: MapDecorationRender | undefined): void {
     const current = this.roomDecorations.get(roomName)
     // Only re-bake when something actually changed.
-    const newKey = colors ? JSON.stringify(colors) : ''
+    const newKey = decoration ? JSON.stringify(decoration) : ''
     const oldKey = current ? JSON.stringify(current) : ''
     if (newKey === oldKey) return
 
-    if (colors) this.roomDecorations.set(roomName, colors)
+    if (decoration) this.roomDecorations.set(roomName, decoration)
     else this.roomDecorations.delete(roomName)
 
     this.rebakeRoom(roomName)
@@ -497,6 +499,12 @@ export class MapRenderer {
   private rebakeRoom(roomName: string): void {
     const entry = this.activeRooms.get(roomName)
     if (!entry) return
+
+    // Roads live in the map2 overlay, not the baked terrain, so their colour is
+    // re-applied separately.
+    const road = this.roomDecorations.get(roomName)?.colors.road
+    entry.roadColor = road != null ? parseInt(road.replace('#', ''), 16) : undefined
+    if (entry.lastMap2Data) this.drawMap2(entry, entry.lastMap2Data, entry.lastMap2Source ?? 'live')
 
     // Destroy both LOD textures so ensureCurrentLod re-bakes from scratch.
     // Colors are looked up internally from roomDecorations.
