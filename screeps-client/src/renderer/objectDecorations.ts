@@ -14,6 +14,17 @@ import type { ContainerWithTarget } from './objects/types.js'
  * (`RoomRenderer.updateLighting`), so an overlay on one is lit either way.
  */
 
+/**
+ * Rotation a `syncRotate` overlay needs on top of our body container.
+ *
+ * The artwork is drawn for the reference renderer, whose creep container faces
+ * `atan2(dy, dx) + π/2` (see its `calculateAngle`) — zero means "moving up". Ours faces
+ * plain `atan2(dy, dx)`, so an inherited overlay lands a quarter turn counter-clockwise.
+ * The same offset also fixes a creep that has not moved yet: our body container starts at
+ * `-π/2` where the reference starts at `0`.
+ */
+const FACING_OFFSET = Math.PI / 2
+
 function matchesCreep(decoration: CreepDecoration, obj: RoomObject): boolean {
   if (obj.type !== 'creep' || obj.spawning === true) return false
   if (obj.user !== decoration.user) return false
@@ -96,6 +107,7 @@ export function applyObjectDecorations(
     const body = visual.__bodyContainer
     const parent = decoration.syncRotate && body ? body : visual
     const container = attach(parent, decoration.below)
+    if (parent === body) container.rotation = FACING_OFFSET
     addSprites(container, decoration.sprites, decoration.width, decoration.height, parent === visual, decoration.flip)
     if (decoration.animation) animator.add(container, decoration.animation)
   }
