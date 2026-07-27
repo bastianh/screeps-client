@@ -37,6 +37,7 @@ import {
   getCreepStore,
   isForeignCreep,
   npcCreepName,
+  setCreepFacing,
   updateCreepFill,
 } from './objects/creep.js'
 import { calcExtensionFillRadius, getExtensionEnergy, updateExtensionFill } from './objects/extension.js'
@@ -645,7 +646,7 @@ export class ObjectLayer {
               const dy = obj.y - (existing.__tileY ?? obj.y)
               if (dx !== 0 || dy !== 0) {
                 existing.__angle = Math.atan2(dy, dx)
-                if (existing.__bodyContainer) existing.__bodyContainer.rotation = existing.__angle
+                setCreepFacing(existing, existing.__angle)
               }
               existing.__tileX = obj.x
               existing.__tileY = obj.y
@@ -923,7 +924,7 @@ export class ObjectLayer {
             const dy = obj.y - (existing.__tileY ?? obj.y)
             if (dx !== 0 || dy !== 0) {
               existing.__angle = Math.atan2(dy, dx)
-              if (existing.__bodyContainer) existing.__bodyContainer.rotation = existing.__angle
+              setCreepFacing(existing, existing.__angle)
             }
             existing.__tileX = obj.x
             existing.__tileY = obj.y
@@ -1590,7 +1591,8 @@ export class ObjectLayer {
       const size = CREEP_INNER_R * 2
       badgeSprite.width = size
       badgeSprite.height = size
-      badgeSprite.rotation = Math.PI / 2
+      // Wired up after the creep already exists, so match whatever heading it holds.
+      badgeSprite.rotation = -bodyContainer.rotation
       bodyContainer.addChild(badgeSprite)
       visual.__creepBadgeSprite = badgeSprite
       this.badgeCache.getOrCreate(creepBadge as Badge).then((texture) => {
