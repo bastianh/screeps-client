@@ -250,12 +250,24 @@ ohne auf ein Feld angewiesen zu sein, das nicht jeder Server liefert.
 kostet einen Roundtrip, bevor der Raum sichtbar wird; danach greift der Cache. Räume ohne
 Dekoration warten nie. Schlägt ein Laden fehl, wird das Overlay übersprungen.
 
-### Phase 5 — Anzeigen & Verwalten (Read-only zuerst)
+### Phase 5 — Anzeigen (Read-only) ✅ erledigt
 
-- Connectivity: `user/decorations/inventory` + `…/themes`.
-- Inventar-Seite mit Filter/Sortierung/Gruppierung, ohne Aktionen.
-- Aside-Panel „Decorations" in der Raumansicht + Creep-Panel-Anzeige.
-- Feature-Gate über `serverData.features.inventory`.
+- ✔ `user.decorations.inventory()` + `.themes()` in connectivity, dazu die Anzeigefelder
+  einer Definition (`name`, `rarity`, `theme`, `restricted`, `preview`, `groupDescription`)
+  und die Typen `ApiUserDecorationItem` / `ApiDecorationTheme`.
+- ✔ Sidebar-Panel „Decorations": listet Landscapes, Graffiti und Object-Overlays des
+  Raums mit Vorschau, Typ und Besitzer.
+- ✔ Creep-Panel zeigt die auf den gewählten Creep passenden Dekorationen — über
+  `creepMatchesDecoration()` aus Phase 3 statt einer zweiten Filterimplementierung.
+  (Genau die hatte der Referenzclient, weshalb Panel und Renderer dort auseinanderlaufen
+  konnten.)
+- ✔ Inventar-Seite `/inventory` mit Filter (Typ/Theme/Raum), Sortierung
+  (new/old, rare/common) und Gruppierung nach Raum; aktivierte Items verlinken in den Raum.
+- ✔ Feature-Gate `capabilities().hasInventory` über `getServerFeature(version, 'inventory')`.
+- ✔ Tests: `tests/components/inventorySorting.test.ts`.
+
+**Offen aus dieser Phase:** nichts — Aktionen (Deactivate, Convert, Transfer) gehören
+bewusst zu Phase 6/7.
 
 ### Phase 6 — Aktivieren & Platzieren
 
