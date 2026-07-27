@@ -269,12 +269,27 @@ Dekoration warten nie. Schlägt ein Laden fehl, wird das Overlay übersprungen.
 **Offen aus dieser Phase:** nichts — Aktionen (Deactivate, Convert, Transfer) gehören
 bewusst zu Phase 6/7.
 
-### Phase 6 — Aktivieren & Platzieren
+### Phase 6 — Aktivieren & Platzieren ✅ erledigt
 
-- Connectivity: `…/activate`, `…/deactivate`, `user/rooms?reservation`, `POST game/rooms`.
-- Prop-Editor-Dialog (Gruppierung nach `type`/`readonly`, `nameFilter`-Chips, Animation-Select).
-- Raumauswahl mit Kollisionsregeln.
-- Positions-Editor mit Move/Resize/Rotate und den Grenzwerten aus Abschnitt 4.5.
+- ✔ `user.decorations.activate()` / `.deactivate()`, `reservation`-Flag auf `user.rooms()`,
+  Schema-Typen `ApiDecorationProp` / `ApiDecorationProps`.
+- ✔ `components/inventory/activation.ts` (pure): `buildActiveState()`, `editorGroups()`,
+  `blockedRooms()` mit den Kollisionsregeln, `!SEP!`-Helfer.
+- ✔ `DecorationDialog` — Farben, Ranges, Checkboxen, Animation-Select,
+  `nameFilter`-Chips mit `exclude`, Raumauswahl mit deaktivierten Kollisionsräumen.
+- ✔ `components/inventory/positionEditor.ts` (pure) + `DecorationPositionEditor`:
+  Move/Resize (8 Griffe)/Rotate über Terrain-Canvas, Fähigkeiten aus dem Schema,
+  `proportional`, Grenzwerte `1…25` und „mindestens eine Zelle im Raum".
+- ✔ Tests: 46 in `decorationActivation.test.ts` und `positionEditor.test.ts`.
+
+**Bewusst abweichend:** Die Referenz bildet den proportionalen Skalierungsfaktor immer
+als `min(wRatio, hRatio)`. Bei einem Kantengriff ist die andere Ratio konstant 1, das
+Minimum also 1 — der Griff wäre wirkungslos. Kantengriffe skalieren hier über ihre
+eigene Achse; Eckgriffe folgen der Referenz.
+
+**Nicht übernommen:** `POST game/rooms` für die Raumvorschau. Die Referenz holt damit
+Terrain und Objekte für ihre Vorschau; wir zeichnen flaches Terrain aus dem bestehenden
+`RoomStore`-Cache, was für die Platzierung von Wand-Graffiti ausreicht.
 
 ### Phase 7 — Optional / niedrige Priorität
 
