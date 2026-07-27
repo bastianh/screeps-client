@@ -82,6 +82,10 @@ function inventoryPath(): string {
   return `${basePath()}/inventory`
 }
 
+function inventoryPrefix(): string {
+  return `${basePath()}/inventory/`
+}
+
 function marketPath(): string {
   return `${basePath()}/market`
 }
@@ -101,7 +105,7 @@ function parseRoute(): Route {
   if (p === messagesPath() || p.startsWith(messagesPrefix())) return 'messages'
   if (p === marketPath() || p.startsWith(marketPrefix())) return 'market'
   if (p === leaderboardPath() || p.startsWith(leaderboardPrefix())) return 'leaderboard'
-  if (p === inventoryPath()) return 'inventory'
+  if (p === inventoryPath() || p.startsWith(inventoryPrefix())) return 'inventory'
   if (p.startsWith(roomOverviewPrefix())) return 'room-overview'
   return 'game'
 }
@@ -131,6 +135,16 @@ function parseRoomOverview(): RoomOverviewTarget | null {
   if (parts.length >= 2) return { shard: parts[0], room: parts[1] }
   if (parts.length === 1) return { shard: null, room: parts[0] }
   return null
+}
+
+// The decoration whose editor is open, from /inventory/<itemId>. Keeping it in the URL
+// means anything that can link — the room sidebar, for one — can open the editor without
+// having to own the dialog or its data.
+function parseInventoryItem(): string | null {
+  const p = window.location.pathname
+  if (!p.startsWith(inventoryPrefix())) return null
+  const id = decodeURIComponent(p.slice(inventoryPrefix().length))
+  return id || null
 }
 
 function parseUserView(): UserView {
@@ -202,7 +216,8 @@ const [powerView, setPowerView] = createSignal<PowerView>(parsePower().view)
 const [powerCreepId, setPowerCreepId] = createSignal<string | null>(parsePower().id)
 const [roomOverviewTarget, setRoomOverviewTarget] = createSignal<RoomOverviewTarget | null>(parseRoomOverview())
 const [leaderboardTarget, setLeaderboardTarget] = createSignal<LeaderboardTarget>(parseLeaderboard())
-export { route, userView, profileUsername, messagesUsername, marketView, marketResourceType, marketShard, marketRoom, powerView, powerCreepId, roomOverviewTarget, leaderboardTarget }
+const [inventoryItemId, setInventoryItemId] = createSignal<string | null>(parseInventoryItem())
+export { route, userView, profileUsername, messagesUsername, marketView, marketResourceType, marketShard, marketRoom, powerView, powerCreepId, roomOverviewTarget, leaderboardTarget, inventoryItemId }
 
 // Remembered so returning to the world restores the exact game view (room +
 // shard + history tick) rather than dropping back to the default map.
@@ -215,9 +230,11 @@ function rememberGamePath(): void {
 // The inventory lists every decoration the account owns. Filters live in component
 // state rather than the URL — unlike the leaderboard, there is nothing here worth
 // linking to or paging through.
-export function goToInventory(): void {
+export function goToInventory(itemId?: string): void {
   rememberGamePath()
-  history.pushState(null, '', inventoryPath())
+  const path = itemId ? `${inventoryPrefix()}${encodeURIComponent(itemId)}` : inventoryPath()
+  history.pushState(null, '', path)
+  setInventoryItemId(itemId ?? null)
   setRoute('inventory')
 }
 
@@ -399,5 +416,6 @@ if (typeof window !== 'undefined') {
     setPowerCreepId(power.id)
     setRoomOverviewTarget(parseRoomOverview())
     setLeaderboardTarget(parseLeaderboard())
+    setInventoryItemId(parseInventoryItem())
   })
 }

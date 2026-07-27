@@ -1,9 +1,9 @@
-import { createMemo, createResource, createSignal, For, Show } from 'solid-js'
+import { createEffect, createMemo, createResource, createSignal, For, Show } from 'solid-js'
 import { X, Package } from 'lucide-solid'
 import type { ApiDecorationTheme, ApiUserDecorationItem } from 'screeps-connectivity'
 import { OverlayPage } from '~/components/OverlayPage.js'
 import { client, userInfo } from '~/stores/clientStore.js'
-import { goToGame, goToRoom } from '~/stores/routeStore.js'
+import { goToGame, goToInventory, goToRoom, inventoryItemId } from '~/stores/routeStore.js'
 import { BG, PANEL, PANEL_RAISED, BTN, BORDER, TEXT, MUTED, DIM, ACCENT } from '~/components/theme.js'
 import { DECORATION_TYPE_LABELS, rarityColor, SORTS, sortItems, type SortKey } from './sorting.js'
 import { DecorationDialog, type RoomOption } from './DecorationDialog.js'
@@ -113,8 +113,6 @@ export function Inventory() {
   const [room, setRoom] = createSignal('')
   const [sort, setSort] = createSignal<SortKey>('newest')
 
-  const [editing, setEditing] = createSignal<ApiUserDecorationItem | null>(null)
-
   // Each resource takes its dependency as a source signal rather than reading it inside
   // the fetcher: the plain form runs exactly once, so anything that wasn't ready at mount
   // — the client, or the user id the room list needs — would stay missing for good.
@@ -203,12 +201,19 @@ export function Inventory() {
     },
   )
 
+  // The open editor lives in the URL (/inventory/<id>), so a link from anywhere — the
+  // room sidebar, say — can open it without owning the dialog or its data.
+  const editing = createMemo(() => {
+    const id = inventoryItemId()
+    if (!id) return null
+    return (inventory() ?? []).find(item => item._id === id) ?? null
+  })
+
   // Claiming or losing a room mid-session would otherwise leave a stale picker, and
   // opening the editor is a cheap, explicit moment to refresh it.
-  const edit = (item: ApiUserDecorationItem) => {
-    setEditing(item)
-    void refetchRooms()
-  }
+  createEffect(() => {
+    if (inventoryItemId()) void refetchRooms()
+  })
 
   const openRoom = (name: string, shard: string | null) => goToRoom(name, shard)
 
@@ -287,7 +292,7 @@ export function Inventory() {
                   gap: '12px',
                 }}>
                   <For each={group.items}>
-                    {item => <DecorationCard item={item} onOpenRoom={openRoom} onEdit={() => edit(item)} />}
+                    {item => <DecorationCard item={item} onOpenRoom={openRoom} onEdit={() => goToInventory(item._id)} />}
                   </For>
                 </div>
               </div>
@@ -302,7 +307,7 @@ export function Inventory() {
             item={item()}
             inventory={inventory() ?? []}
             rooms={rooms() ?? []}
-            onClose={() => setEditing(null)}
+            onClose={() => goToInventory()}
             onChanged={() => void refetch()}
           />
         )}

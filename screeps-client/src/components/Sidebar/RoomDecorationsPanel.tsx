@@ -2,6 +2,9 @@ import { For, Show, createMemo } from 'solid-js'
 import type { ApiRoomDecorationItem } from 'screeps-connectivity'
 import { roomDecorationItems, roomUsers } from '~/stores/roomDataStore.js'
 import { showRoomDecorations } from '~/stores/settingsStore.js'
+import { userInfo } from '~/stores/clientStore.js'
+import { capabilities } from '~/stores/capabilities.js'
+import { goToInventory } from '~/stores/routeStore.js'
 import { UserLink } from '~/components/UserLink.js'
 import { DECORATION_TYPE_LABELS as TYPE_LABELS, rarityColor } from '~/components/inventory/sorting.js'
 
@@ -15,11 +18,21 @@ function DecorationRow(props: { item: ApiRoomDecorationItem }) {
   const preview = () => decoration().preview?.['128x128'] ?? decoration().preview?.original
   const owner = () => roomUsers()?.[props.item.user]
 
+  // Only your own decorations can be edited, and only where the server has an inventory
+  // at all. `game/room-decorations` returns the same user-decoration records the
+  // inventory does, so their `_id` addresses the editor directly.
+  const editable = () => capabilities().hasInventory && props.item.user === userInfo()?._id
+
   return (
-    <div style={{
-      display: 'flex', gap: '8px', 'align-items': 'center',
-      padding: '4px 0', 'border-top': '1px solid #21262d',
-    }}>
+    <div
+      onClick={() => { if (editable()) goToInventory(props.item._id) }}
+      title={editable() ? 'Edit' : undefined}
+      style={{
+        display: 'flex', gap: '8px', 'align-items': 'center',
+        padding: '4px 0', 'border-top': '1px solid #21262d',
+        cursor: editable() ? 'pointer' : 'default',
+      }}
+    >
       <Show when={preview()} fallback={
         <div style={{
           width: '28px', height: '28px', 'border-radius': '4px', 'flex-shrink': 0,
