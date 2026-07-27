@@ -815,19 +815,26 @@ http.game.roomObjects(room, shard?): Promise<ApiRoomObjectsResponse>
 http.game.roomStatus(room, shard?): Promise<{ ok, status, novice? }>
 http.game.roomOverview(room, interval?, shard?): Promise<unknown>
 http.game.time(shard?): Promise<{ ok, time }>
+http.game.tick(shard?): Promise<ApiGameTickResponse>
+http.game.roomHistory(room, time, shard?): Promise<RoomHistoryChunk>
 http.game.worldSize(shard?): Promise<unknown>
 http.game.mapStats(rooms, statName, shard?): Promise<ApiMapStatsResponse>
 http.game.roomsTerrain(rooms, shard?): Promise<ApiGameRoomsResponse>
 http.game.createFlag(room, x, y, name, color, secondaryColor, shard?): Promise<ApiCreateFlagResponse>
-http.game.genUniqueFlagName(): Promise<ApiGenUniqueFlagNameResponse>
-http.game.checkUniqueFlagName(name): Promise<ApiCheckUniqueFlagNameResponse>
-http.game.changeFlagColor(room, name, color, secondaryColor): Promise<ApiChangeFlagColorResponse>
-http.game.removeFlag(room, name): Promise<ApiRemoveFlagResponse>
-http.game.genUniqueObjectName(type): Promise<ApiGenUniqueObjectNameResponse>
-http.game.checkUniqueObjectName(type, name): Promise<ApiCheckUniqueObjectNameResponse>
+http.game.genUniqueFlagName(shard?): Promise<ApiGenUniqueFlagNameResponse>
+http.game.checkUniqueFlagName(name, shard?): Promise<ApiCheckUniqueFlagNameResponse>
+http.game.changeFlagColor(room, name, color, secondaryColor, shard?): Promise<ApiChangeFlagColorResponse>
+http.game.removeFlag(room, name, shard?): Promise<ApiRemoveFlagResponse>
+http.game.genUniqueObjectName(type, shard?): Promise<ApiGenUniqueObjectNameResponse>
+http.game.checkUniqueObjectName(type, name, shard?): Promise<ApiCheckUniqueObjectNameResponse>
 http.game.placeSpawn(room, x, y, name?, shard?): Promise<{ ok: number }>
 http.game.createConstruction(room, x, y, structureType, name?, shard?): Promise<{ ok: number }>
 http.game.removeConstructionSite(room, ids, shard?): Promise<{ ok: number }>
+http.game.addObjectIntent(id, room, name, intent, shard?): Promise<{ ok: number }>
+http.game.addGlobalIntent(name, intent, shard?): Promise<{ ok: number }>
+http.game.setNotifyWhenAttacked(id, enabled, shard?): Promise<{ ok: number }>
+http.game.createInvader(room, x, y, size, type, boosted?, shard?): Promise<{ ok: number }>
+http.game.removeInvader(id, shard?): Promise<{ ok: number }>
 http.game.market.ordersIndex(shard?): Promise<unknown>
 http.game.market.myOrders(): Promise<unknown>
 http.game.market.orders(resourceType, shard?): Promise<unknown>
@@ -836,6 +843,11 @@ http.game.shards.info(): Promise<ApiShardsInfoResponse>
 ```
 
 Default shard is `'shard0'` for all endpoints that accept one.
+
+`tick()` and `roomHistory()` are the exceptions: they take a different route entirely
+depending on the shard. With a shard they use the official server's per-shard route
+(`/api/game/shards/tick`, `/room-history/<shard>/…`), without one the shardless
+private-server route.
 
 #### HTTP Events
 

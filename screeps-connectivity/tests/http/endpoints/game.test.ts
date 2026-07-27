@@ -68,7 +68,18 @@ describe('game endpoints', () => {
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
     expect(url).toContain('/api/game/gen-unique-flag-name')
     expect(init.method).toBe('POST')
+    expect(init.body).toBeUndefined()
     expect(res.name).toBe('Flag1')
+  })
+
+  it('genUniqueFlagName sends the shard when given', async () => {
+    fetchMock.mockResolvedValue(mockResponse({ ok: 1, name: 'Flag1' }))
+    const http = new HttpClient({ url: 'http://test.local', auth: new TokenAuth({ token: 't' }) })
+
+    await http.game.genUniqueFlagName('shard1')
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(JSON.parse(init.body as string)).toEqual({ shard: 'shard1' })
   })
 
   it('checkUniqueFlagName sends POST to /api/game/check-unique-flag-name', async () => {
@@ -81,6 +92,16 @@ describe('game endpoints', () => {
     expect(url).toContain('/api/game/check-unique-flag-name')
     expect(init.method).toBe('POST')
     expect(JSON.parse(init.body as string)).toEqual({ name: 'MyFlag' })
+  })
+
+  it('checkUniqueFlagName sends the shard when given', async () => {
+    fetchMock.mockResolvedValue(mockResponse({ ok: 1 }))
+    const http = new HttpClient({ url: 'http://test.local', auth: new TokenAuth({ token: 't' }) })
+
+    await http.game.checkUniqueFlagName('MyFlag', 'shard1')
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(JSON.parse(init.body as string)).toEqual({ name: 'MyFlag', shard: 'shard1' })
   })
 
   it('genUniqueObjectName sends POST with type', async () => {
@@ -198,6 +219,25 @@ describe('game endpoints', () => {
     expect(JSON.parse(init.body as string)).toEqual({ _id: 'inv-id' })
   })
 
+  it('sends the shard on global and invader endpoints when given', async () => {
+    const http = new HttpClient({ url: 'http://test.local', auth: new TokenAuth({ token: 't' }) })
+
+    // a fresh Response per call — a body can only be read once
+    fetchMock.mockImplementation(() => Promise.resolve(mockResponse({ ok: 1 })))
+    await http.game.addGlobalIntent('respawn', {}, 'shard1')
+    await http.game.setNotifyWhenAttacked('struct-id', true, 'shard1')
+    await http.game.createInvader('W1N1', 10, 10, 1, 'melee', undefined, 'shard1')
+    await http.game.removeInvader('inv-id', 'shard1')
+
+    const bodies = fetchMock.mock.calls.map(([, init]) => JSON.parse((init as RequestInit).body as string))
+    expect(bodies).toEqual([
+      { name: 'respawn', intent: {}, shard: 'shard1' },
+      { _id: 'struct-id', enabled: true, shard: 'shard1' },
+      { room: 'W1N1', x: 10, y: 10, size: 1, type: 'melee', shard: 'shard1' },
+      { _id: 'inv-id', shard: 'shard1' },
+    ])
+  })
+
   it('tick sends GET to /api/game/tick', async () => {
     fetchMock.mockResolvedValue(mockResponse({ ok: 1, tick: 500 }))
     const http = new HttpClient({ url: 'http://test.local', auth: new TokenAuth({ token: 't' }) })
@@ -206,6 +246,16 @@ describe('game endpoints', () => {
     expect(init.method).toBe('GET')
     expect(url).toContain('/api/game/tick')
     expect(res.tick).toBe(500)
+  })
+
+  it('tick uses /api/game/shards/tick when a shard is given', async () => {
+    fetchMock.mockResolvedValue(mockResponse({ ok: 1, tick: 500 }))
+    const http = new HttpClient({ url: 'http://test.local', auth: new TokenAuth({ token: 't' }) })
+    await http.game.tick('shard1')
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(init.method).toBe('GET')
+    expect(url).toContain('/api/game/shards/tick')
+    expect(url).toContain('shard=shard1')
   })
 
   it('roomHistory uses path URL for official server (shard provided)', async () => {
