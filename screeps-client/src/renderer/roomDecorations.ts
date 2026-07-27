@@ -1,19 +1,72 @@
-import type { ApiRoomDecorationsResponse, ApiRoomDecorationActive, ApiRoomDecorationDef } from 'screeps-connectivity'
+import type {
+  ApiRoomDecorationsResponse,
+  ApiRoomDecorationActive,
+  ApiRoomDecorationDef,
+  ApiRoomDecorationItem,
+} from 'screeps-connectivity'
 import type { TerrainDecoration } from './TerrainLayer.js'
+import { colorBrightness } from './hsl.js'
 
-/** Parsed room decoration ready for use by renderer layers. */
+/** Alpha animation presets of the reference renderer (`src/lib/decorations.js`). */
+export type DecorationAnimation = 'slow' | 'fast' | 'blink' | 'neon' | 'flash'
+
+const ANIMATIONS: readonly string[] = ['slow', 'fast', 'blink', 'neon', 'flash']
+
+/** One sprite of a decoration, with the `graphics[]` prop references already resolved. */
+export interface DecorationSprite {
+  url: string
+  /** Resolved tint, or undefined to leave the texture untinted. */
+  tint?: number
+  alpha: number
+  tiling: boolean
+  tileScale: number
+}
+
+interface DecorationBase {
+  id: string
+  /** Owner of the decoration — creep/object overlays only apply to their own objects. */
+  user: string
+  sprites: DecorationSprite[]
+  width: number
+  height: number
+  alpha: number
+  /** Radians, as delivered by the API (the official UI shows degrees). */
+  rotation: number
+  flip: boolean
+  lighting: boolean
+  animation?: DecorationAnimation
+}
+
+/** `wallGraffiti` — a free image masked to the room's walls. Geometry in room cells. */
+export interface GraffitiDecoration extends DecorationBase {
+  x: number
+  y: number
+}
+
+/** `creep` — overlay on the owner's creeps matching `nameFilter`. Geometry in pixels. */
+export interface CreepDecoration extends DecorationBase {
+  /** Already split on the API's `!SEP!` separator. */
+  nameFilter: string[]
+  /** Invert the name filter: decorate everything *except* the matches. */
+  exclude: boolean
+  /** Attach to the rotating creep container instead of the room root. */
+  syncRotate: boolean
+  /** `position === 'below'` — draw under the creep instead of in the effects layer. */
+  below: boolean
+}
+
+/** `object` — overlay on every object of `objectType`. Geometry in pixels. */
+export interface ObjectDecoration extends DecorationBase {
+  objectType: string
+}
+
+/** Parsed room decorations ready for use by renderer layers. */
 export interface RoomDecoration {
   terrain?: TerrainDecoration
   roadColor?: number
-}
-
-/** Multiply RGB channels by a brightness factor (matches reference renderer colorBrightness). */
-function applyBrightness(hex: string, brightness: number): number {
-  const n = parseInt(hex.replace('#', ''), 16)
-  const r = Math.min(255, Math.round(((n >> 16) & 0xff) * brightness))
-  const g = Math.min(255, Math.round(((n >> 8)  & 0xff) * brightness))
-  const b = Math.min(255, Math.round(( n         & 0xff) * brightness))
-  return (r << 16) | (g << 8) | b
+  graffiti: GraffitiDecoration[]
+  creeps: CreepDecoration[]
+  objects: ObjectDecoration[]
 }
 
 function hex(color: string): number {
@@ -21,16 +74,90 @@ function hex(color: string): number {
 }
 
 /** API returns some numeric fields as strings — normalise to number. */
-function num(v: number | string | undefined, fallback: number): number {
-  if (v == null) return fallback
+function num(v: unknown, fallback: number): number {
+  if (v == null || v === '') return fallback
   const n = Number(v)
   return isNaN(n) ? fallback : n
+}
+
+/** API returns some booleans as `'0'` / `'1'` strings. */
+function bool(v: unknown): boolean {
+  if (typeof v === 'string') return v !== '' && v !== '0' && v !== 'false'
+  return !!v
+}
+
+function tinted(color: unknown, brightness: number): number | undefined {
+  return typeof color === 'string' && color !== '' ? colorBrightness(hex(color), brightness) : undefined
+}
+
+/**
+ * Build the sprite list of a decoration. The `color` / `alpha` / `visible` fields of a
+ * `graphics[]` entry hold *names* of props on `active`, not values.
+ */
+function resolveSprites(a: ApiRoomDecorationActive, d: ApiRoomDecorationDef): DecorationSprite[] {
+  const brightness = num(a.brightness, 1)
+  const tiling = bool(d.tiling)
+  const tileScale = num(a.tileScale ?? d.tileScale, 1)
+  const sprites: DecorationSprite[] = []
+
+  for (const graphic of d.graphics ?? []) {
+    if (graphic.visible && !bool(a[graphic.visible])) continue
+    sprites.push({
+      url: graphic.url,
+      tint: graphic.color ? tinted(a[graphic.color], brightness) : undefined,
+      alpha: graphic.alpha ? num(a[graphic.alpha], 1) : 1,
+      tiling,
+      tileScale,
+    })
+  }
+  return sprites
+}
+
+function parseBase(item: ApiRoomDecorationItem): DecorationBase {
+  const a = item.active
+  const animation = typeof a.animation === 'string' && ANIMATIONS.includes(a.animation)
+    ? a.animation as DecorationAnimation
+    : undefined
+
+  return {
+    id: item._id,
+    user: item.user,
+    sprites: resolveSprites(a, item.decoration),
+    width: num(a.width, 1),
+    height: num(a.height, 1),
+    alpha: num(a.alpha, 1),
+    rotation: num(a.rotation, 0),
+    flip: bool(a.flip),
+    lighting: bool(a.lighting),
+    animation,
+  }
+}
+
+function parseGraffiti(item: ApiRoomDecorationItem): GraffitiDecoration {
+  return { ...parseBase(item), x: num(item.active.x, 0), y: num(item.active.y, 0) }
+}
+
+function parseCreep(item: ApiRoomDecorationItem): CreepDecoration {
+  const a = item.active
+  const filter = typeof a.nameFilter === 'string' ? a.nameFilter : ''
+  return {
+    ...parseBase(item),
+    nameFilter: filter.split('!SEP!').filter(s => s !== ''),
+    exclude: bool(a.exclude),
+    syncRotate: bool(a.syncRotate),
+    below: a.position === 'below',
+  }
+}
+
+function parseObject(item: ApiRoomDecorationItem): ObjectDecoration {
+  const objectType = item.decoration.objectType
+  return { ...parseBase(item), objectType: typeof objectType === 'string' ? objectType : '' }
 }
 
 function parseFloorLandscape(a: ApiRoomDecorationActive, d: ApiRoomDecorationDef, out: RoomDecoration): void {
   const t: TerrainDecoration = out.terrain ?? {}
   if (a.floorBackgroundColor) {
-    t.floorColor = applyBrightness(a.floorBackgroundColor, num(a.floorBackgroundBrightness, 1))
+    t.floorColor = colorBrightness(hex(a.floorBackgroundColor), num(a.floorBackgroundBrightness, 1))
   }
   if (a.swampColor)       t.swampFillColor   = hex(a.swampColor)
   if (a.swampStrokeColor) t.swampBorderColor = hex(a.swampStrokeColor)
@@ -40,15 +167,15 @@ function parseFloorLandscape(a: ApiRoomDecorationActive, d: ApiRoomDecorationDef
     t.swampBorderWidth = num(a.swampStrokeWidth, 50) / 250
   }
   if (a.roadsColor) {
-    out.roadColor = applyBrightness(a.roadsColor, num(a.roadsBrightness, 1))
+    out.roadColor = colorBrightness(hex(a.roadsColor), num(a.roadsBrightness, 1))
   }
   if (d.floorForegroundUrl) {
     t.floorTextureUrl = d.floorForegroundUrl
     if (a.floorForegroundColor) {
-      t.floorTextureTint = applyBrightness(a.floorForegroundColor, num(a.floorForegroundBrightness, 1))
+      t.floorTextureTint = colorBrightness(hex(a.floorForegroundColor), num(a.floorForegroundBrightness, 1))
     }
     t.floorTextureAlpha = num(a.floorForegroundAlpha, 1)
-    t.floorTextureTileScale = num((a as Record<string, unknown>)['tileScale'] as number | string | undefined ?? d.tileScale, 1)
+    t.floorTextureTileScale = num(a.tileScale ?? d.tileScale, 1)
   }
   out.terrain = t
 }
@@ -56,10 +183,10 @@ function parseFloorLandscape(a: ApiRoomDecorationActive, d: ApiRoomDecorationDef
 function parseWallLandscape(a: ApiRoomDecorationActive, d: ApiRoomDecorationDef, out: RoomDecoration): void {
   const t: TerrainDecoration = out.terrain ?? {}
   if (a.backgroundColor) {
-    t.wallFillColor = applyBrightness(a.backgroundColor, num(a.backgroundBrightness, 1))
+    t.wallFillColor = colorBrightness(hex(a.backgroundColor), num(a.backgroundBrightness, 1))
   }
   if (a.strokeColor) {
-    t.wallBorderColor = applyBrightness(a.strokeColor, num(a.strokeBrightness, 1))
+    t.wallBorderColor = colorBrightness(hex(a.strokeColor), num(a.strokeBrightness, 1))
   }
   if (a.strokeWidth != null) {
     t.wallBorderWidth = num(a.strokeWidth, 10) / 250
@@ -67,25 +194,39 @@ function parseWallLandscape(a: ApiRoomDecorationActive, d: ApiRoomDecorationDef,
   if (d.foregroundUrl) {
     t.wallTextureUrl = d.foregroundUrl
     if (a.foregroundColor) {
-      t.wallTextureTint = applyBrightness(a.foregroundColor, num(a.foregroundBrightness, 1))
+      t.wallTextureTint = colorBrightness(hex(a.foregroundColor), num(a.foregroundBrightness, 1))
     }
     t.wallTextureAlpha = num(a.foregroundAlpha, 1)
-    t.wallTextureTileScale = num((a as Record<string, unknown>)['tileScale'] as number | string | undefined ?? d.tileScale, 1)
+    t.wallTextureTileScale = num(a.tileScale ?? d.tileScale, 1)
   }
   out.terrain = t
 }
 
 /**
  * Convert a raw /api/game/room-decorations response into renderer-ready values.
- * Handles floorLandscape (floor/swamp/road colors) and wallLandscape (wall colors).
- * wallGraffiti / creep / object overlays are left for future work.
+ *
+ * Landscapes are first-wins, matching the reference renderer's `decorations.find(...)`:
+ * only one floor and one wall landscape take effect per room, and the combined
+ * `landscape` type counts as both. Graffiti, creep and object overlays are collected
+ * as lists — a room may carry any number of them.
  */
 export function parseRoomDecorations(response: ApiRoomDecorationsResponse): RoomDecoration {
-  const out: RoomDecoration = {}
-  for (const item of response.decorations) {
-    const type = item.decoration.type
-    if (type === 'floorLandscape')  parseFloorLandscape(item.active, item.decoration, out)
-    else if (type === 'wallLandscape') parseWallLandscape(item.active, item.decoration, out)
+  const items = response.decorations
+  const out: RoomDecoration = { graffiti: [], creeps: [], objects: [] }
+
+  const floor = items.find(i => i.decoration.type === 'floorLandscape' || i.decoration.type === 'landscape')
+  if (floor) parseFloorLandscape(floor.active, floor.decoration, out)
+
+  const wall = items.find(i => i.decoration.type === 'wallLandscape' || i.decoration.type === 'landscape')
+  if (wall) parseWallLandscape(wall.active, wall.decoration, out)
+
+  for (const item of items) {
+    switch (item.decoration.type) {
+      case 'wallGraffiti': out.graffiti.push(parseGraffiti(item)); break
+      case 'creep':        out.creeps.push(parseCreep(item)); break
+      case 'object':       out.objects.push(parseObject(item)); break
+    }
   }
+
   return out
 }

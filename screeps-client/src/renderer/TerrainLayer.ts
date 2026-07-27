@@ -1,19 +1,12 @@
-import { Assets, Container, Graphics, BlurFilter, NoiseFilter, Rectangle, Sprite, TilingSprite, type DestroyOptions, type Renderer, type StrokeStyle } from 'pixi.js'
+import { Container, Graphics, BlurFilter, NoiseFilter, Rectangle, Sprite, TilingSprite, type DestroyOptions, type Renderer, type StrokeStyle } from 'pixi.js'
 import { TerrainType, RoomTerrain } from 'screeps-connectivity'
 import { TILE_SIZE } from './RoomRenderer.js'
+import { loadDecorationTexture } from './decorationTextures.js'
 import {
   TERRAIN_PLAIN, TERRAIN_ROAD, TERRAIN_BORDER,
   TERRAIN_WALL_FILL, TERRAIN_WALL_BORDER, TERRAIN_WALL_NOISE,
   TERRAIN_SWAMP_FILL, TERRAIN_SWAMP_BORDER, TERRAIN_SWAMP_GLOW,
 } from './colors.js'
-
-// In dev, route Screeps S3 decoration textures through the Vite proxy to avoid CORS.
-function devProxyUrl(url: string): string {
-  if (import.meta.env.DEV && url.startsWith('https://s3.amazonaws.com/')) {
-    return url.replace('https://s3.amazonaws.com', '/__screeps_s3__')
-  }
-  return url
-}
 
 export interface TerrainDecoration {
   /** Floor background color (replaces plain ground color) */
@@ -324,7 +317,7 @@ export function createTerrainLayer(terrain: RoomTerrain, renderer: Renderer, dec
 
   if (decoration?.floorTextureUrl) {
     const { floorTextureUrl, floorTextureTint = 0xffffff, floorTextureAlpha = 1, floorTextureTileScale = 1 } = decoration
-    Assets.load(devProxyUrl(floorTextureUrl)).then((texture) => {
+    loadDecorationTexture(floorTextureUrl).then((texture) => {
       if (container.destroyed) return
       const sprite = new TilingSprite({ texture, width: W, height: W })
       sprite.tint = floorTextureTint
@@ -337,7 +330,7 @@ export function createTerrainLayer(terrain: RoomTerrain, renderer: Renderer, dec
 
   if (decoration?.wallTextureUrl) {
     const { wallTextureUrl, wallTextureTint = 0xffffff, wallTextureAlpha = 1, wallTextureTileScale = 1 } = decoration
-    Assets.load(devProxyUrl(wallTextureUrl)).then((texture) => {
+    loadDecorationTexture(wallTextureUrl).then((texture) => {
       if (container.destroyed) return
       const sprite = new TilingSprite({ texture, width: W, height: W })
       sprite.tint = wallTextureTint

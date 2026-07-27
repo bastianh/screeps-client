@@ -435,11 +435,16 @@ export interface ApiRoomDecorationGraphic {
 
 export interface ApiRoomDecorationDef {
   _id: string
-  type: 'floorLandscape' | 'wallLandscape' | 'wallGraffiti' | 'creep' | 'object' | 'metadata'
+  /** `landscape` is the combined type — it acts as both a floor and a wall landscape. */
+  type: 'floorLandscape' | 'wallLandscape' | 'landscape' | 'wallGraffiti' | 'creep' | 'object' | 'metadata' | 'badge'
   graphics?: ApiRoomDecorationGraphic[]
   foregroundUrl?: string
   floorForegroundUrl?: string
+  /** Render the graphics as a repeating tile instead of a single stretched sprite. */
+  tiling?: boolean
   tileScale?: number | string
+  /** Target object type, `type === 'object'` only. */
+  objectType?: string
   [key: string]: unknown
 }
 
@@ -466,18 +471,29 @@ export interface ApiRoomDecorationActive {
   foregroundColor?: string
   foregroundAlpha?: number | string
   foregroundBrightness?: number | string
-  // creep / object
-  user?: string
-  nameFilter?: string
-  exclude?: boolean
+  // geometry — cells for wallGraffiti, pixels for creep/object
+  x?: number | string
+  y?: number | string
   width?: number | string
   height?: number | string
+  /** Radians. The official UI edits this in degrees. */
+  rotation?: number | string
+  flip?: boolean | string
+  alpha?: number | string
   brightness?: number | string
-  lighting?: boolean
+  tileScale?: number | string
+  lighting?: boolean | string
   animation?: string
+  // target
+  shard?: string
+  room?: string
+  // creep / object
+  user?: string
+  /** `!SEP!`-separated list, not an array. */
+  nameFilter?: string
+  exclude?: boolean | string
   position?: string
-  syncRotate?: boolean
-  flip?: boolean
+  syncRotate?: boolean | string
   [key: string]: unknown
 }
 

@@ -110,16 +110,27 @@ export function RoomViewer(props: RoomViewerProps) {
       })
       .catch((err) => { if (!cancelled) error(`terrain load failed for ${room}:`, err) })
 
-    if (untrack(showRoomDecorations)) {
-      c.http.game.roomDecorations(room, shard)
-        .then((resp) => {
-          if (!cancelled) {
-            log(`decorations loaded — ${room}: ${resp.decorations.length} item(s)`)
-            setRoomDecoration({ room, decoration: parseRoomDecorations(resp) })
-          }
-        })
-        .catch((err) => { if (!cancelled) log(`no decorations for ${room}: ${err}`) })
-    }
+    onCleanup(() => { cancelled = true })
+  })
+
+  // Decorations are fetched in their own effect so that switching the setting back on
+  // re-fetches immediately instead of waiting for the next room change.
+  createEffect(() => {
+    const c = client()
+    if (!c || !showRoomDecorations()) return
+
+    const room = props.room
+    const shard = props.shard
+
+    let cancelled = false
+    c.http.game.roomDecorations(room, shard)
+      .then((resp) => {
+        if (!cancelled) {
+          log(`decorations loaded — ${room}: ${resp.decorations.length} item(s)`)
+          setRoomDecoration({ room, decoration: parseRoomDecorations(resp) })
+        }
+      })
+      .catch((err) => { if (!cancelled) log(`no decorations for ${room}: ${err}`) })
 
     onCleanup(() => { cancelled = true })
   })
