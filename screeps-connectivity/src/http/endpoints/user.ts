@@ -6,6 +6,8 @@ import type {
   ApiUserOverviewResponse,
   ApiUserRoomsResponse,
   ApiUserStatsResponse,
+  ApiUserDecorationsInventoryResponse,
+  ApiDecorationThemesResponse,
 } from '../../types/api.js'
 import type { NotifyPrefs } from '../../types/game.js'
 import { createUserMessagesEndpoints, type UserMessagesEndpoints } from './user-messages.js'
@@ -44,6 +46,11 @@ export interface UserEndpoints {
   setSteamVisible(visible: boolean): Promise<{ ok: number }>
   /** Change the current user's password (screepsmod-auth private servers only). Pass oldPassword when the account already has a password set. */
   password(newPassword: string, oldPassword?: string): Promise<{ ok: number }>
+  decorations: {
+    /** Every decoration the user owns, activated or not. */
+    inventory(): Promise<ApiUserDecorationsInventoryResponse>
+    themes(): Promise<ApiDecorationThemesResponse>
+  }
   messages: UserMessagesEndpoints
 }
 
@@ -90,5 +97,11 @@ export function createUserEndpoints(http: HttpClient): UserEndpoints {
     setSteamVisible: (visible) => http.request('POST', '/api/user/set-steam-visible', { visible }),
     password: (newPassword, oldPassword) => http.request('POST', '/api/user/password', { password: newPassword, ...(oldPassword != null ? { oldPassword } : {}) }),
     messages: createUserMessagesEndpoints(http),
+    decorations: {
+      // Silent: servers without the decoration feature answer 404, and the caller
+      // treats that as "no inventory" rather than surfacing a failure toast.
+      inventory: () => http.request('GET', '/api/user/decorations/inventory', undefined, { silent: true }),
+      themes: () => http.request('GET', '/api/user/decorations/themes', undefined, { silent: true }),
+    },
   }
 }

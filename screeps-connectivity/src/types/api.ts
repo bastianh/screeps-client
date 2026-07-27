@@ -466,6 +466,15 @@ export interface ApiRoomDecorationDef {
   _id: string
   /** `landscape` is the combined type — it acts as both a floor and a wall landscape. */
   type: 'floorLandscape' | 'wallLandscape' | 'landscape' | 'wallGraffiti' | 'creep' | 'object' | 'metadata' | 'badge'
+  name?: string
+  /** 1–5. Drives the colour and glow of the rarity indicator. */
+  rarity?: number
+  /** Id of the theme this decoration belongs to. */
+  theme?: string
+  /** Cannot be converted to pixels or transferred to Steam. */
+  restricted?: boolean
+  groupDescription?: string
+  preview?: { original?: string; '128x128'?: string; '256x256'?: string }
   graphics?: ApiRoomDecorationGraphic[]
   foregroundUrl?: string
   floorForegroundUrl?: string
@@ -537,4 +546,40 @@ export interface ApiRoomDecorationItem {
 export interface ApiRoomDecorationsResponse {
   ok: number
   decorations: ApiRoomDecorationItem[]
+}
+
+/**
+ * One decoration owned by the logged-in user, as returned by the inventory.
+ *
+ * `active` is `null` while the decoration is not placed; once activated it carries the
+ * chosen prop values plus the target `shard`/`room` (absent for the globally-active
+ * `creep` and `badge` types).
+ */
+export interface ApiUserDecorationItem {
+  _id: string
+  /** Sort key for "new to old". */
+  createdAt: string
+  activatedAt?: string
+  active: ApiRoomDecorationActive | null
+  decoration: ApiRoomDecorationDef
+}
+
+export interface ApiUserDecorationsInventoryResponse {
+  ok: number
+  list: ApiUserDecorationItem[]
+}
+
+export interface ApiDecorationTheme {
+  _id: string
+  name: string
+  color?: string
+  /** Not offered in the inventory's theme filter. */
+  hidden?: boolean
+  /** Not selectable as a pixelization target. */
+  restricted?: boolean
+}
+
+export interface ApiDecorationThemesResponse {
+  ok: number
+  list: ApiDecorationTheme[]
 }
