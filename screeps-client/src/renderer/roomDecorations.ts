@@ -11,6 +11,13 @@ export type DecorationAnimation = 'slow' | 'fast' | 'blink' | 'neon' | 'flash'
 
 const ANIMATIONS: readonly string[] = ['slow', 'fast', 'blink', 'neon', 'flash']
 
+/**
+ * Cell size of the reference renderer's coordinate space. `wallGraffiti` sizes arrive in
+ * cells, but `creep` and `object` sizes arrive in these pixels (a 256 means 2.56 cells),
+ * so those are divided by this to give every decoration type a size in cells.
+ */
+const REFERENCE_CELL_SIZE = 100
+
 /** One sprite of a decoration, with the `graphics[]` prop references already resolved. */
 export interface DecorationSprite {
   url: string
@@ -26,6 +33,7 @@ interface DecorationBase {
   /** Owner of the decoration — creep/object overlays only apply to their own objects. */
   user: string
   sprites: DecorationSprite[]
+  /** Size in room cells, whatever unit the API used. */
   width: number
   height: number
   alpha: number
@@ -36,15 +44,19 @@ interface DecorationBase {
   animation?: DecorationAnimation
 }
 
-/** `wallGraffiti` — a free image masked to the room's walls. Geometry in room cells. */
+/** `wallGraffiti` — a free image masked to the room's walls. Position in room cells. */
 export interface GraffitiDecoration extends DecorationBase {
   x: number
   y: number
 }
 
-/** `creep` — overlay on the owner's creeps matching `nameFilter`. Geometry in pixels. */
+/** `creep` — overlay on the owner's creeps matching `nameFilter`. */
 export interface CreepDecoration extends DecorationBase {
-  /** Already split on the API's `!SEP!` separator. */
+  /**
+   * Already split on the API's `!SEP!` separator. Empty means "every creep": the
+   * reference splits the raw string, so an empty filter yields `['']` and
+   * `name.includes('')` matches everything — see `creepMatchesDecoration`.
+   */
   nameFilter: string[]
   /** Invert the name filter: decorate everything *except* the matches. */
   exclude: boolean
@@ -54,9 +66,21 @@ export interface CreepDecoration extends DecorationBase {
   below: boolean
 }
 
-/** `object` — overlay on every object of `objectType`. Geometry in pixels. */
+/** `object` — overlay on every object of `objectType`. */
 export interface ObjectDecoration extends DecorationBase {
   objectType: string
+}
+
+/**
+ * Does this creep decoration apply to `name`?
+ *
+ * An empty filter matches every creep, which falls out of how the reference splits the
+ * raw `!SEP!` string: `''.split('!SEP!')` is `['']` and `name.includes('')` is always true.
+ * `exclude` inverts the result, so an empty filter plus `exclude` matches nothing.
+ */
+export function creepMatchesDecoration(decoration: CreepDecoration, name: string): boolean {
+  const matched = decoration.nameFilter.length === 0 || decoration.nameFilter.some(f => name.includes(f))
+  return decoration.exclude ? !matched : matched
 }
 
 /** Parsed room decorations ready for use by renderer layers. */
@@ -112,7 +136,7 @@ function resolveSprites(a: ApiRoomDecorationActive, d: ApiRoomDecorationDef): De
   return sprites
 }
 
-function parseBase(item: ApiRoomDecorationItem): DecorationBase {
+function parseBase(item: ApiRoomDecorationItem, sizeScale = 1): DecorationBase {
   const a = item.active
   const animation = typeof a.animation === 'string' && ANIMATIONS.includes(a.animation)
     ? a.animation as DecorationAnimation
@@ -122,8 +146,8 @@ function parseBase(item: ApiRoomDecorationItem): DecorationBase {
     id: item._id,
     user: item.user,
     sprites: resolveSprites(a, item.decoration),
-    width: num(a.width, 1),
-    height: num(a.height, 1),
+    width: num(a.width, 1) * sizeScale,
+    height: num(a.height, 1) * sizeScale,
     alpha: num(a.alpha, 1),
     rotation: num(a.rotation, 0),
     flip: bool(a.flip),
@@ -140,7 +164,7 @@ function parseCreep(item: ApiRoomDecorationItem): CreepDecoration {
   const a = item.active
   const filter = typeof a.nameFilter === 'string' ? a.nameFilter : ''
   return {
-    ...parseBase(item),
+    ...parseBase(item, 1 / REFERENCE_CELL_SIZE),
     nameFilter: filter.split('!SEP!').filter(s => s !== ''),
     exclude: bool(a.exclude),
     syncRotate: bool(a.syncRotate),
@@ -150,7 +174,10 @@ function parseCreep(item: ApiRoomDecorationItem): CreepDecoration {
 
 function parseObject(item: ApiRoomDecorationItem): ObjectDecoration {
   const objectType = item.decoration.objectType
-  return { ...parseBase(item), objectType: typeof objectType === 'string' ? objectType : '' }
+  return {
+    ...parseBase(item, 1 / REFERENCE_CELL_SIZE),
+    objectType: typeof objectType === 'string' ? objectType : '',
+  }
 }
 
 function parseFloorLandscape(a: ApiRoomDecorationActive, d: ApiRoomDecorationDef, out: RoomDecoration): void {

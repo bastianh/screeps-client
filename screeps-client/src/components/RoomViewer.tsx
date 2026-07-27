@@ -535,6 +535,7 @@ export function RoomViewer(props: RoomViewerProps) {
     r.bringNavOverlayToTop()
     objLayer?.setRoadColor(OBJ_ROAD)
     objLayer?.setWallColor(ST_DARK)
+    objLayer?.setDecorations([], [])
   })
 
   // Re-apply terrain colors when decoration arrives after terrain (common async case)
@@ -559,6 +560,9 @@ export function RoomViewer(props: RoomViewerProps) {
     if (objLayer && dec.decoration.terrain?.wallFillColor != null) {
       objLayer.setWallColor(dec.decoration.terrain.wallFillColor)
     }
+    // Creep and object overlays hang off the individual object visuals, so the
+    // ObjectLayer owns them rather than a layer of our own.
+    objLayer?.setDecorations(dec.decoration.creeps, dec.decoration.objects)
   })
 
   // Graffiti overlay. Rebuilt whenever the decorations or the terrain change — the
@@ -611,6 +615,7 @@ export function RoomViewer(props: RoomViewerProps) {
       if (dec?.room === props.room) {
         if (dec.decoration.roadColor != null) objLayer.setRoadColor(dec.decoration.roadColor)
         if (dec.decoration.terrain?.wallFillColor != null) objLayer.setWallColor(dec.decoration.terrain.wallFillColor)
+        objLayer.setDecorations(dec.decoration.creeps, dec.decoration.objects)
       }
       objLayer.setLightingLayer(r.lighting)
       objLayer.container.label = 'objects'

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { ApiRoomDecorationItem } from 'screeps-connectivity'
-import { parseRoomDecorations, mergeDecorationItems } from '../../src/renderer/roomDecorations'
+import { parseRoomDecorations, mergeDecorationItems, creepMatchesDecoration, type CreepDecoration } from '../../src/renderer/roomDecorations'
 
 function response(...decorations: ApiRoomDecorationItem[]): ApiRoomDecorationItem[] {
   return decorations
@@ -117,9 +117,10 @@ describe('parseRoomDecorations()', () => {
         below: true,
         lighting: true,
         animation: 'blink',
-        width: 256,
-        height: 256,
       })
+      // Creep sizes arrive in the reference renderer's pixels (cell = 100), not cells.
+      expect(res.creeps[0].width).toBeCloseTo(2.56)
+      expect(res.creeps[0].height).toBeCloseTo(2.56)
     })
 
     it('yields an empty name filter when the prop is absent', () => {
@@ -141,12 +142,24 @@ describe('parseRoomDecorations()', () => {
     it('carries the target object type and the owner', () => {
       const res = parseRoomDecorations(response(item({
         user: 'owner1',
+        active: { width: 150, height: 50 },
         decoration: { _id: 'd1', type: 'object', objectType: 'controller', graphics: [{ url: 'o.svg' }] },
       })))
 
       expect(res.objects).toHaveLength(1)
       expect(res.objects[0]).toMatchObject({ objectType: 'controller', user: 'owner1' })
+      expect(res.objects[0].width).toBeCloseTo(1.5)
+      expect(res.objects[0].height).toBeCloseTo(0.5)
     })
+  })
+
+  it('leaves graffiti sizes in cells', () => {
+    const res = parseRoomDecorations(response(item({
+      active: { width: 8, height: 4 },
+      decoration: { _id: 'd1', type: 'wallGraffiti', graphics: [{ url: 'g.svg' }] },
+    })))
+
+    expect(res.graffiti[0]).toMatchObject({ width: 8, height: 4 })
   })
 
   it('accepts an empty list', () => {
@@ -160,6 +173,32 @@ describe('parseRoomDecorations()', () => {
     ))
 
     expect(res).toEqual({ graffiti: [], creeps: [], objects: [] })
+  })
+})
+
+describe('creepMatchesDecoration()', () => {
+  function decoration(nameFilter: string[], exclude = false): CreepDecoration {
+    return { nameFilter, exclude } as CreepDecoration
+  }
+
+  it('matches when any filter is a substring of the name', () => {
+    const d = decoration(['harvest', 'haul'])
+    expect(creepMatchesDecoration(d, 'harvester1')).toBe(true)
+    expect(creepMatchesDecoration(d, 'hauler7')).toBe(true)
+    expect(creepMatchesDecoration(d, 'defender')).toBe(false)
+  })
+
+  it('inverts on exclude', () => {
+    const d = decoration(['harvest'], true)
+    expect(creepMatchesDecoration(d, 'harvester1')).toBe(false)
+    expect(creepMatchesDecoration(d, 'defender')).toBe(true)
+  })
+
+  it('matches every creep on an empty filter, and none when that is excluded', () => {
+    // The reference splits the raw string, so an empty filter becomes [''] and
+    // `name.includes('')` is true for everything.
+    expect(creepMatchesDecoration(decoration([]), 'anything')).toBe(true)
+    expect(creepMatchesDecoration(decoration([], true), 'anything')).toBe(false)
   })
 })
 

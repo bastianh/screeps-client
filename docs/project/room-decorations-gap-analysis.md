@@ -201,13 +201,29 @@ es der Referenz beim Dedupe ging, liefert der Identitätsvergleich.
 History-Modus ist tick-basiert (`/room-history`), kein Season-Replay. Es gibt also
 nichts zu überschreiben.
 
-### Phase 3 — `creep`- und `object`-Dekorationen
+### Phase 3 — `creep`- und `object`-Dekorationen ✅ erledigt
 
-- `object`: Match über `decoration.objectType === obj.type` + optionaler `user`; Sprites in
-  den bestehenden `ObjectLayer`-Containern.
-- `creep`: `nameFilter`-Split auf `!SEP!` + `exclude`, Besitzerprüfung, `!spawning`,
-  `syncRotate`, `position === 'below'`, `flip` in Y.
-- Beide mit `lighting` und `animation`.
+- ✔ `renderer/objectDecorations.ts` hängt die Overlays an die Objekt-Visuals;
+  `ObjectLayer.setDecorations()` verteilt sie und baut sie bei Änderung neu auf.
+- ✔ `creep`: Besitzerprüfung, `!spawning` (inkl. Neuaufbau beim Spawning-Übergang),
+  `nameFilter`/`exclude`, `syncRotate` (Parent = `__bodyContainer`), `below`, `flip` in Y.
+- ✔ `object`: Match über `decoration.objectType === obj.type` plus optionaler Besitzer.
+- ✔ Animationen für beide; der Animator reapt zerstörte Tweens, weil Overlays neu
+  aufgebaut werden.
+- ✔ Größenumrechnung: `creep`/`object` liefern Pixel im Referenzraster (`CELL_SIZE: 100`),
+  Graffiti dagegen Zellen. Alles wird auf Zellen normalisiert.
+- ✔ Tests: Namensfilter-Matcher und Größenumrechnung in `roomDecorations.test.ts`.
+- ✔ Nebenbei: die sechs identischen Visual-Erzeugungsblöcke im `ObjectLayer` zu einem
+  Helper zusammengefasst.
+
+**Bewusst abweichend:**
+- `lighting` braucht hier kein Duplikat-Sprite. Jedes Objekt stanzt in
+  `RoomRenderer.updateLighting()` ohnehin ein Lichtloch um sich herum — ein Overlay
+  darauf ist also so oder so hell.
+- Die Referenz legt Overlays mit `position !== 'below'` in einen globalen `effects`-Layer.
+  Wir hängen sie stattdessen oben in den Container des jeweiligen Objekts: über dessen
+  Körper, aber nicht über fremde Objekte. Ein globaler Effects-Layer wäre für diesen
+  Unterschied unverhältnismäßig.
 
 ### Phase 4 — Weltkarte auf Referenzniveau
 

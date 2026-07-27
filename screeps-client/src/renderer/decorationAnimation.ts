@@ -33,7 +33,7 @@ interface Tween {
  */
 export class DecorationAnimator {
   private readonly ticker: Ticker
-  private readonly tweens: Tween[] = []
+  private tweens: Tween[] = []
   private running = false
   private readonly onTick = (ticker: Ticker) => this.update(ticker.deltaMS / 1000)
 
@@ -59,8 +59,15 @@ export class DecorationAnimator {
   }
 
   private update(dt: number): void {
+    // Object overlays are rebuilt whenever the decoration list or a creep's spawning
+    // state changes, so dead tweens have to be reaped or the list grows without bound.
+    let reap = false
+
     for (const tween of this.tweens) {
-      if (tween.target.destroyed) continue
+      if (tween.target.destroyed) {
+        reap = true
+        continue
+      }
       const [to, duration] = tween.steps[tween.index]
       tween.elapsed += dt
 
@@ -74,5 +81,7 @@ export class DecorationAnimator {
 
       tween.target.alpha = tween.from + (to - tween.from) * (tween.elapsed / duration)
     }
+
+    if (reap) this.tweens = this.tweens.filter(t => !t.target.destroyed)
   }
 }
