@@ -8,10 +8,14 @@ import { DECORATION_TYPE_LABELS, rarityColor } from './sorting.js'
 import {
   ANIMATION_OPTIONS, blockedRooms, buildActiveState, editorGroups, joinList, needsRoom, roomKey, splitList,
 } from './activation.js'
+import { DecorationPositionEditor } from './DecorationPositionEditor.js'
+import { editorCapabilities, sizeBounds, type Placement } from './positionEditor.js'
 
-// Editor for one decoration: its properties, its target room, and the activate /
-// deactivate actions. Geometry properties show as plain numeric controls here; the
-// drag-and-drop position editor is a separate step.
+// Editor for one decoration: its position in the room, its properties, its target room,
+// and the activate / deactivate actions.
+
+/** Geometry is edited by dragging the frame, so it is kept out of the slider list. */
+const GEOMETRY_PROPS = new Set(['x', 'y', 'width', 'height', 'rotation'])
 
 export interface RoomOption {
   shard: string | null
@@ -79,7 +83,30 @@ export function DecorationDialog(props: DialogProps) {
   const wasActive = () => props.item.active != null
   const requiresRoom = () => needsRoom(decoration().type)
 
+  const capabilities = createMemo(() => editorCapabilities(decoration()))
+  const bounds = createMemo(() => sizeBounds(decoration()))
+  const showPositionEditor = createMemo(() => {
+    const caps = capabilities()
+    return (caps.positionable || caps.resizable || caps.rotatable) && selectedRoomName() !== ''
+  })
+
+  const placement = (): Placement => {
+    const a = active()
+    return {
+      x: Number(a.x ?? 0),
+      y: Number(a.y ?? 0),
+      width: Number(a.width ?? 1),
+      height: Number(a.height ?? 1),
+      rotation: Number(a.rotation ?? 0),
+    }
+  }
+  const setPlacement = (next: Placement) => setActive(prev => ({ ...prev, ...next }))
+
   const blocked = createMemo(() => blockedRooms(props.inventory, decoration().type, props.item._id))
+  const selectedRoomName = () => {
+    const room = active().room
+    return typeof room === 'string' ? room : ''
+  }
   const selectedRoom = () => {
     const a = active()
     return typeof a.room === 'string' && a.room !== ''
@@ -143,7 +170,8 @@ export function DecorationDialog(props: DialogProps) {
     >
       <div style={{
         background: PANEL, border: `1px solid ${BORDER}`, 'border-radius': '10px',
-        width: '560px', 'max-height': '90vh', display: 'flex', 'flex-direction': 'column', overflow: 'hidden',
+        width: showPositionEditor() ? '600px' : '560px',
+        'max-height': '90vh', display: 'flex', 'flex-direction': 'column', overflow: 'hidden',
       }}>
         <div style={{
           display: 'flex', 'align-items': 'center', gap: '10px',
@@ -210,6 +238,20 @@ export function DecorationDialog(props: DialogProps) {
             </Section>
           </Show>
 
+          <Show when={showPositionEditor()}>
+            <Section title="Position">
+              <DecorationPositionEditor
+                room={selectedRoomName()}
+                shard={typeof active().shard === 'string' ? String(active().shard) : null}
+                placement={placement()}
+                capabilities={capabilities()}
+                bounds={bounds()}
+                previewUrl={preview()}
+                onChange={setPlacement}
+              />
+            </Section>
+          </Show>
+
           <Show when={groups().colors.length > 0}>
             <Section title="Colors">
               <For each={groups().colors}>
@@ -232,6 +274,7 @@ export function DecorationDialog(props: DialogProps) {
             <Section title="Values">
               <For each={groups().ranges}>
                 {([name, descriptor]) => (
+                  <Show when={!(showPositionEditor() && GEOMETRY_PROPS.has(name))}>
                   <Row label={label(name, descriptor)}>
                     <input
                       type="range"
@@ -246,6 +289,7 @@ export function DecorationDialog(props: DialogProps) {
                       {Number(active()[name] ?? 0)}
                     </span>
                   </Row>
+                  </Show>
                 )}
               </For>
             </Section>
