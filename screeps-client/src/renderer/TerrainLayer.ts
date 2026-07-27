@@ -291,6 +291,17 @@ function createWallNoise(terrain: RoomTerrain, renderer: Renderer, colors: Resol
   return sprite
 }
 
+/**
+ * Graphics covering exactly the wall tiles. Used as a mask for wall-only overlays —
+ * the landscape wall texture here, and wallGraffiti in the decoration layer.
+ * A Graphics can only mask one object, so every consumer needs its own instance.
+ */
+export function createWallMask(terrain: RoomTerrain): Graphics {
+  const mask = new Graphics()
+  drawTerrainQuadrants(mask, terrain, TerrainType.Wall, (g) => g.fill(0xffffff))
+  return mask
+}
+
 export function createTerrainLayer(terrain: RoomTerrain, renderer: Renderer, decoration?: TerrainDecoration): Container {
   const colors = resolveColors(decoration)
   const container = new Container()
@@ -336,8 +347,7 @@ export function createTerrainLayer(terrain: RoomTerrain, renderer: Renderer, dec
       sprite.tint = wallTextureTint
       sprite.alpha = wallTextureAlpha
       sprite.tileScale.set(wallTextureTileScale)
-      const maskG = new Graphics()
-      drawTerrainQuadrants(maskG, terrain, TerrainType.Wall, (gg) => gg.fill(0xffffff))
+      const maskG = createWallMask(terrain)
       container.addChild(maskG)
       sprite.mask = maskG
       container.addChild(sprite)

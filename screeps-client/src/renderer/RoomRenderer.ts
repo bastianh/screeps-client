@@ -15,6 +15,9 @@ export const Z = {
   objects:    10,
   animations: 20,
   darkOverlay:30,
+  // `lighting`-enabled decorations are drawn a second time above the darkness, which
+  // is how the reference renderer's separate lighting layer makes them glow.
+  decorationsLit: 35,
   visuals:    40,
   hover:      50,
   nav:        60,

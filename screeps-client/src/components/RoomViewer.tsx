@@ -2,6 +2,7 @@ import { createEffect, createSignal, onCleanup, onMount, untrack, Show } from 's
 import { RoomRenderer, Z } from '~/renderer/RoomRenderer.js'
 import { createTerrainLayer, setTerrainEffectsVisible } from '~/renderer/TerrainLayer.js'
 import { parseRoomDecorations, type RoomDecoration } from '~/renderer/roomDecorations.js'
+import { DecorationLayer } from '~/renderer/DecorationLayer.js'
 import { OBJ_ROAD, ST_DARK } from '~/renderer/colors.js'
 import { ObjectLayer } from '~/renderer/ObjectLayer.js'
 import { ActionAnimationLayer } from '~/renderer/ActionAnimationLayer.js'
@@ -53,6 +54,7 @@ export function RoomViewer(props: RoomViewerProps) {
   let animLayer: ActionAnimationLayer | null = null
   let visualLayer: VisualLayer | null = null
   let terrainLayerRef: ReturnType<typeof createTerrainLayer> | null = null
+  let decorationLayerRef: DecorationLayer | null = null
   const [renderer, setRenderer] = createSignal<RoomRenderer | null>(null)
   const [terrain, setTerrain] = createSignal<{ room: string, data: RoomTerrain } | null>(null)
   const [roomDecoration, setRoomDecoration] = createSignal<{ room: string; decoration: RoomDecoration } | null>(null)
@@ -80,6 +82,8 @@ export function RoomViewer(props: RoomViewerProps) {
     animLayer = null
     visualLayer?.destroy()
     visualLayer = null
+    decorationLayerRef?.destroy()
+    decorationLayerRef = null
     const r = renderer()
     if (r) r.destroy()
   })
@@ -520,6 +524,24 @@ export function RoomViewer(props: RoomViewerProps) {
     if (objLayer && dec.decoration.terrain?.wallFillColor != null) {
       objLayer.setWallColor(dec.decoration.terrain.wallFillColor)
     }
+  })
+
+  // Graffiti overlay. Rebuilt whenever the decorations or the terrain change — the
+  // layer masks itself against the terrain, so it needs both.
+  createEffect(() => {
+    const r = renderer()
+    const dec = roomDecoration()
+    const t = terrain()
+
+    decorationLayerRef?.destroy()
+    decorationLayerRef = null
+
+    if (!r || !t || t.room !== props.room) return
+    if (!dec || dec.room !== props.room || dec.decoration.graffiti.length === 0) return
+
+    log(`graffiti — ${props.room}: ${dec.decoration.graffiti.length} item(s)`)
+    decorationLayerRef = new DecorationLayer(dec.decoration.graffiti, t.data, r.app.ticker)
+    r.world.addChild(decorationLayerRef.base, decorationLayerRef.lit)
   })
 
   // Render objects when they update

@@ -159,14 +159,24 @@ Komplett fehlend — in aufsteigender Komplexität:
 - ✔ Bug fix: Toggle `showRoomDecorations` → an löst sofortigen Refetch aus.
 - ✔ Tests: `screeps-client/tests/renderer/{hsl,roomDecorations}.test.ts`.
 
-### Phase 1 — `wallGraffiti` rendern
+### Phase 1 — `wallGraffiti` rendern ✅ erledigt
 
-- Neuer `DecorationLayer` (Container, `zIndex = Z.decorations`), Wandmaske aus
-  `drawTerrainQuadrants(…, TerrainType.Wall, …)` wiederverwenden.
-- Pro Item pro `graphics[]`: Sprite/TilingSprite, `visible`/`color`/`alpha`-Prop-Auflösung,
-  Position/Größe/Anchor nach Referenzformel, `flip`, `rotation`, Container-`alpha`.
-- Animations-Helper (`slow|fast|blink|neon|flash`) als Ticker-basierte Alpha-Sequenz.
-- `lighting` → Zweitsprite im `LightingLayer`.
+- ✔ `DecorationLayer` (`renderer/DecorationLayer.ts`) mit zwei Containern: `base`
+  (`Z.decorations`) und `lit` (`Z.decorationsLit`), beide über `createWallMask()` auf
+  die Wände maskiert.
+- ✔ Pro Item pro `graphics[]`: Sprite bzw. TilingSprite, Tint, Alpha, `tileScale`,
+  Position/Größe/Anchor nach Referenzformel, `flip`, `rotation`.
+- ✔ Animations-Runner (`renderer/decorationAnimation.ts`) mit den fünf Alpha-Sequenzen,
+  ein einziger Ticker-Callback für alle Tweens.
+- ✔ `lighting`: Zweitsprite oberhalb des Dark-Overlays statt eines eigenen Lighting-Layers —
+  entspricht dem Doppelzeichnen der Referenz.
+- ✔ Synthetischer `wallGraffiti`-Eintrag in `ROOM_DECORATIONS_MOCK`.
+- ✔ Tests: `screeps-client/tests/renderer/decorationAnimation.test.ts`.
+
+**Bewusst abweichend:** Die Referenz legt das Lighting-Duplikat in einen eigenen
+Pixi-Layer mit additivem Blending. Der neue Client hat stattdessen einen GPU-Lightmap-
+`LightingLayer`, der Löcher in die Dunkelheit stanzt — dort passt ein Sprite nicht hinein.
+Das Zeichnen oberhalb des Dark-Overlays erzielt denselben Effekt („bleibt hell").
 
 ### Phase 2 — Live-Updates & Verlässlichkeit
 
