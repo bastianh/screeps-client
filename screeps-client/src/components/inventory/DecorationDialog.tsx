@@ -83,6 +83,17 @@ export function DecorationDialog(props: DialogProps) {
   const wasActive = () => props.item.active != null
   const requiresRoom = () => needsRoom(decoration().type)
 
+  const selectedRoomName = () => {
+    const room = active().room
+    return typeof room === 'string' ? room : ''
+  }
+  const selectedShard = () => {
+    const shard = active().shard
+    return typeof shard === 'string' ? shard : null
+  }
+  /** The picker's key for the chosen room, or '' when none is chosen. */
+  const selectedRoom = () => selectedRoomName() === '' ? '' : roomKey(selectedShard(), selectedRoomName())
+
   const capabilities = createMemo(() => editorCapabilities(decoration()))
   const bounds = createMemo(() => sizeBounds(decoration()))
   const showPositionEditor = createMemo(() => {
@@ -103,16 +114,6 @@ export function DecorationDialog(props: DialogProps) {
   const setPlacement = (next: Placement) => setActive(prev => ({ ...prev, ...next }))
 
   const blocked = createMemo(() => blockedRooms(props.inventory, decoration().type, props.item._id))
-  const selectedRoomName = () => {
-    const room = active().room
-    return typeof room === 'string' ? room : ''
-  }
-  const selectedRoom = () => {
-    const a = active()
-    return typeof a.room === 'string' && a.room !== ''
-      ? roomKey(typeof a.shard === 'string' ? a.shard : null, a.room)
-      : ''
-  }
 
   const canActivate = () => !busy() && (!requiresRoom() || selectedRoom() !== '')
 
@@ -242,7 +243,7 @@ export function DecorationDialog(props: DialogProps) {
             <Section title="Position">
               <DecorationPositionEditor
                 room={selectedRoomName()}
-                shard={typeof active().shard === 'string' ? String(active().shard) : null}
+                shard={selectedShard()}
                 placement={placement()}
                 capabilities={capabilities()}
                 bounds={bounds()}
