@@ -9,17 +9,16 @@ import type { DecorationSprite, GraffitiDecoration } from './roomDecorations.js'
 /**
  * Renders `wallGraffiti` decorations: free-floating images masked to the room's walls.
  *
- * Two containers come out of this, both meant to be added to the renderer's world:
- * `base` sits between terrain and objects, and `lit` repeats the sprites of
- * `lighting`-enabled items above the darkness overlay. Drawing the sprite twice is
- * what the reference renderer does — its second copy goes into a dedicated lighting
- * layer that renders after the darkness.
+ * The decoration's `lighting` flag gets no separate pass. The reference draws a second,
+ * untinted copy into a layer that is a *light map* — ambient grey, multiplied over the
+ * scene — where those copies are never seen as artwork, only as bright spots. Our
+ * darkness works the same way already (`LightingLayer` erases holes in an overlay), so
+ * the artwork is drawn once, tinted. Drawing that second copy as a normal sprite would
+ * paint an untinted white shape straight over the real one.
  */
 export class DecorationLayer {
   readonly base: Container
-  readonly lit: Container
   private readonly baseContent: Container
-  private readonly litContent: Container
   private readonly animator: DecorationAnimator
   private destroyed = false
 
@@ -31,15 +30,9 @@ export class DecorationLayer {
     this.base.zIndex = Z.decorations
     this.baseContent = this.maskedContent(this.base, terrain)
 
-    this.lit = new Container()
-    this.lit.label = 'decorationsLit'
-    this.lit.zIndex = Z.decorationsLit
-    this.litContent = this.maskedContent(this.lit, terrain)
-
     for (const item of graffiti) {
       for (const sprite of item.sprites) {
-        this.addSprite(this.baseContent, item, sprite, true)
-        if (item.lighting) this.addSprite(this.litContent, item, sprite, false)
+        this.addSprite(this.baseContent, item, sprite)
       }
     }
   }
@@ -48,7 +41,6 @@ export class DecorationLayer {
     this.destroyed = true
     this.animator.destroy()
     this.base.destroy({ children: true })
-    this.lit.destroy({ children: true })
   }
 
   private maskedContent(root: Container, terrain: RoomTerrain): Container {
@@ -59,7 +51,7 @@ export class DecorationLayer {
     return content
   }
 
-  private addSprite(parent: Container, item: GraffitiDecoration, spec: DecorationSprite, tint: boolean): void {
+  private addSprite(parent: Container, item: GraffitiDecoration, spec: DecorationSprite): void {
     // Static alphas live on the holder so an animation can own the sprite's own alpha
     // outright; the two then multiply instead of overwriting each other.
     const holder = new Container()
@@ -86,7 +78,7 @@ export class DecorationLayer {
       // top-left corner there — hence half a cell more than the reference formula.
       sprite.x = Math.floor((item.x + item.width / 2) * TILE_SIZE)
       sprite.y = Math.floor((item.y + item.height / 2) * TILE_SIZE)
-      if (tint && spec.tint != null) sprite.tint = spec.tint
+      if (spec.tint != null) sprite.tint = spec.tint
       if (item.flip) sprite.scale.x *= -1
       sprite.rotation = item.rotation
 

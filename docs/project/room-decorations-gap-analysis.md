@@ -168,15 +168,19 @@ Komplett fehlend — in aufsteigender Komplexität:
   Position/Größe/Anchor nach Referenzformel, `flip`, `rotation`.
 - ✔ Animations-Runner (`renderer/decorationAnimation.ts`) mit den fünf Alpha-Sequenzen,
   ein einziger Ticker-Callback für alle Tweens.
-- ✔ `lighting`: Zweitsprite oberhalb des Dark-Overlays statt eines eigenen Lighting-Layers —
-  entspricht dem Doppelzeichnen der Referenz.
+- ✔ `lighting`: kein eigener Pass (siehe unten).
 - ✔ Synthetischer `wallGraffiti`-Eintrag in `ROOM_DECORATIONS_MOCK`.
 - ✔ Tests: `screeps-client/tests/renderer/decorationAnimation.test.ts`.
 
-**Bewusst abweichend:** Die Referenz legt das Lighting-Duplikat in einen eigenen
-Pixi-Layer mit additivem Blending. Der neue Client hat stattdessen einen GPU-Lightmap-
-`LightingLayer`, der Löcher in die Dunkelheit stanzt — dort passt ein Sprite nicht hinein.
-Das Zeichnen oberhalb des Dark-Overlays erzielt denselben Effekt („bleibt hell").
+**Zu `lighting`:** Der `lighting`-Layer der Referenz ist eine **Lightmap**, kein sichtbarer
+Layer — ambientes `0x808080` über den ganzen Raum, per MULTIPLY-Filter über die Szene
+(`reference/renderer/metadata/src/index.js:92`). Die ungetönten Duplikat-Sprites darin sind
+weiße Formen, die die Lightmap lokal aufhellen; sie werden nie als Grafik gesehen.
+
+Unser `LightingLayer` funktioniert bereits genauso (Dunkelheit mit ausgestanzten Löchern),
+deshalb gibt es hier keinen zweiten Pass: die Grafik wird einmal gezeichnet, getönt.
+Ein erster Versuch zeichnete das Duplikat als normales Sprite über dem Dark-Overlay — das
+legte eine ungetönte weiße Kopie über das Original und ließ farbige Graffiti weiß erscheinen.
 
 ### Phase 2 — Live-Updates & Verlässlichkeit ✅ erledigt
 

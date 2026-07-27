@@ -585,7 +585,7 @@ export function RoomViewer(props: RoomViewerProps) {
 
     log(`graffiti — ${props.room}: ${dec.decoration.graffiti.length} item(s)`)
     decorationLayerRef = new DecorationLayer(dec.decoration.graffiti, t.data, r.app.ticker)
-    r.world.addChild(decorationLayerRef.base, decorationLayerRef.lit)
+    r.world.addChild(decorationLayerRef.base)
   })
 
   // Render objects when they update
