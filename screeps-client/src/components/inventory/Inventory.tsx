@@ -115,9 +115,10 @@ export function Inventory() {
 
   const [editing, setEditing] = createSignal<ApiUserDecorationItem | null>(null)
 
-  const [inventory, { refetch }] = createResource(async (): Promise<ApiUserDecorationItem[]> => {
-    const c = client()
-    if (!c) return []
+  // Each resource takes its dependency as a source signal rather than reading it inside
+  // the fetcher: the plain form runs exactly once, so anything that wasn't ready at mount
+  // — the client, or the user id the room list needs — would stay missing for good.
+  const [inventory, { refetch }] = createResource(client, async (c): Promise<ApiUserDecorationItem[]> => {
     try {
       return (await c.http.user.decorations.inventory()).list ?? []
     } catch {
@@ -127,9 +128,7 @@ export function Inventory() {
     }
   })
 
-  const [themes] = createResource(async (): Promise<ApiDecorationTheme[]> => {
-    const c = client()
-    if (!c) return []
+  const [themes] = createResource(client, async (c): Promise<ApiDecorationTheme[]> => {
     try {
       return (await c.http.user.decorations.themes()).list ?? []
     } catch {
@@ -178,10 +177,13 @@ export function Inventory() {
   })
 
   // Rooms the account can place a decoration in: owned first, then reserved.
-  const [rooms] = createResource(async (): Promise<RoomOption[]> => {
-    const c = client()
-    const id = userInfo()?._id
-    if (!c || !id) return []
+  const [rooms, { refetch: refetchRooms }] = createResource(
+    () => {
+      const c = client()
+      const id = userInfo()?._id
+      return c && id ? ({ c, id } as const) : undefined
+    },
+    async ({ c, id }): Promise<RoomOption[]> => {
     try {
       const res = await c.http.user.rooms(id, true)
       const out: RoomOption[] = []
@@ -198,7 +200,15 @@ export function Inventory() {
     } catch {
       return []
     }
-  })
+    },
+  )
+
+  // Claiming or losing a room mid-session would otherwise leave a stale picker, and
+  // opening the editor is a cheap, explicit moment to refresh it.
+  const edit = (item: ApiUserDecorationItem) => {
+    setEditing(item)
+    void refetchRooms()
+  }
 
   const openRoom = (name: string, shard: string | null) => goToRoom(name, shard)
 
@@ -277,7 +287,7 @@ export function Inventory() {
                   gap: '12px',
                 }}>
                   <For each={group.items}>
-                    {item => <DecorationCard item={item} onOpenRoom={openRoom} onEdit={() => setEditing(item)} />}
+                    {item => <DecorationCard item={item} onOpenRoom={openRoom} onEdit={() => edit(item)} />}
                   </For>
                 </div>
               </div>
