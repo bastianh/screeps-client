@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import type { ApiRoomDecorationItem, ApiRoomDecorationsResponse } from 'screeps-connectivity'
-import { parseRoomDecorations } from '../../src/renderer/roomDecorations'
+import type { ApiRoomDecorationItem } from 'screeps-connectivity'
+import { parseRoomDecorations, mergeDecorationItems } from '../../src/renderer/roomDecorations'
 
-function response(...decorations: ApiRoomDecorationItem[]): ApiRoomDecorationsResponse {
-  return { ok: 1, decorations }
+function response(...decorations: ApiRoomDecorationItem[]): ApiRoomDecorationItem[] {
+  return decorations
 }
 
 function item(partial: Partial<ApiRoomDecorationItem> & { decoration: ApiRoomDecorationItem['decoration'] }): ApiRoomDecorationItem {
@@ -149,6 +149,10 @@ describe('parseRoomDecorations()', () => {
     })
   })
 
+  it('accepts an empty list', () => {
+    expect(parseRoomDecorations([])).toEqual({ graffiti: [], creeps: [], objects: [] })
+  })
+
   it('ignores unsupported types and returns empty lists', () => {
     const res = parseRoomDecorations(response(
       item({ decoration: { _id: 'd1', type: 'badge' } }),
@@ -156,5 +160,39 @@ describe('parseRoomDecorations()', () => {
     ))
 
     expect(res).toEqual({ graffiti: [], creeps: [], objects: [] })
+  })
+})
+
+describe('mergeDecorationItems()', () => {
+  const base = item({ _id: 'a', decoration: { _id: 'd1', type: 'wallGraffiti' } })
+
+  it('appends items the current list does not know', () => {
+    const incoming = item({ _id: 'b', decoration: { _id: 'd2', type: 'wallGraffiti' } })
+    const merged = mergeDecorationItems([base], [incoming])
+
+    expect(merged.map(i => i._id)).toEqual(['a', 'b'])
+  })
+
+  it('returns the same array reference when nothing differs', () => {
+    const current = [base]
+    // A repeated payload must not churn the renderer — identity is what downstream
+    // memos compare on.
+    expect(mergeDecorationItems(current, [structuredClone(base)])).toBe(current)
+  })
+
+  it('replaces an item that actually changed, in place', () => {
+    const current = [base, item({ _id: 'b', decoration: { _id: 'd2', type: 'creep' } })]
+    const edited = item({ _id: 'a', active: { alpha: 0.5 }, decoration: { _id: 'd1', type: 'wallGraffiti' } })
+    const merged = mergeDecorationItems(current, [edited])
+
+    expect(merged).not.toBe(current)
+    expect(merged.map(i => i._id)).toEqual(['a', 'b'])
+    expect(merged[0].active.alpha).toBe(0.5)
+  })
+
+  it('handles an empty current list and an empty update', () => {
+    expect(mergeDecorationItems([], [base]).map(i => i._id)).toEqual(['a'])
+    const current = [base]
+    expect(mergeDecorationItems(current, [])).toBe(current)
   })
 })

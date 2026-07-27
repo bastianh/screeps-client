@@ -1,5 +1,4 @@
 import type {
-  ApiRoomDecorationsResponse,
   ApiRoomDecorationActive,
   ApiRoomDecorationDef,
   ApiRoomDecorationItem,
@@ -203,15 +202,46 @@ function parseWallLandscape(a: ApiRoomDecorationActive, d: ApiRoomDecorationDef,
 }
 
 /**
- * Convert a raw /api/game/room-decorations response into renderer-ready values.
+ * Merge decoration items delivered over the room socket into the list fetched over HTTP.
+ *
+ * Returns `current` untouched when nothing actually differs, so a server that repeats the
+ * same payload every tick doesn't churn the renderer — that stability is why the reference
+ * client dedupes by `_id` at all. Unlike the reference, which skips any `_id` it already
+ * knows, a genuinely changed item replaces its predecessor so edits show up without a reload.
+ */
+export function mergeDecorationItems(
+  current: readonly ApiRoomDecorationItem[],
+  incoming: readonly ApiRoomDecorationItem[],
+): readonly ApiRoomDecorationItem[] {
+  const merged = [...current]
+  const indexById = new Map(current.map((item, i) => [item._id, i]))
+  let changed = false
+
+  for (const item of incoming) {
+    const at = indexById.get(item._id)
+    if (at === undefined) {
+      indexById.set(item._id, merged.length)
+      merged.push(item)
+      changed = true
+    } else if (JSON.stringify(merged[at]) !== JSON.stringify(item)) {
+      // Both sides come from the same server serialisation, so key order is stable.
+      merged[at] = item
+      changed = true
+    }
+  }
+
+  return changed ? merged : current
+}
+
+/**
+ * Convert raw /api/game/room-decorations items into renderer-ready values.
  *
  * Landscapes are first-wins, matching the reference renderer's `decorations.find(...)`:
  * only one floor and one wall landscape take effect per room, and the combined
  * `landscape` type counts as both. Graffiti, creep and object overlays are collected
  * as lists — a room may carry any number of them.
  */
-export function parseRoomDecorations(response: ApiRoomDecorationsResponse): RoomDecoration {
-  const items = response.decorations
+export function parseRoomDecorations(items: readonly ApiRoomDecorationItem[]): RoomDecoration {
   const out: RoomDecoration = { graffiti: [], creeps: [], objects: [] }
 
   const floor = items.find(i => i.decoration.type === 'floorLandscape' || i.decoration.type === 'landscape')

@@ -204,6 +204,29 @@ describe('RoomStore', () => {
     expect(handler).toHaveBeenCalledWith(expect.objectContaining({ room: 'W7N7', shard: 'shard0', gameTime: 2000 }))
   })
 
+  it('emits room:decorations when a tick carries decorations', async () => {
+    const { store, socket } = makeStore()
+    let messageHandler: (data: unknown) => void = () => {}
+    ;(socket.on as ReturnType<typeof vi.fn>).mockImplementation((_ch: string, cb: (data: unknown) => void) => {
+      messageHandler = cb
+      return { dispose: vi.fn() }
+    })
+
+    const handler = vi.fn()
+    store.on('room:decorations', handler)
+    store.subscribe('W7N7', 'shard0')
+
+    const decorations = [{ _id: 'x1', user: 'u1', active: {}, decoration: { _id: 'd1', type: 'wallGraffiti' as const } }]
+    messageHandler({ objects: {}, gameTime: 2000, decorations })
+    expect(handler).toHaveBeenCalledWith({ room: 'W7N7', shard: 'shard0', decorations })
+
+    // Ticks without decorations must stay silent — the field is absent on most ticks.
+    handler.mockClear()
+    messageHandler({ objects: {}, gameTime: 2001 })
+    messageHandler({ objects: {}, gameTime: 2002, decorations: [] })
+    expect(handler).not.toHaveBeenCalled()
+  })
+
   it('fetchObjects loads objects via HTTP and emits room:update', async () => {
     const { store, http } = makeStore()
     const mockObjects = [

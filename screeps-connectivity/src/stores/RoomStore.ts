@@ -3,6 +3,7 @@ import { RoomTerrain } from '../types/game.js'
 import type { Logger } from '../logger.js'
 import type { RoomStoreEvents } from '../types/events.js'
 import type { Badge, RoomObject, RoomObjectMap, RoomObjectDiff } from '../types/game.js'
+import type { ApiRoomDecorationItem } from '../types/api.js'
 import type { HttpClient } from '../http/HttpClient.js'
 import type { SocketClient } from '../socket/SocketClient.js'
 import type { Cache } from '../cache/Cache.js'
@@ -202,8 +203,12 @@ export class RoomStore extends TypedStore<RoomStoreEvents> {
     })
 
     const listenerSub = this.socket.on(channel, (data) => {
-      const update = data as { objects?: RoomObjectDiff | null; gameTime?: number; visual?: string; flags?: string; users?: Record<string, { _id: string; username: string; badge?: Badge }> }
+      const update = data as { objects?: RoomObjectDiff | null; gameTime?: number; visual?: string; flags?: string; users?: Record<string, { _id: string; username: string; badge?: Badge }>; decorations?: ApiRoomDecorationItem[] }
       const current: RoomObjectMap = { ...(this.roomObjects.get(mapKey) ?? {}) }
+
+      if (update.decorations?.length) {
+        this.emit('room:decorations', { room, shard, decorations: update.decorations })
+      }
 
       if (update.objects == null) {
         // Some server implementations send tick messages without an objects field

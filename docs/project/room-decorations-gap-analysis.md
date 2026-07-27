@@ -178,11 +178,28 @@ Pixi-Layer mit additivem Blending. Der neue Client hat stattdessen einen GPU-Lig
 `LightingLayer`, der Löcher in die Dunkelheit stanzt — dort passt ein Sprite nicht hinein.
 Das Zeichnen oberhalb des Dark-Overlays erzielt denselben Effekt („bleibt hell").
 
-### Phase 2 — Live-Updates & Verlässlichkeit
+### Phase 2 — Live-Updates & Verlässlichkeit ✅ erledigt
 
-- `decorations`-Feld aus dem `room:`-Socket-Event im `RoomStore` durchreichen und per `_id`
-  dedupliziert mergen; `RoomViewer` reagiert reaktiv statt einmalig.
-- `decorationsOverride` für den History-/Replay-Modus.
+- ✔ `RoomStore` reicht das `decorations`-Feld des Room-Ticks als neues Event
+  `room:decorations` durch (nur wenn nicht leer).
+- ✔ `RoomViewer` hält die Rohitems als Signal und leitet die geparste Form als Memo ab;
+  `mergeDecorationItems()` merged per `_id` und gibt die **bisherige Array-Referenz**
+  zurück, wenn sich nichts geändert hat — sonst würde ein Server, der die Liste jeden
+  Tick wiederholt, den Layer jeden Tick neu bauen.
+- ✔ Race behoben: trifft ein Tick ein, bevor der HTTP-Fetch auflöst, werden dessen Items
+  nicht überschrieben, sondern wieder aufgelegt.
+- ✔ Tests: Merge-Fälle in `roomDecorations.test.ts`, Event-Emission in
+  `screeps-connectivity/tests/stores/RoomStore.test.ts`.
+
+**Abweichung zur Referenz:** Diese überspringt eingehende Items mit bekannter `_id`
+komplett — eine Änderung an einer bereits sichtbaren Dekoration wird also erst beim
+Reload übernommen. Wir ersetzen stattdessen bei echter Änderung; die Stabilität, um die
+es der Referenz beim Dedupe ging, liefert der Identitätsvergleich.
+
+**Entfallen:** `decorationsOverride` für Replays. Der Referenzclient bezieht das aus
+`seasons/replay/<code>`; dieses Feature existiert im neuen Client nicht — sein
+History-Modus ist tick-basiert (`/room-history`), kein Season-Replay. Es gibt also
+nichts zu überschreiben.
 
 ### Phase 3 — `creep`- und `object`-Dekorationen
 
