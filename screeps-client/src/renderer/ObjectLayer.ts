@@ -24,6 +24,12 @@ import {
 } from './objects/controller.js'
 import { createObjectVisual } from './objects/createObjectVisual.js'
 import {
+  DISABLED_PEAK_ALPHA,
+  computeDisabledIds,
+  disabledPulseAlpha,
+  drawDisabledTiles,
+} from './objects/disabled.js'
+import {
   CREEP_INNER_R,
   LABEL_CREEP_TOP,
   LABEL_FONT_SCALE,
@@ -89,6 +95,8 @@ export class ObjectLayer {
   private rampartGlowGraphics: Graphics
   private wallGraphics: Graphics
   private wallMarkGraphics: Graphics
+  private disabledGraphics: Graphics
+  private disabledSig = ''
   private ticker: Ticker | null = null
   private tickerCallback: (() => void) | null = null
   // One map for every fill tween (extension/creep/tower/storage/container/terminal/factory/
@@ -142,6 +150,14 @@ export class ObjectLayer {
     this.container.addChild(this.rampartGlowGraphics)
     this.roadGraphics = new Graphics()
     this.container.addChild(this.roadGraphics)
+    // Disabled-structure wash: above ramparts and creeps, below flags — the same
+    // stacking vanilla gets from drawing it in its "effects" layer. Additive, so it
+    // reads as a red glow over the structure rather than a flat cover.
+    this.disabledGraphics = new Graphics()
+    this.disabledGraphics.zIndex = 160
+    this.disabledGraphics.blendMode = 'add'
+    this.disabledGraphics.alpha = 0
+    this.container.addChild(this.disabledGraphics)
     if (ticker) {
       this.ticker = ticker
       this.tickerCallback = () => this.tick()
@@ -407,6 +423,12 @@ export class ObjectLayer {
         const seg = segs[i]
         if (seg && !seg.destroyed) seg.tint = tintColor
       }
+    }
+
+    // Disabled-structure wash: one shared pulse for every off tile. Frozen at peak in
+    // instant/history mode so the state still reads without animating.
+    if (this.disabledSig !== '') {
+      this.disabledGraphics.alpha = this.instantMode ? DISABLED_PEAK_ALPHA : disabledPulseAlpha(now)
     }
 
     // Composite the lightmap once per frame (no-op unless a light moved this
@@ -1078,6 +1100,8 @@ export class ObjectLayer {
       this.redrawRoads()
     }
 
+    this.refreshDisabled()
+
     // Drive every spawn's progress ring from the local game clock. Re-sync the
     // completion tick only when the spawning payload changes (the server doesn't
     // reliably re-send remainingTime each tick), then advance locally so the ring
@@ -1113,6 +1137,26 @@ export class ObjectLayer {
 
     this.refreshForeignCreepLabels()
     this.refreshForeignCreepBadges()
+  }
+
+  /**
+   * Recompute which structures the controller currently keeps switched off and
+   * repaint the wash. Only touches the Graphics when the tile set actually changed —
+   * the controller level and structure counts move rarely, this runs every tick.
+   */
+  private refreshDisabled(): void {
+    const disabled = computeDisabledIds(this.rawObjects)
+    const tiles: Array<{ x: number; y: number }> = []
+    for (const id of disabled) {
+      const obj = this.rawObjects.get(id)
+      if (obj) tiles.push({ x: obj.x, y: obj.y })
+    }
+    tiles.sort((a, b) => a.y - b.y || a.x - b.x)
+    const sig = tiles.map((t) => `${t.x},${t.y}`).join(' ')
+    if (sig === this.disabledSig) return
+    this.disabledSig = sig
+    drawDisabledTiles(this.disabledGraphics, tiles, TILE_SIZE)
+    if (sig === '') this.disabledGraphics.alpha = 0
   }
 
   private redrawWalls(): void {
@@ -1735,11 +1779,19 @@ export class ObjectLayer {
     this.roadGraphics.clear()
     this.rampartGraphics.clear()
     this.rampartGlowGraphics.clear()
+    this.wallGraphics.clear()
+    this.wallMarkGraphics.clear()
+    this.disabledGraphics.clear()
+    this.disabledGraphics.alpha = 0
+    this.disabledSig = ''
     this.container.removeChildren()
     // Re-attach persistent graphics layers removed by removeChildren()
+    this.container.addChild(this.wallGraphics)
+    this.container.addChild(this.wallMarkGraphics)
     this.container.addChild(this.rampartGraphics)
     this.container.addChild(this.rampartGlowGraphics)
     this.container.addChild(this.roadGraphics)
+    this.container.addChild(this.disabledGraphics)
   }
 
   destroy(): void {

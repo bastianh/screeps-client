@@ -169,3 +169,6 @@ export const ST_RAMPART        = 0x55B84F  // rampart fill (vanilla green; drawn
 export const ST_RAMPART_STROKE = 0x8AD97A  // rampart border (brighter rim leading the fill)
 export const ST_RAMPART_ENEMY        = 0xB23A3A  // foreign rampart fill
 export const ST_RAMPART_ENEMY_STROKE = 0xD66060  // foreign rampart border
+
+// Tile wash over a structure switched off by the controller level (vanilla: additive red pulse)
+export const ST_DISABLED = 0xFF0000
