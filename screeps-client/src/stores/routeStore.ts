@@ -5,7 +5,7 @@ import { buildRoomUrl, buildRoomOverviewUrl } from '~/utils/gameRoutes.js'
 // Top-level screen the connected app shows. The in-game Dashboard owns its own
 // /room and /map sub-routing; this store decides the User hub (/user) vs.
 // Profile (public, any user) vs. Messages vs. Market vs. the game view.
-export type Route = 'user' | 'profile' | 'game' | 'market' | 'messages' | 'room-overview' | 'leaderboard'
+export type Route = 'user' | 'profile' | 'game' | 'market' | 'messages' | 'room-overview' | 'leaderboard' | 'inventory'
 
 // Target of the /room-overview/<shard>/<room> page: the room to show stats for,
 // with its shard (null on single-shard servers where no shard segment is present).
@@ -78,6 +78,10 @@ function leaderboardPrefix(): string {
   return `${basePath()}/leaderboard/`
 }
 
+function inventoryPath(): string {
+  return `${basePath()}/inventory`
+}
+
 function marketPath(): string {
   return `${basePath()}/market`
 }
@@ -97,6 +101,7 @@ function parseRoute(): Route {
   if (p === messagesPath() || p.startsWith(messagesPrefix())) return 'messages'
   if (p === marketPath() || p.startsWith(marketPrefix())) return 'market'
   if (p === leaderboardPath() || p.startsWith(leaderboardPrefix())) return 'leaderboard'
+  if (p === inventoryPath()) return 'inventory'
   if (p.startsWith(roomOverviewPrefix())) return 'room-overview'
   return 'game'
 }
@@ -205,6 +210,15 @@ let lastGamePath = parseRoute() === 'game' ? currentPath() : `${basePath()}/map`
 
 function rememberGamePath(): void {
   if (parseRoute() === 'game') lastGamePath = currentPath()
+}
+
+// The inventory lists every decoration the account owns. Filters live in component
+// state rather than the URL — unlike the leaderboard, there is nothing here worth
+// linking to or paging through.
+export function goToInventory(): void {
+  rememberGamePath()
+  history.pushState(null, '', inventoryPath())
+  setRoute('inventory')
 }
 
 export function goToUser(): void {

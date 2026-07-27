@@ -1,3 +1,4 @@
+import { getServerFeature } from 'screeps-connectivity'
 import { isTauri } from '~/utils/tauri.js'
 import { isProxy } from '~/utils/proxy.js'
 import { isEmbedded, isXxscreepsMode } from '~/utils/embedded.js'
@@ -17,6 +18,10 @@ export interface Capabilities {
   // detection here (a feature flag, a probe, whatever) without touching callers.
   hasMarket: boolean
   hasMessaging: boolean
+  // Decoration inventory. The reference client gates its /inventory route on this
+  // exact feature flag out of /api/version, so private servers without decorations
+  // simply don't advertise it and the section stays hidden.
+  hasInventory: boolean
 }
 
 export function capabilities(): Capabilities {
@@ -29,5 +34,11 @@ export function capabilities(): Capabilities {
     hasHistory: (serverVersion()?.serverData?.historyChunkSize ?? 0) > 0,
     hasMarket: true,
     hasMessaging: true,
+    hasInventory: hasInventoryFeature(),
   }
+}
+
+function hasInventoryFeature(): boolean {
+  const version = serverVersion()
+  return version != null && getServerFeature(version, 'inventory') != null
 }

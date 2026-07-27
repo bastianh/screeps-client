@@ -3,26 +3,12 @@ import type { ApiRoomDecorationItem } from 'screeps-connectivity'
 import { roomDecorationItems, roomUsers } from '~/stores/roomDataStore.js'
 import { showRoomDecorations } from '~/stores/settingsStore.js'
 import { UserLink } from '~/components/UserLink.js'
+import { DECORATION_TYPE_LABELS as TYPE_LABELS, rarityColor } from '~/components/inventory/sorting.js'
 
 // Types the panel lists — the ones that are visibly placed in this room. `creep` and
 // `badge` are globally active rather than room-bound, so the reference client leaves
 // them out here too; creep overlays show on the selected creep instead.
 const LISTED_TYPES = new Set(['floorLandscape', 'wallLandscape', 'landscape', 'wallGraffiti', 'object'])
-
-const TYPE_LABELS: Record<string, string> = {
-  floorLandscape: 'Floor texture',
-  wallLandscape: 'Wall texture',
-  landscape: 'Landscape',
-  wallGraffiti: 'Graffiti',
-  object: 'Object',
-}
-
-// Rarity 1–5, common → legendary. Mirrors the reference client's rarity colouring.
-const RARITY_COLORS = ['#8b949e', '#8b949e', '#58a6ff', '#a371f7', '#d29922', '#f0883e']
-
-function rarityColor(rarity?: number): string {
-  return RARITY_COLORS[rarity ?? 0] ?? RARITY_COLORS[0]
-}
 
 function DecorationRow(props: { item: ApiRoomDecorationItem }) {
   const decoration = () => props.item.decoration
