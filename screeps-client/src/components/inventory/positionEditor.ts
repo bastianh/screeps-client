@@ -1,4 +1,4 @@
-import type { ApiRoomDecorationDef } from 'screeps-connectivity'
+import type { ApiRoomDecorationActive, ApiRoomDecorationDef } from 'screeps-connectivity'
 import { propEntries } from './activation.js'
 
 // Geometry behind the position editor, kept free of DOM so it can be tested directly.
@@ -45,6 +45,17 @@ export function editorCapabilities(decoration: ApiRoomDecorationDef): EditorCapa
 
 function numberOr(value: unknown, fallback: number): number {
   return typeof value === 'number' && !isNaN(value) ? value : fallback
+}
+
+/** Read the placement out of an activation state. Numbers may arrive as strings. */
+export function placementOf(active: ApiRoomDecorationActive): Placement {
+  return {
+    x: Number(active.x ?? 0),
+    y: Number(active.y ?? 0),
+    width: Number(active.width ?? 1),
+    height: Number(active.height ?? 1),
+    rotation: Number(active.rotation ?? 0),
+  }
 }
 
 /** Size limits in cells. The reference falls back to 1…25 when the schema is silent. */

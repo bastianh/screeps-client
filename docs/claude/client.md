@@ -22,8 +22,13 @@ src/
 │   └── Dashboard.tsx            # Main layout: header, canvas, console, sidebar + draggable splitters; URL routing
 ├── components/
 │   ├── theme.ts                 # Central GitHub-dark palette tokens for the HTML UI
-│   ├── Sidebar/                 # index.tsx + BuildPanel, FlagForm, RoomInfoBox, CustomUiPanel,
-│   │                            #   CustomObjectActions, HistoryControlPanel
+│   ├── Sidebar/                 # index.tsx + BuildPanel, FlagForm, DecoratePanel, RoomInfoBox,
+│   │                            #   RoomDecorationsPanel, CustomUiPanel, CustomObjectActions,
+│   │                            #   HistoryControlPanel
+│   ├── inventory/               # Decoration inventory + editor: Inventory, DecorationDialog,
+│   │                            #   DecorationProperties, PlacementFrame (shared drag frame),
+│   │                            #   DecorationPositionEditor, positionEditor.ts (geometry),
+│   │                            #   activation.ts, commit.ts (activate/deactivate), sorting.ts
 │   ├── selection/               # Per-type detail views for the selection panel + registry.ts + shared.ts
 │   ├── login/                   # shared.tsx: building blocks + capability probes for both login forms
 │   ├── market/                  # Market pages (orders, history, resource views) + section theme
@@ -69,8 +74,9 @@ src/
 │   └── colors.ts                # Renderer color constants (PixiJS palette)
 ├── stores/
 │   ├── clientStore.ts           # Signals (client, status, error) + connect/disconnect/tryAutoConnect
-│   ├── roomViewStore.tsx        # Active room view state (name, shard, viewport)
+│   ├── roomViewStore.tsx        # Room interaction mode (view | flag | build | decorate) + drafts
 │   ├── roomDataStore.ts         # Room objects + terrain reactive cache
+│   ├── decorationEditStore.ts   # Draft of the decoration being edited in the room view
 │   ├── routeStore.ts            # URL ↔ view routing state
 │   ├── selectionStore.ts        # Selected game objects
 │   ├── settingsStore.ts         # Persisted user settings
@@ -106,3 +112,15 @@ src/
 `RoomViewer.tsx` subscribes to `RoomStore` and `UserStore`, creates `TerrainLayer` and `ObjectLayer`, hands them to `RoomRenderer`.
 
 `RoomRenderer.ts` wraps a PixiJS `Application` in a `world` container with pointer-drag panning, wheel zoom, navigation zones (edge-scroll), and a view-reset method.
+
+## In-room decoration editor
+
+`roomViewStore`'s `decorate` mode edits a decoration where it actually sits, in the live room. Entry points: a row in `RoomDecorationsPanel`, or "Edit in the room view instead" in the inventory dialog. `decorationEditStore` owns the draft and drops it whenever the mode leaves `decorate` — which a room change does, so a draft never outlives its room.
+
+Three things make it work:
+
+- **The camera is locked** (`RoomRenderer.setCameraLocked`) to a fully zoomed-out room while editing. Nothing pans or zooms, so the frame and its handles can stay HTML over the canvas, positioned from `viewTransform`. `PlacementFrame` is that frame, shared with the 2D editor in the inventory dialog; the geometry behind it stays in `positionEditor.ts`.
+- **Dragging never rebuilds a layer.** The draft's geometry is pinned in `decorationPreviewItem()`, and the live placement goes straight to the sprites through `DecorationLayer.setTransform`. Only non-geometry edits — colours, alpha, animation — flow through the parse/rebuild path, which is what makes them show up live too.
+- **Saving keeps the editor open.** `placeDecoration` is a deactivate-then-activate pair; closing on success would drop the draft before the re-read lands and the decoration would visibly snap back. The saved state becomes the new baseline instead.
+
+Decoration changes made by this client bump `decorationsRevision` (`roomDataStore`), which re-reads `game/room-decorations`. The response is authoritative, so removals propagate; only socket items that arrived while the request was in flight are layered back on top.

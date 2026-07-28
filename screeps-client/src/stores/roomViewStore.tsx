@@ -8,7 +8,7 @@ import { createLogger } from '~/utils/log.js'
 
 const { log, warn, error } = createLogger('build')
 
-export type RoomViewMode = 'view' | 'flag' | 'build'
+export type RoomViewMode = 'view' | 'flag' | 'build' | 'decorate'
 
 export interface FlagDraft {
     name: string
@@ -267,6 +267,17 @@ export function modeHint(): JSX.Element | null {
       <div style={{ display: 'flex', 'flex-direction': 'column', gap: '2px', 'text-align': 'center' }}>
         <span>{pending ? 'Click again to confirm position' : 'Click to choose flag position'}</span>
         <span style={{ opacity: '0.6', 'font-size': '0.9em' }}>Right-click to exit flag mode</span>
+      </div>
+    )
+  }
+
+  // The decoration itself is named in the sidebar panel, which also owns Save — this only
+  // has to say that the camera is parked on purpose.
+  if (mode === 'decorate') {
+    return (
+      <div style={{ display: 'flex', 'flex-direction': 'column', gap: '2px', 'text-align': 'center' }}>
+        <span>Drag the decoration · Save in the sidebar</span>
+        <span style={{ opacity: '0.6', 'font-size': '0.9em' }}>Zoom is locked to the whole room · Right-click to exit</span>
       </div>
     )
   }
