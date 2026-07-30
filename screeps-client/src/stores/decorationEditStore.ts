@@ -55,19 +55,22 @@ export { decorationDraft, decorationBusy }
  * What the room says while decorate mode is open. `roomViewStore.modeHint` hands this
  * phase over because the text depends on the draft, which lives here.
  */
-export function decorateHint(): { primary: string; secondary: string } {
+export function decorateHint(): { primary: string; secondary: string; note?: string } {
   const draft = decorationDraft()
-  if (!draft) {
-    return {
-      primary: 'Pick a decoration in the sidebar',
-      secondary: 'Zoom is locked to the whole room · Right-click to exit',
-    }
-  }
+  const secondary = 'Zoom is locked to the whole room · Right-click to exit'
+  if (!draft) return { primary: 'Pick a decoration in the sidebar', secondary }
+
+  const commit = draft.wasActive ? 'Save' : 'Activate'
   return {
     primary: draftHasFrame()
-      ? `Drag the decoration · ${draft.wasActive ? 'Save' : 'Activate'} in the sidebar`
-      : `Adjust it in the sidebar · ${draft.wasActive ? 'Save' : 'Activate'} there too`,
-    secondary: 'Zoom is locked to the whole room · Right-click to exit',
+      ? `Drag the decoration · ${commit} in the sidebar`
+      : `Adjust it in the sidebar · ${commit} there too`,
+    secondary,
+    // Graffiti is masked to the room's walls, so a frame parked over open floor looks
+    // like nothing happened. Worth saying outright rather than letting it puzzle.
+    note: draft.decoration.type === 'wallGraffiti'
+      ? 'Graffiti only shows where it covers walls'
+      : undefined,
   }
 }
 

@@ -80,6 +80,19 @@ describe('decorationEditStore', () => {
     expect(draftHasFrame()).toBe(false)
     expect(decorationDraft()?.decoration.type).toBe('wallLandscape')
   })
+
+  /** A graffiti parked over open floor draws nothing, which is worth saying outright. */
+  it('warns that graffiti only shows on walls, and only for graffiti', () => {
+    begin(GRAFFITI)
+    expect(decorateHint().note).toMatch(/walls/i)
+
+    begin(LANDSCAPE, {})
+    expect(decorateHint().note).toBeUndefined()
+
+    resetRoomViewMode()
+    startDecorationPlacement()
+    expect(decorateHint().note).toBeUndefined()
+  })
 })
 
 describe('placing a decoration from the room view', () => {

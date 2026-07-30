@@ -19,7 +19,9 @@ mode, a room change abandons the draft, and saving keeps the editor open rather 
 under the re-read it triggers.
 
 Only rooms the account owns or reserves offer placement, and a type the room already holds — a
-second wall landscape, say — is greyed out in the list rather than failing on the server.
+second wall landscape, say — is greyed out in the list rather than failing on the server. While a
+graffiti is being placed, the hint over the room says it only shows where it covers walls, which
+is otherwise easy to read as nothing having happened.
 
 The dialog's 2D editor stays for decorations whose room is not the one on screen, and history
 playback still edits through the inventory — it is a read-only view of a past tick.

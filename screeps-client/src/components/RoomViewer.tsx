@@ -17,6 +17,7 @@ import {
   draftHasFrame, draftPlacement, setDraftPlacement,
 } from '~/stores/decorationEditStore.js'
 import { PlacementFrame } from '~/components/inventory/PlacementFrame.js'
+import { AMBER } from '~/components/theme.js'
 import { parseRoomName, formatRoomName, isRoomInWorld } from '~/utils/roomName.js'
 import { useRoomNavigationKeys } from '~/utils/useRoomNavigationKeys.js'
 import type { ApiRoomDecorationItem, Badge, RoomTerrain, RoomObjectMap, RoomObjectDiff } from 'screeps-connectivity'
@@ -53,6 +54,9 @@ function DecorateHint() {
   return (
     <div style={{ display: 'flex', 'flex-direction': 'column', gap: '2px', 'text-align': 'center' }}>
       <span>{decorateHint().primary}</span>
+      <Show when={decorateHint().note}>
+        {(note) => <span style={{ color: AMBER }}>{note()}</span>}
+      </Show>
       <span style={{ opacity: '0.6', 'font-size': '0.9em' }}>{decorateHint().secondary}</span>
     </div>
   )
