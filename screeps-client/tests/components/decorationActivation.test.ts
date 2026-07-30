@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import type { ApiRoomDecorationDef, ApiUserDecorationItem } from 'screeps-connectivity'
 import {
   buildActiveState, propEntries, needsRoom, collidingTypes, blockedRooms, roomKey,
-  editorGroups, splitList, joinList,
+  findRoomOption, editorGroups, splitList, joinList,
 } from '../../src/components/inventory/activation'
 
 function decoration(partial: Partial<ApiRoomDecorationDef> = {}): ApiRoomDecorationDef {
@@ -136,6 +136,31 @@ describe('blockedRooms()', () => {
   it('keeps the same room name on two shards apart', () => {
     const twoShards = [owned('a', 'wallLandscape', 'E1S1', 'shard0'), owned('b', 'wallLandscape', 'E1S1', 'shard1')]
     expect(blockedRooms(twoShards, 'wallLandscape').size).toBe(2)
+  })
+})
+
+describe('findRoomOption()', () => {
+  const options = [
+    { room: 'W1N1', shard: 'shard0' },
+    { room: 'W1N1', shard: 'shard1' },
+    { room: 'W2N2', shard: null },
+  ]
+
+  it('prefers the entry on the same shard', () => {
+    expect(findRoomOption(options, 'W1N1', 'shard1')).toEqual({ room: 'W1N1', shard: 'shard1' })
+  })
+
+  it('matches a shardless room', () => {
+    expect(findRoomOption(options, 'W2N2', null)).toEqual({ room: 'W2N2', shard: null })
+  })
+
+  /** A single-shard server reports no shard for the open room but may still list one. */
+  it('falls back to the room name when the shards disagree', () => {
+    expect(findRoomOption(options, 'W1N1', null)).toEqual({ room: 'W1N1', shard: 'shard0' })
+  })
+
+  it('finds nothing for a room the account does not hold', () => {
+    expect(findRoomOption(options, 'W9N9', null)).toBeUndefined()
   })
 })
 

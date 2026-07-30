@@ -85,6 +85,22 @@ export function roomKey(shard: string | null | undefined, room: string): string 
 }
 
 /**
+ * Find the picker entry for a room, preferring an exact shard match.
+ *
+ * The fallback to the name alone covers servers that disagree with themselves about
+ * shards: a single-shard server reports no shard for the open room while still listing
+ * the account's rooms under a shard name, and the two would never match otherwise.
+ */
+export function findRoomOption<T extends { room: string; shard: string | null }>(
+  options: readonly T[],
+  room: string,
+  shard: string | null,
+): T | undefined {
+  return options.find(o => o.room === room && o.shard === shard)
+    ?? options.find(o => o.room === room)
+}
+
+/**
  * Rooms that already hold a decoration clashing with `type`, keyed by {@link roomKey}.
  * The item being edited is skipped — re-placing it in its own room is not a conflict.
  */

@@ -1,4 +1,4 @@
-import { createMemo, createSignal, For, Show, untrack } from 'solid-js'
+import { createEffect, createMemo, createSignal, For, Show, untrack } from 'solid-js'
 import { X } from 'lucide-solid'
 import type { ApiRoomDecorationActive, ApiUserDecorationItem } from 'screeps-connectivity'
 import { BG, PANEL, BTN, BORDER, TEXT, MUTED, DIM, GREEN, RED, ACCENT } from '~/components/theme.js'
@@ -6,7 +6,7 @@ import { currentRoom, currentShard } from '~/stores/roomDataStore.js'
 import { goToGame } from '~/stores/routeStore.js'
 import { beginDecorationEdit } from '~/stores/decorationEditStore.js'
 import { DECORATION_TYPE_LABELS, rarityColor } from './sorting.js'
-import { blockedRooms, buildActiveState, needsRoom, roomKey } from './activation.js'
+import { blockedRooms, buildActiveState, findRoomOption, needsRoom, roomKey } from './activation.js'
 import { DecorationPositionEditor } from './DecorationPositionEditor.js'
 import { DecorationProperties, Row, Section, inputStyle } from './DecorationProperties.js'
 import { editorCapabilities, placementOf, sizeBounds, type Placement } from './positionEditor.js'
@@ -66,6 +66,28 @@ export function DecorationDialog(props: DialogProps) {
   const setPlacement = (next: Placement) => setActive(prev => ({ ...prev, ...next }))
 
   const blocked = createMemo(() => blockedRooms(props.inventory, decoration().type, props.item._id))
+
+  /**
+   * Opening the editor while a room is on screen is a strong hint about where an unplaced
+   * decoration is meant to go, so the picker starts there.
+   *
+   * Seeded from an effect rather than the initial state because the room list arrives
+   * asynchronously, and only once while nothing is chosen — a choice the user makes, or a
+   * room the decoration already sits in, must never be overwritten.
+   */
+  let seededRoom = false
+  createEffect(() => {
+    if (seededRoom || wasActive() || !requiresRoom()) return
+    if (selectedRoomName() !== '') return
+
+    const room = currentRoom()
+    if (!room) return
+    const option = findRoomOption(props.rooms, room, currentShard())
+    if (!option || blocked().has(roomKey(option.shard, option.room))) return
+
+    seededRoom = true
+    setActive(prev => ({ ...prev, room: option.room, shard: option.shard ?? undefined }))
+  })
 
   const canActivate = () => !busy() && (!requiresRoom() || selectedRoom() !== '')
 
