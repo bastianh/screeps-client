@@ -1,5 +1,222 @@
 # screeps-client
 
+## 0.20.0
+
+### Minor Changes
+
+- be68680: Add the decoration inventory page at `/inventory`.
+
+  Lists every decoration the account owns with its preview, rarity and type, filterable by type,
+  theme and target room, and sortable new/old, rare/common or grouped by room. Activated items link
+  straight to the room they sit in.
+
+  The nav entry appears only when the server advertises the `inventory` feature in `/api/version`,
+  which is the same gate the reference client uses — private servers without decorations keep the
+  section hidden.
+
+  Placing and removing decorations is not wired up yet; this view is read-only.
+
+- 552bb32: Render `wallGraffiti` room decorations.
+
+  Graffiti images now draw between the terrain and the objects, masked to the room's walls, with
+  tint, per-graphic alpha, tiling, rotation and horizontal flip applied. The five alpha animations of
+  the official renderer (`slow`, `fast`, `blink`, `neon`, `flash`) are driven off a single ticker
+  callback, and `lighting`-enabled items are drawn a second time above the darkness overlay so they
+  stay bright — the same trick the reference renderer's separate lighting layer performs.
+
+  `ROOM_DECORATIONS_MOCK` gained a synthetic `wallGraffiti` entry so the path can be exercised
+  without owning one.
+
+- e33e5fc: Keep room decorations live.
+
+  Room tick messages can carry a `decorations` field. `RoomStore` now forwards it as a new
+  `room:decorations` event, and the room view merges those items by `_id` into the list it fetched
+  over HTTP — so a decoration placed or edited while you are watching the room appears without a
+  reload. The merge returns the previous list untouched when nothing actually differs, so a server
+  that repeats the same payload every tick does not rebuild the decoration layer.
+
+- 278230a: Mark structures disabled by the controller level with a pulsing red tile wash, matching the official client. Structures beyond the RCL cap (the ones farthest from the controller) and everything in an unowned or downgraded room now read as switched off in the room view.
+- 0e8b382: Render `creep` and `object` room decorations.
+
+  Creep overlays now apply to their owner's creeps, honouring the `!SEP!` name filter and its
+  `exclude` inversion, skipping creeps that are still spawning, and following the body rotation when
+  `syncRotate` is set. Object overlays apply to every object of their target type. Both support the
+  alpha animations and per-graphic tint and alpha.
+
+  Sizes for these two types arrive in the reference renderer's pixels rather than room cells, so they
+  are converted on the way in — a 256 is 2.56 cells, not 256.
+
+  The six identical object-visual creation blocks in `ObjectLayer` were collapsed into one helper.
+
+- 975c619: Place decorations by dragging them around the room.
+
+  Once a target room is picked, the decoration dialog shows the room's terrain with a frame over it:
+  drag to move, eight handles to resize, and a grip to rotate. Which of the three is offered comes
+  from the decoration's own schema — a read-only `rotation` means no rotate grip — and `proportional`
+  decorations keep their aspect ratio while resizing.
+
+  The room is drawn as flat terrain rather than a full render: walls are what matters when placing
+  graffiti, which only shows on them.
+
+- 4d4167f: Place and edit room decorations in the room view itself, instead of on a separate 2D canvas.
+
+  A new Decorate mode (the palette button beside View / Flag / Build, or `4`) lists the decorations
+  the account owns but has not placed; picking one drops it into the middle of the room, where it is
+  visible before it is ever activated. Clicking one of your already-placed decorations in the room
+  sidebar opens the same editor for it.
+
+  Either way the frame is dragged, resized and turned over the live, ticking room, with the artwork
+  following it wall-masked and tinted as it will really look. The sidebar carries the same numbers
+  and properties the dialog offers, so colours, alpha and animation update live too.
+
+  While editing, the camera parks on the whole room and stops panning and zooming — the decoration
+  stays reachable end to end, and the frame can sit as HTML over the canvas. Right-click leaves the
+  mode, a room change abandons the draft, and saving keeps the editor open rather than closing it
+  under the re-read it triggers.
+
+  Only rooms the account owns or reserves offer placement, and a type the room already holds — a
+  second wall landscape, say — is greyed out in the list rather than failing on the server. While a
+  graffiti is being placed, the hint over the room says it only shows where it covers walls, which
+  is otherwise easy to read as nothing having happened.
+
+  The dialog's 2D editor stays for decorations whose room is not the one on screen, and history
+  playback still edits through the inventory — it is a read-only view of a past tick.
+
+- 5a0355a: Bring world-map decorations up to the reference client.
+
+  `map-stats` returns decoration definitions in a top-level dictionary keyed by the id each room
+  stat references. That dictionary was previously discarded, so the map had to guess what a
+  decoration was from its colour properties and could only ever tint plains and swamps. It is now
+  resolved, which brings the map wall colour, both landscape overlay textures and graffiti.
+
+  Colours follow the reference map layer's maths: each layer is desaturated by its own factor (0.48
+  for walls, 0.5 for floors, 0.75 and 0.35 for the overlay textures) so a decorated room still reads
+  as a map tile. Swamps mix 70% of the already-desaturated plain colour with 30% of the raw swamp
+  colour.
+
+  The road colour was being stored but never drawn — it now tints the map's road overlay.
+
+  **Breaking (`screeps-connectivity`):** `MapStatsRoomData.terrainColors` and the `TerrainColors` type
+  are replaced by `MapStatsRoomData.decorations` and the `MapRoomDecorations` / `MapLandscape` /
+  `MapGraffiti` types. The store now reports raw decoration values and leaves the colour maths to the
+  renderer.
+
+- 5173461: Open the decoration editor straight from the room sidebar.
+
+  Clicking one of your own decorations in the room's Decorations panel opens its editor. Decorations
+  belonging to other players stay inert, since there is nothing to edit.
+
+  The open editor now lives in the URL as `/inventory/<id>`, the way the reference client addresses
+  it. That is what lets a link from the room open it at all — the dialog needs the inventory and the
+  room list, which the inventory page already has.
+
+- 268b592: Show room decorations in the sidebar and on the selected creep.
+
+  The sidebar lists the decorations placed in the current room — landscapes, graffiti and object
+  overlays — with their preview image, type and owner. Selecting a creep now shows which creep
+  decorations actually apply to it, reusing the renderer's own owner and `!SEP!` name-filter matching
+  so the panel cannot drift away from what is drawn.
+
+  `screeps-connectivity` gained `user.decorations.inventory()` and `user.decorations.themes()`, plus
+  the `ApiUserDecorationItem` and `ApiDecorationTheme` types and the display fields of a decoration
+  definition (`name`, `rarity`, `theme`, `restricted`, `preview`, `groupDescription`).
+
+- 4b3412e: Place and remove decorations from the inventory.
+
+  Clicking a decoration opens an editor for its properties — colours, ranges, checkboxes, the
+  animation preset, and the creep name filter with its `exclude` inversion — plus the target room,
+  and activates or deactivates it.
+
+  The room picker disables rooms that already hold a clashing decoration, following the reference
+  client's rules: the combined `landscape` type blocks both halves, a wall and a floor landscape
+  coexist, skins and object overlays clash only with their own type, and graffiti is unrestricted.
+  Creep and badge decorations are account-wide and skip the room picker entirely.
+
+  Geometry shows as numeric controls for now; dragging a decoration around a room preview follows.
+
+  `screeps-connectivity` gained `user.decorations.activate()` / `.deactivate()`, a `reservation`
+  flag on `user.rooms()`, and the `ApiDecorationProp` / `ApiDecorationProps` schema types.
+
+- c4d9b82: Room decorations: rework the parsing foundation ahead of graffiti/creep/object rendering.
+
+  - Decoration `brightness` props now scale HSL lightness like the official renderer instead of
+    multiplying RGB channels — floor, wall, road and texture colours were visibly off whenever
+    brightness was below 1.
+  - Landscapes are first-wins per room (matching the reference renderer) instead of last-wins, and
+    the combined `landscape` type is finally recognised as both a floor and a wall landscape.
+  - Graffiti, creep and object decorations are parsed into typed lists (sprites with their
+    `color`/`alpha`/`visible` prop references resolved, `!SEP!` name filters split, animation names
+    validated). Rendering for them follows in a later change.
+  - Turning the "room decorations" setting back on now re-fetches immediately instead of waiting for
+    the next room change.
+  - Decoration textures load through a shared, deduplicating cache.
+  - `ApiRoomDecorationDef` gained the `landscape` and `badge` types plus `tiling`/`objectType`;
+    `ApiRoomDecorationActive` gained the geometry, animation and targeting fields.
+
+### Patch Changes
+
+- 764b871: Fix moving an already-placed decoration failing with "Decoration already activated".
+
+  The server rejects `activate` on a decoration that is already active, so editing one now takes it
+  down first — the same two-step the reference client performs behind its "back edit" button. Because
+  that leaves a moment where the decoration sits nowhere, a failure in the second step says the old
+  placement is gone instead of reading as if nothing happened.
+
+- 4d4167f: Show decoration changes in the room view without reloading the room.
+
+  Placing or removing a decoration now re-reads `game/room-decorations` straight away. The room
+  socket only carries decorations when the server volunteers them, so an activation made from the
+  inventory — which leaves the room view mounted behind it — stayed invisible until the room was
+  reloaded.
+
+  Removals propagate as well. The re-read treats its response as authoritative instead of merging
+  it onto everything seen so far, which could only ever add decorations: a deactivated one kept
+  being drawn. Items that arrive over the socket while the read is in flight are still layered back
+  on top, so the race that guarded against is unaffected.
+
+- 465a257: Preselect the open room when placing an unplaced decoration from the inventory.
+
+  Opening the inventory while a room is on screen is a strong hint about where a decoration is meant
+  to go, so its room picker now starts there instead of on "Select a room…" — and the position editor
+  comes up with that room's terrain straight away.
+
+  Only for decorations that are not placed anywhere: one that already sits in a room keeps pointing
+  at it, and a room chosen by hand is never overwritten. Rooms the account does not hold, and rooms
+  whose decoration of that type is already taken, are skipped.
+
+- 1a9556f: Fix the decoration editor crashing on open.
+
+  A memo evaluated at setup read an accessor declared further down the component, so opening any
+  decoration that offers a position editor threw `Cannot access 'selectedRoomName' before
+initialization`. The room accessors now sit above their first use.
+
+- 6e815d6: Keep the owner badge upright on a moving creep.
+
+  The badge sits inside the creep's rotating body container so the store fill can cover it, and
+  counter-rotated by a fixed quarter turn — which only cancelled the idle heading. Once the creep
+  moved, the badge tilted with it. Facing changes now go through one helper that keeps the badge
+  level at any heading, including a badge that arrives after the creep is already on screen.
+
+- ecdadcf: Fix `syncRotate` creep decorations rendering a quarter turn counter-clockwise.
+
+  The artwork is drawn for the reference renderer, whose creep container faces
+  `atan2(dy, dx) + π/2` — zero means "moving up". Ours faces plain `atan2(dy, dx)`, so an
+  overlay inheriting that rotation landed 90° off.
+
+- f31e5c8: Send the shard with flag-name lookups. `genUniqueFlagName()` and `checkUniqueFlagName()` now take an optional `shard`, and the client passes the shard of the room being viewed. Without it, official multi-shard servers rejected both calls with `invalid shard`, so the flag form could not generate or validate a name.
+
+  `addGlobalIntent()`, `setNotifyWhenAttacked()`, `createInvader()` and `removeInvader()` gained the same optional `shard` argument — the official client sends one on all four, and they were previously unusable on multi-shard servers for the same reason.
+
+  `tick()` also takes an optional `shard`, and with one it queries the official server's per-shard route `/api/game/shards/tick` instead of the shardless `/api/game/tick`, which only private servers provide. Calls without a shard are unchanged.
+
+- 47b7b75: Fix the inventory's room, theme and decoration lists never loading or refreshing.
+
+  All three took their dependency by reading it inside the fetcher, which `createResource` runs
+  exactly once — so whatever wasn't ready when the page mounted stayed missing for the rest of the
+  session. The room picker was hit hardest, since it also needs the user id. They now take their
+  dependency as a source signal, and the room list refreshes when the editor opens so claiming or
+  losing a room mid-session can't leave a stale picker.
+
 ## 0.19.0
 
 ### Minor Changes
