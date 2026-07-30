@@ -8,7 +8,7 @@ import { createLogger } from '~/utils/log.js'
 
 const { log, warn, error } = createLogger('build')
 
-export type RoomViewMode = 'view' | 'flag' | 'build'
+export type RoomViewMode = 'view' | 'flag' | 'build' | 'decorate'
 
 export interface FlagDraft {
     name: string
@@ -270,6 +270,10 @@ export function modeHint(): JSX.Element | null {
       </div>
     )
   }
+
+  // Decorate mode's hint depends on whether anything is being edited yet, so it lives in
+  // `decorationEditStore` alongside that state — importing it here would be a cycle.
+  if (mode === 'decorate') return null
 
   if (mode === 'build') {
     const draft = buildDraft()

@@ -16,11 +16,25 @@ import type { DecorationSprite, GraffitiDecoration } from './roomDecorations.js'
  * the artwork is drawn once, tinted. Drawing that second copy as a normal sprite would
  * paint an untinted white shape straight over the real one.
  */
+/** Where one graffiti sits, in room cells. Mirrors the editor's `Placement`. */
+export interface GraffitiTransform {
+  x: number
+  y: number
+  width: number
+  height: number
+  rotation: number
+}
+
 export class DecorationLayer {
   readonly base: Container
   private readonly baseContent: Container
   private readonly animator: DecorationAnimator
   private destroyed = false
+  /** Sprites per decoration id, so the in-room editor can move one without a rebuild. */
+  private readonly spritesById = new Map<string, Array<Sprite | TilingSprite>>()
+  private readonly items = new Map<string, GraffitiDecoration>()
+  /** Live transforms from the editor, kept for sprites whose texture resolves later. */
+  private readonly transforms = new Map<string, GraffitiTransform>()
 
   constructor(graffiti: readonly GraffitiDecoration[], terrain: RoomTerrain, ticker: Ticker) {
     this.animator = new DecorationAnimator(ticker)
@@ -31,6 +45,7 @@ export class DecorationLayer {
     this.baseContent = this.maskedContent(this.base, terrain)
 
     for (const item of graffiti) {
+      this.items.set(item.id, item)
       for (const sprite of item.sprites) {
         this.addSprite(this.baseContent, item, sprite)
       }
@@ -40,7 +55,50 @@ export class DecorationLayer {
   destroy(): void {
     this.destroyed = true
     this.animator.destroy()
+    this.spritesById.clear()
+    this.transforms.clear()
     this.base.destroy({ children: true })
+  }
+
+  /**
+   * Move, resize or turn one decoration in place.
+   *
+   * The in-room editor calls this on every pointer move, so it must not touch the scene
+   * graph: rebuilding the layer would re-create the wall mask and re-await every texture.
+   * Pass `null` to fall back to the decoration's stored placement.
+   */
+  setTransform(id: string, transform: GraffitiTransform | null): void {
+    if (transform) this.transforms.set(id, transform)
+    else this.transforms.delete(id)
+
+    const sprites = this.spritesById.get(id)
+    if (!sprites) return
+    for (const sprite of sprites) this.applyTransform(sprite, id)
+  }
+
+  /** Position a sprite from its decoration's placement, or the editor's override. */
+  private applyTransform(sprite: Sprite | TilingSprite, id: string): void {
+    const item = this.items.get(id)
+    if (!item) return
+    const geometry = this.transforms.get(id) ?? item
+
+    const width = geometry.width * TILE_SIZE
+    const height = geometry.height * TILE_SIZE
+    if (sprite instanceof TilingSprite) {
+      sprite.width = width
+      sprite.height = height
+    } else {
+      // setSize drives the sprite's scale off the texture, so the flip has to be
+      // re-applied after it rather than multiplied in once at creation.
+      sprite.setSize(width, height)
+    }
+
+    // The reference grid puts cell (0,0)'s centre at the origin, ours puts its
+    // top-left corner there — hence half a cell more than the reference formula.
+    sprite.x = Math.floor((geometry.x + geometry.width / 2) * TILE_SIZE)
+    sprite.y = Math.floor((geometry.y + geometry.height / 2) * TILE_SIZE)
+    sprite.scale.x = Math.abs(sprite.scale.x) * (item.flip ? -1 : 1)
+    sprite.rotation = geometry.rotation
   }
 
   private maskedContent(root: Container, terrain: RoomTerrain): Container {
@@ -61,26 +119,24 @@ export class DecorationLayer {
     loadDecorationTexture(spec.url).then((texture) => {
       if (this.destroyed || holder.destroyed) return
 
-      const width = item.width * TILE_SIZE
-      const height = item.height * TILE_SIZE
       let sprite: Sprite | TilingSprite
       if (spec.tiling) {
-        const tiled = new TilingSprite({ texture, width, height })
+        const tiled = new TilingSprite({ texture, width: item.width * TILE_SIZE, height: item.height * TILE_SIZE })
         tiled.tileScale.set(spec.tileScale)
         sprite = tiled
       } else {
         sprite = new Sprite(texture)
-        sprite.setSize(width, height)
       }
 
       sprite.anchor.set(0.5)
-      // The reference grid puts cell (0,0)'s centre at the origin, ours puts its
-      // top-left corner there — hence half a cell more than the reference formula.
-      sprite.x = Math.floor((item.x + item.width / 2) * TILE_SIZE)
-      sprite.y = Math.floor((item.y + item.height / 2) * TILE_SIZE)
       if (spec.tint != null) sprite.tint = spec.tint
-      if (item.flip) sprite.scale.x *= -1
-      sprite.rotation = item.rotation
+
+      const known = this.spritesById.get(item.id)
+      if (known) known.push(sprite)
+      else this.spritesById.set(item.id, [sprite])
+      // Placement runs through the same path the editor uses, so a drag that started
+      // before this texture resolved is already accounted for.
+      this.applyTransform(sprite, item.id)
 
       holder.addChild(sprite)
       if (item.animation) this.animator.add(sprite, item.animation)

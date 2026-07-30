@@ -5,6 +5,8 @@ import { showRoomDecorations } from '~/stores/settingsStore.js'
 import { userInfo } from '~/stores/clientStore.js'
 import { capabilities } from '~/stores/capabilities.js'
 import { goToInventory } from '~/stores/routeStore.js'
+import { historyMode } from '~/stores/historyStore.js'
+import { beginDecorationEdit } from '~/stores/decorationEditStore.js'
 import { UserLink } from '~/components/UserLink.js'
 import { DECORATION_TYPE_LABELS as TYPE_LABELS, rarityColor } from '~/components/inventory/sorting.js'
 
@@ -23,9 +25,25 @@ function DecorationRow(props: { item: ApiRoomDecorationItem }) {
   // inventory does, so their `_id` addresses the editor directly.
   const editable = () => capabilities().hasInventory && props.item.user === userInfo()?._id
 
+  // Editing happens in the room itself; history playback is a read-only view of a past
+  // tick, so there it falls back to the inventory dialog.
+  const edit = () => {
+    if (!editable()) return
+    if (historyMode()) {
+      goToInventory(props.item._id)
+      return
+    }
+    beginDecorationEdit({
+      _id: props.item._id,
+      decoration: decoration(),
+      active: props.item.active,
+      wasActive: true,
+    })
+  }
+
   return (
     <div
-      onClick={() => { if (editable()) goToInventory(props.item._id) }}
+      onClick={edit}
       title={editable() ? 'Edit' : undefined}
       style={{
         display: 'flex', gap: '8px', 'align-items': 'center',

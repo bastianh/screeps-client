@@ -10,13 +10,18 @@ import { RoomInfoBox } from './RoomInfoBox.js'
 import { RoomDecorationsPanel } from './RoomDecorationsPanel.js'
 import { FlagForm } from './FlagForm.js'
 import { BuildPanel } from './BuildPanel.js'
+import { DecoratePanel } from './DecoratePanel.js'
 import { HistoryControlPanel } from './HistoryControlPanel.js'
 import { CustomUiPanel } from './CustomUiPanel.js'
 
 function RoomModePanel(props: { shard?: string | null }) {
   return (
     <Show when={roomViewMode() === 'flag'} fallback={
-      <Show when={roomViewMode() === 'build'} fallback={<SelectionList />}>
+      <Show when={roomViewMode() === 'build'} fallback={
+        <Show when={roomViewMode() === 'decorate'} fallback={<SelectionList />}>
+          <DecoratePanel />
+        </Show>
+      }>
         <BuildPanel shard={props.shard} />
       </Show>
     }>

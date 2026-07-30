@@ -1,5 +1,5 @@
 import { createEffect, createMemo, createSignal, onCleanup, onMount, untrack, Show } from 'solid-js'
-import { RoomRenderer, Z } from '~/renderer/RoomRenderer.js'
+import { RoomRenderer, TILE_SIZE, Z } from '~/renderer/RoomRenderer.js'
 import { createTerrainLayer, setTerrainEffectsVisible } from '~/renderer/TerrainLayer.js'
 import { parseRoomDecorations, mergeDecorationItems, type RoomDecoration } from '~/renderer/roomDecorations.js'
 import { DecorationLayer } from '~/renderer/DecorationLayer.js'
@@ -11,7 +11,13 @@ import { client, gameTime, setGameTime, recordGameTime, tickDuration, worldBound
 import { showCreepLabels, terrainEffects, showRoomVisuals, showRoomDecorations, roomDarkOverlay, smoothAnimations } from '~/stores/settingsStore.js'
 import { setSelection, clearSelection, selection, updateSelectionWithDiff, updateSelectionFromObjects, createSelectedObject } from '~/stores/selectionStore.js'
 import { addToast } from '~/stores/toastStore.js'
-import { setRoomObjectCount, setRoomOwner, setControllerLevel, setControllerProgress, setControllerReservation, setStructureCounts, setRoomUsers, roomUsers, setCurrentShard, setCurrentRoom, setRoomDecorationItems } from '~/stores/roomDataStore.js'
+import { setRoomObjectCount, setRoomOwner, setControllerLevel, setControllerProgress, setControllerReservation, setStructureCounts, setRoomUsers, roomUsers, setCurrentShard, setCurrentRoom, setRoomDecorationItems, decorationsRevision } from '~/stores/roomDataStore.js'
+import {
+  decorateHint, decorationDraft, decorationPreviewItem, draftBounds, draftCapabilities,
+  draftHasFrame, draftPlacement, setDraftPlacement,
+} from '~/stores/decorationEditStore.js'
+import { PlacementFrame } from '~/components/inventory/PlacementFrame.js'
+import { AMBER } from '~/components/theme.js'
 import { parseRoomName, formatRoomName, isRoomInWorld } from '~/utils/roomName.js'
 import { useRoomNavigationKeys } from '~/utils/useRoomNavigationKeys.js'
 import type { ApiRoomDecorationItem, Badge, RoomTerrain, RoomObjectMap, RoomObjectDiff } from 'screeps-connectivity'
@@ -43,6 +49,19 @@ function regenerateUniqueFlagName(
     .catch((err) => error('gen unique flag name failed:', err))
 }
 
+/** Decorate mode's hint, which depends on the draft rather than the mode alone. */
+function DecorateHint() {
+  return (
+    <div style={{ display: 'flex', 'flex-direction': 'column', gap: '2px', 'text-align': 'center' }}>
+      <span>{decorateHint().primary}</span>
+      <Show when={decorateHint().note}>
+        {(note) => <span style={{ color: AMBER }}>{note()}</span>}
+      </Show>
+      <span style={{ opacity: '0.6', 'font-size': '0.9em' }}>{decorateHint().secondary}</span>
+    </div>
+  )
+}
+
 interface RoomViewerProps {
   room: string
   shard: string | null
@@ -61,9 +80,25 @@ export function RoomViewer(props: RoomViewerProps) {
   // Raw items are kept so socket updates can be merged into them by `_id`; the parsed
   // form every layer consumes is derived from that.
   const [decorationItems, setDecorationItems] = createSignal<{ room: string; items: readonly ApiRoomDecorationItem[] } | null>(null)
+  // Items that arrived over the socket while an HTTP read was in flight. Only those are
+  // layered back on top of the response — carrying every earlier socket item over would
+  // keep a decoration that has since been taken down alive until the next room change.
+  let socketItemsSinceFetch: ApiRoomDecorationItem[] = []
+  // The draft changes on every pointer move, but its geometry is pinned, so most of those
+  // changes are no-ops here. Comparing by content keeps the decoration memo — and with it
+  // the layer rebuild — off the drag path entirely.
+  const decorationPreview = createMemo(decorationPreviewItem, undefined, {
+    equals: (a, b) => JSON.stringify(a) === JSON.stringify(b),
+  })
   const roomDecoration = createMemo<{ room: string; decoration: RoomDecoration } | null>(() => {
     const raw = decorationItems()
-    return raw ? { room: raw.room, decoration: parseRoomDecorations(raw.items) } : null
+    if (!raw) return null
+    // While a decoration is being edited in this room, the draft stands in for the stored
+    // item — that is what makes a colour or animation change show up live. Its geometry
+    // is pinned (see `decorationPreviewItem`) and pushed to the layer separately.
+    const preview = raw.room === props.room ? decorationPreview() : null
+    const items = preview ? mergeDecorationItems(raw.items, [preview]) : raw.items
+    return { room: raw.room, decoration: parseRoomDecorations(items) }
   })
   // Publish the raw items for the sidebar and the creep properties panel.
   createEffect(() => {
@@ -137,18 +172,22 @@ export function RoomViewer(props: RoomViewerProps) {
 
     const room = props.room
     const shard = props.shard
+    // Re-read after this client placed or removed a decoration. The room socket only
+    // carries decorations when the server volunteers them, so an activation made from
+    // the inventory would otherwise stay invisible until the room was reloaded.
+    void decorationsRevision()
 
     let cancelled = false
+    socketItemsSinceFetch = []
     c.http.game.roomDecorations(room, shard)
       .then((resp) => {
         if (!cancelled) {
           log(`decorations loaded — ${room}: ${resp.decorations.length} item(s)`)
-          // A room tick can land before this resolves; layer those items back on top
-          // instead of dropping them.
-          setDecorationItems((prev) => {
-            const fromSocket = prev?.room === room ? prev.items : []
-            return { room, items: mergeDecorationItems(resp.decorations, fromSocket) }
-          })
+          // The response is authoritative, so removals take effect; a room tick that
+          // landed while it was in flight is layered back on top rather than dropped.
+          const items = mergeDecorationItems(resp.decorations, socketItemsSinceFetch)
+          socketItemsSinceFetch = []
+          setDecorationItems({ room, items })
         }
       })
       .catch((err) => { if (!cancelled) log(`no decorations for ${room}: ${err}`) })
@@ -168,6 +207,7 @@ export function RoomViewer(props: RoomViewerProps) {
 
     const sub = c.stores.room.on('room:decorations', (data) => {
       if (data.room !== room || data.shard !== shard) return
+      socketItemsSinceFetch.push(...data.decorations)
       setDecorationItems((prev) => {
         const current = prev?.room === room ? prev.items : []
         const merged = mergeDecorationItems(current, data.decorations)
@@ -587,6 +627,50 @@ export function RoomViewer(props: RoomViewerProps) {
     log(`graffiti — ${props.room}: ${dec.decoration.graffiti.length} item(s)`)
     decorationLayerRef = new DecorationLayer(dec.decoration.graffiti, t.data, r.app.ticker)
     r.world.addChild(decorationLayerRef.base)
+
+    // A rebuild — a colour edit, a tick carrying decorations — starts from the stored
+    // placement, so an in-progress drag has to be put back on top of it.
+    const draft = untrack(decorationDraft)
+    const placement = untrack(draftPlacement)
+    if (draft && placement) decorationLayerRef.setTransform(draft.id, placement)
+  })
+
+  // ── In-room decoration editing ──────────────────────────────────────────────────
+  // The frame and its handles are HTML drawn over the canvas, so they need the world
+  // transform to be readable and to hold still. Locking the camera gives both, and a
+  // fully zoomed-out room is what makes a decoration reachable without panning.
+  const [viewTransform, setViewTransform] = createSignal({ x: 0, y: 0, scale: 1 })
+  // A plain boolean, so a drag — which replaces the draft on every pointer move — does
+  // not re-run the camera wiring underneath it. The camera parks as soon as the mode is
+  // entered, before anything is picked: choosing what to place means looking at the room.
+  const decorating = createMemo(() => roomViewMode() === 'decorate')
+
+  createEffect(() => {
+    const r = renderer()
+    if (!r) return
+
+    const editing = decorating()
+    r.setCameraLocked(editing)
+    if (!editing) {
+      r.setViewChangeHandler(null)
+      return
+    }
+
+    const sync = () => setViewTransform(r.viewTransform)
+    r.setViewChangeHandler(sync)
+    sync()
+    onCleanup(() => r.setViewChangeHandler(null))
+  })
+
+  const hint = () => roomViewMode() === 'decorate' ? <DecorateHint /> : modeHint()
+
+  // Dragging never rebuilds the decoration layer: the placement goes straight to the
+  // sprites, so the wall-masked artwork follows the frame at pointer speed.
+  createEffect(() => {
+    const draft = decorationDraft()
+    const placement = draftPlacement()
+    if (!decorationLayerRef || !draft || !placement) return
+    decorationLayerRef.setTransform(draft.id, placement)
   })
 
   // Render objects when they update
@@ -649,6 +733,10 @@ export function RoomViewer(props: RoomViewerProps) {
             const currentRoom = props.room
             const currentShard = props.shard
             const mode = roomViewMode()
+
+            // Decorate mode owns the canvas: the frame handles the gesture, and a click
+            // beside it must not start changing the selection behind the editor.
+            if (mode === 'decorate') return
 
             const overlay = overlayAction()
 
@@ -793,7 +881,7 @@ export function RoomViewer(props: RoomViewerProps) {
           },
           () => {
             const mode = roomViewMode()
-            if (mode === 'build' || mode === 'flag' || overlayAction()?.type === 'moveFlag') {
+            if (mode === 'build' || mode === 'flag' || mode === 'decorate' || overlayAction()?.type === 'moveFlag') {
               resetRoomViewMode()
               r.hoverLayer.clearPendingTile()
             }
@@ -938,7 +1026,26 @@ export function RoomViewer(props: RoomViewerProps) {
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative' }}>
       <div ref={(el) => containerRef = el} style={{ width: '100%', height: '100%' }} />
-      {modeHint() && (
+      <Show when={roomViewMode() === 'decorate' && draftHasFrame() ? draftPlacement() : null}>
+        {(placement) => (
+          <div style={{ position: 'absolute', inset: '0', 'pointer-events': 'none', 'z-index': 9 }}>
+            <PlacementFrame
+              placement={placement()}
+              capabilities={draftCapabilities()!}
+              bounds={draftBounds()!}
+              cellSize={TILE_SIZE * viewTransform().scale}
+              originX={viewTransform().x}
+              originY={viewTransform().y}
+              // The real, wall-masked artwork is already rendering underneath; this is
+              // the ghost that shows where the image sits when it falls off the walls.
+              previewUrl={decorationDraft()?.decoration.preview?.['256x256'] ?? decorationDraft()?.decoration.preview?.original}
+              previewOpacity={0.3}
+              onChange={setDraftPlacement}
+            />
+          </div>
+        )}
+      </Show>
+      {hint() && (
         <div
           style={{
             position: 'absolute',
@@ -957,7 +1064,7 @@ export function RoomViewer(props: RoomViewerProps) {
             'z-index': 10,
           }}
         >
-          {modeHint()}
+          {hint()}
         </div>
       )}
       {!historyMode() && gameTime() !== null && (

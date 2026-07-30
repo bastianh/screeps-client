@@ -42,6 +42,8 @@ export class RoomRenderer {
   private onHoverTile: ((tx: number | null, ty: number | null) => void) | null = null
   private onClickTile: ((tx: number, ty: number, ctrlKey: boolean) => void) | null = null
   private onRightClick: (() => void) | null = null
+  private onViewChange: (() => void) | null = null
+  private cameraLocked = false
 
   private constructor(app: Application, container: HTMLElement) {
     this.app = app
@@ -71,6 +73,29 @@ export class RoomRenderer {
     this.centerView()
     this.clampView()
     this.setupResizeObserver()
+  }
+
+  /**
+   * Park the camera on the whole room and stop it moving.
+   *
+   * The in-room decoration editor draws its frame and handles as HTML over the canvas, so
+   * it needs the world transform to hold still between renders — and a fixed, fully
+   * zoomed-out view is what makes a decoration editable end to end without panning.
+   */
+  setCameraLocked(locked: boolean): void {
+    if (this.cameraLocked === locked) return
+    this.cameraLocked = locked
+    if (locked) this.resetView()
+  }
+
+  /** Where the room sits on screen right now: origin of cell (0,0) plus the zoom. */
+  get viewTransform(): { x: number; y: number; scale: number } {
+    return { x: this.world.x, y: this.world.y, scale: this.world.scale.x }
+  }
+
+  /** Called whenever {@link viewTransform} changed — pan, zoom, resize, reset. */
+  setViewChangeHandler(handler: (() => void) | null): void {
+    this.onViewChange = handler
   }
 
   bringNavOverlayToTop(): void {
@@ -144,6 +169,7 @@ export class RoomRenderer {
     }
 
     this.canDrag = true
+    this.onViewChange?.()
   }
 
   private getTargetPosition(): { x: number; y: number } | null {
@@ -272,7 +298,14 @@ export class RoomRenderer {
       activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
       canvas.setPointerCapture(e.pointerId)
 
-      if (activePointers.size >= 2) {
+      if (this.cameraLocked) {
+        // Still track the pointer so a tap is recognised as a click, but never pan or
+        // zoom: the decoration editor's HTML handles are positioned against this view.
+        pinching = false
+        dragging = false
+        lastPos = new Point(e.clientX, e.clientY)
+        pointerDownPos = new Point(e.clientX, e.clientY)
+      } else if (activePointers.size >= 2) {
         // Enter pinch mode, cancel single-finger drag
         dragging = false
         pinching = true
@@ -351,6 +384,17 @@ export class RoomRenderer {
 
       dragging = false
 
+      if (this.cameraLocked) {
+        const dx = e.clientX - pointerDownPos.x
+        const dy = e.clientY - pointerDownPos.y
+        if (Math.sqrt(dx * dx + dy * dy) < CLICK_THRESHOLD) {
+          const rect = canvas.getBoundingClientRect()
+          const tile = this.screenToTile(e.clientX - rect.left, e.clientY - rect.top)
+          if (tile) this.onClickTile?.(tile.tx, tile.ty, e.ctrlKey || e.metaKey)
+        }
+        return
+      }
+
       // Treat as click if pointer barely moved
       const dx = e.clientX - pointerDownPos.x
       const dy = e.clientY - pointerDownPos.y
@@ -381,6 +425,7 @@ export class RoomRenderer {
 
     canvas.addEventListener('wheel', (e) => {
       e.preventDefault()
+      if (this.cameraLocked) return
       const scaleFactor = e.deltaY > 0 ? 0.9 : 1.1
       const minScale = this.getMinScale()
       const maxScale = 5
@@ -479,7 +524,10 @@ export class RoomRenderer {
     this.resizeObserver = new ResizeObserver((entries) => {
       const { width, height } = entries[0].contentRect
       this.app.renderer.resize(width, height)
-      this.clampView()
+      // A locked camera re-fits instead of clamping, so "the whole room is visible"
+      // survives the sidebar being opened or the window being resized.
+      if (this.cameraLocked) this.resetView()
+      else this.clampView()
     })
     this.resizeObserver.observe(this.container)
   }

@@ -29,6 +29,7 @@ import { historyMode, historyTick, enterHistoryMode, exitHistoryMode, seekToTick
 import { widescreenMode } from '~/stores/settingsStore.js'
 import { showSegments, setShowSegments, showCustomUiEditor, setShowCustomUiEditor } from '~/stores/consoleStore.js'
 import { setRoomViewMode } from '~/stores/roomViewStore.js'
+import { startDecorationPlacement } from '~/stores/decorationEditStore.js'
 import { initCustomUi, disposeCustomUi } from '~/stores/customUiStore.js'
 import { route, goToUser, goToGame, goToMarket, goToRoomOverview, goToLeaderboard, goToInventory } from '~/stores/routeStore.js'
 import { Overview } from '~/components/Overview.js'
@@ -375,6 +376,7 @@ export function Dashboard() {
         if (!isGuest()) {
           if (e.key === '2') setRoomViewMode('flag')
           if (e.key === '3') setRoomViewMode('build')
+          if (e.key === '4' && capabilities().hasInventory) startDecorationPlacement()
         }
         if (e.key === 'm') openMap(room())
       }
