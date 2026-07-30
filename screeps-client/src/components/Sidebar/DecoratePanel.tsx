@@ -7,8 +7,9 @@ import { goToInventory } from '~/stores/routeStore.js'
 import {
   cancelDecorationEdit, deactivateDecorationEdit, decorationBusy, decorationDraft,
   draftBounds, draftCapabilities, draftDirty, draftHasFrame, draftPlacement,
-  saveDecorationEdit, setDraftPlacement, setDraftProp,
+  saveDecorationEdit, setDraftPlacement, setDraftProp, startDecorationPlacement,
 } from '~/stores/decorationEditStore.js'
+import { DecorationPicker } from './DecorationPicker.js'
 
 // Sidebar half of the in-room decoration editor: the numbers behind the frame that is
 // being dragged on the canvas, everything the decoration exposes besides its geometry,
@@ -56,7 +57,7 @@ export function DecoratePanel() {
   const canSave = () => !decorationBusy() && (draftDirty() || decorationDraft()?.wasActive === false)
 
   return (
-    <Show when={decorationDraft()}>
+    <Show when={decorationDraft()} fallback={<DecorationPicker />}>
       {(draft) => (
         <div style={{ padding: '8px', overflow: 'auto', 'min-height': 0, flex: 1 }}>
           <div style={{
@@ -129,12 +130,22 @@ export function DecoratePanel() {
 
           <div style={{ display: 'flex', 'flex-wrap': 'wrap', gap: '6px', 'margin-top': '4px' }}>
             <button onClick={() => void saveDecorationEdit()} disabled={!canSave()} style={buttonStyle('primary', canSave())}>
-              Save
+              {draft().wasActive ? 'Save' : 'Activate'}
             </button>
             <button onClick={cancelDecorationEdit} disabled={decorationBusy()} style={buttonStyle('plain', !decorationBusy())}>
               Cancel
             </button>
-            <Show when={draft().wasActive}>
+            <Show when={draft().wasActive} fallback={
+              // Nothing has been placed yet, so backing out returns to the list rather
+              // than leaving the mode altogether.
+              <button
+                onClick={startDecorationPlacement}
+                disabled={decorationBusy()}
+                style={buttonStyle('plain', !decorationBusy())}
+              >
+                Pick another
+              </button>
+            }>
               <button
                 onClick={() => void deactivateDecorationEdit()}
                 disabled={decorationBusy()}

@@ -271,16 +271,9 @@ export function modeHint(): JSX.Element | null {
     )
   }
 
-  // The decoration itself is named in the sidebar panel, which also owns Save — this only
-  // has to say that the camera is parked on purpose.
-  if (mode === 'decorate') {
-    return (
-      <div style={{ display: 'flex', 'flex-direction': 'column', gap: '2px', 'text-align': 'center' }}>
-        <span>Drag the decoration · Save in the sidebar</span>
-        <span style={{ opacity: '0.6', 'font-size': '0.9em' }}>Zoom is locked to the whole room · Right-click to exit</span>
-      </div>
-    )
-  }
+  // Decorate mode's hint depends on whether anything is being edited yet, so it lives in
+  // `decorationEditStore` alongside that state — importing it here would be a cycle.
+  if (mode === 'decorate') return null
 
   if (mode === 'build') {
     const draft = buildDraft()

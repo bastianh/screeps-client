@@ -13,7 +13,7 @@ import { setSelection, clearSelection, selection, updateSelectionWithDiff, updat
 import { addToast } from '~/stores/toastStore.js'
 import { setRoomObjectCount, setRoomOwner, setControllerLevel, setControllerProgress, setControllerReservation, setStructureCounts, setRoomUsers, roomUsers, setCurrentShard, setCurrentRoom, setRoomDecorationItems, decorationsRevision } from '~/stores/roomDataStore.js'
 import {
-  decorationDraft, decorationPreviewItem, draftBounds, draftCapabilities,
+  decorateHint, decorationDraft, decorationPreviewItem, draftBounds, draftCapabilities,
   draftHasFrame, draftPlacement, setDraftPlacement,
 } from '~/stores/decorationEditStore.js'
 import { PlacementFrame } from '~/components/inventory/PlacementFrame.js'
@@ -46,6 +46,16 @@ function regenerateUniqueFlagName(
       setFlagDraft((prev) => ({ ...prev, name: res.name }))
     })
     .catch((err) => error('gen unique flag name failed:', err))
+}
+
+/** Decorate mode's hint, which depends on the draft rather than the mode alone. */
+function DecorateHint() {
+  return (
+    <div style={{ display: 'flex', 'flex-direction': 'column', gap: '2px', 'text-align': 'center' }}>
+      <span>{decorateHint().primary}</span>
+      <span style={{ opacity: '0.6', 'font-size': '0.9em' }}>{decorateHint().secondary}</span>
+    </div>
+  )
 }
 
 interface RoomViewerProps {
@@ -627,8 +637,9 @@ export function RoomViewer(props: RoomViewerProps) {
   // fully zoomed-out room is what makes a decoration reachable without panning.
   const [viewTransform, setViewTransform] = createSignal({ x: 0, y: 0, scale: 1 })
   // A plain boolean, so a drag — which replaces the draft on every pointer move — does
-  // not re-run the camera wiring underneath it.
-  const decorating = createMemo(() => roomViewMode() === 'decorate' && decorationDraft() != null)
+  // not re-run the camera wiring underneath it. The camera parks as soon as the mode is
+  // entered, before anything is picked: choosing what to place means looking at the room.
+  const decorating = createMemo(() => roomViewMode() === 'decorate')
 
   createEffect(() => {
     const r = renderer()
@@ -646,6 +657,8 @@ export function RoomViewer(props: RoomViewerProps) {
     sync()
     onCleanup(() => r.setViewChangeHandler(null))
   })
+
+  const hint = () => roomViewMode() === 'decorate' ? <DecorateHint /> : modeHint()
 
   // Dragging never rebuilds the decoration layer: the placement goes straight to the
   // sprites, so the wall-masked artwork follows the frame at pointer speed.
@@ -1028,7 +1041,7 @@ export function RoomViewer(props: RoomViewerProps) {
           </div>
         )}
       </Show>
-      {modeHint() && (
+      {hint() && (
         <div
           style={{
             position: 'absolute',
@@ -1047,7 +1060,7 @@ export function RoomViewer(props: RoomViewerProps) {
             'z-index': 10,
           }}
         >
-          {modeHint()}
+          {hint()}
         </div>
       )}
       {!historyMode() && gameTime() !== null && (

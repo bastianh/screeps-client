@@ -1,8 +1,10 @@
-import { For, Show, type JSX } from 'solid-js'
-import { Eye, Flag, Hammer } from 'lucide-solid'
+import { createMemo, For, Show, type JSX } from 'solid-js'
+import { Eye, Flag, Hammer, Palette } from 'lucide-solid'
 import { gameTime, tickDuration, isGuest } from '~/stores/clientStore.js'
 import { roomObjectCount, roomOwner, controllerLevel, controllerProgress, controllerReservation, roomUsers } from '~/stores/roomDataStore.js'
+import { capabilities } from '~/stores/capabilities.js'
 import { roomViewMode, setRoomViewMode, type RoomViewMode } from '~/stores/roomViewStore.js'
+import { startDecorationPlacement } from '~/stores/decorationEditStore.js'
 import { historyMode, exitHistoryMode } from '~/stores/historyStore.js'
 import { showCreepLabels, setShowCreepLabels, showRoomVisuals, setShowRoomVisuals } from '~/stores/settingsStore.js'
 import { CONTROLLER_LEVEL_TOTAL } from '~/utils/gameConstants.js'
@@ -17,9 +19,15 @@ const ROOM_VIEW_MODES: Array<{ mode: RoomViewMode; label: string; icon: () => JS
   { mode: 'view', label: 'View',  icon: () => <Eye size={14} /> },
   { mode: 'flag', label: 'Flag',  icon: () => <Flag size={14} /> },
   { mode: 'build', label: 'Build', icon: () => <Hammer size={14} /> },
+  // Decorations only exist where the server advertises the inventory feature, which is
+  // the same gate the /inventory route uses.
+  { mode: 'decorate', label: 'Decorate', icon: () => <Palette size={14} /> },
 ]
 
 export function RoomInfoPanel(props: RoomInfoPanelProps) {
+  const modes = createMemo(() =>
+    ROOM_VIEW_MODES.filter(entry => entry.mode !== 'decorate' || capabilities().hasInventory))
+
   return (<div style={{ padding: '8px', 'border-bottom': '1px solid #30363d', 'flex-shrink': 0 }}>
     <div style={{
       padding: '4px 8px', background: '#161b22', 'border-radius': '6px', border: '1px solid #30363d',
@@ -129,18 +137,25 @@ export function RoomInfoPanel(props: RoomInfoPanelProps) {
       <div
         style={{
           display: 'grid',
-          'grid-template-columns': 'repeat(3, 1fr)',
+          'grid-template-columns': `repeat(${modes().length}, 1fr)`,
           gap: '4px',
           'margin-top': '8px',
         }}
       >
-        <For each={ROOM_VIEW_MODES}>
+        <For each={modes()}>
           {(entry) => {
             const active = () => !historyMode() && roomViewMode() === entry.mode
+            const enter = () => {
+              if (historyMode()) exitHistoryMode()
+              // Decorate mode starts on the picker, and re-entering it from the button
+              // returns there rather than keeping a half-finished draft around.
+              if (entry.mode === 'decorate') startDecorationPlacement()
+              else setRoomViewMode(entry.mode)
+            }
             return (
               <button
                 type="button"
-                onClick={() => { if (historyMode()) exitHistoryMode(); setRoomViewMode(entry.mode) }}
+                onClick={enter}
                 title={entry.label}
                 style={{
                   padding: '5px 8px',

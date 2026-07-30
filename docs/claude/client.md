@@ -22,9 +22,9 @@ src/
 │   └── Dashboard.tsx            # Main layout: header, canvas, console, sidebar + draggable splitters; URL routing
 ├── components/
 │   ├── theme.ts                 # Central GitHub-dark palette tokens for the HTML UI
-│   ├── Sidebar/                 # index.tsx + BuildPanel, FlagForm, DecoratePanel, RoomInfoBox,
-│   │                            #   RoomDecorationsPanel, CustomUiPanel, CustomObjectActions,
-│   │                            #   HistoryControlPanel
+│   ├── Sidebar/                 # index.tsx + BuildPanel, FlagForm, DecoratePanel,
+│   │                            #   DecorationPicker, RoomInfoBox, RoomDecorationsPanel,
+│   │                            #   CustomUiPanel, CustomObjectActions, HistoryControlPanel
 │   ├── inventory/               # Decoration inventory + editor: Inventory, DecorationDialog,
 │   │                            #   DecorationProperties, PlacementFrame (shared drag frame),
 │   │                            #   DecorationPositionEditor, positionEditor.ts (geometry),
@@ -115,7 +115,9 @@ src/
 
 ## In-room decoration editor
 
-`roomViewStore`'s `decorate` mode edits a decoration where it actually sits, in the live room. Entry points: a row in `RoomDecorationsPanel`, or "Edit in the room view instead" in the inventory dialog. `decorationEditStore` owns the draft and drops it whenever the mode leaves `decorate` — which a room change does, so a draft never outlives its room.
+`roomViewStore`'s `decorate` mode places and edits a decoration where it actually sits, in the live room. Entry points: the Decorate button in `RoomInfoPanel` (or `4`), which opens `DecorationPicker` with the account's unplaced decorations; a row in `RoomDecorationsPanel`, for one already in the room; or "Edit in the room view instead" in the inventory dialog. `decorationEditStore` owns the draft and drops it whenever the mode leaves `decorate` — which a room change does, so a draft never outlives its room.
+
+A new placement starts centred rather than at the schema's origin default, which sits under the edge wall, and renders through `decorationPreviewItem()` — so an unplaced decoration is visible in the room before it is ever activated. The picker gates on room ownership using `roomOwner` / `controllerReservation`, which the room subscription already provides, and greys out types the room already holds (`collidingTypes`).
 
 Three things make it work:
 

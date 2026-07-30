@@ -3,7 +3,7 @@ import type { ApiRoomDecorationActive, ApiRoomDecorationDef, ApiRoomDecorationIt
 import { buildActiveState } from '~/components/inventory/activation.js'
 import { placeDecoration, unplaceDecoration } from '~/components/inventory/commit.js'
 import {
-  editorCapabilities, placementOf, sizeBounds,
+  clampPlacement, editorCapabilities, placementOf, sizeBounds,
   type EditorCapabilities, type Placement, type SizeBounds,
 } from '~/components/inventory/positionEditor.js'
 import { userInfo } from './clientStore.js'
@@ -51,6 +51,26 @@ createRoot(() => {
 
 export { decorationDraft, decorationBusy }
 
+/**
+ * What the room says while decorate mode is open. `roomViewStore.modeHint` hands this
+ * phase over because the text depends on the draft, which lives here.
+ */
+export function decorateHint(): { primary: string; secondary: string } {
+  const draft = decorationDraft()
+  if (!draft) {
+    return {
+      primary: 'Pick a decoration in the sidebar',
+      secondary: 'Zoom is locked to the whole room · Right-click to exit',
+    }
+  }
+  return {
+    primary: draftHasFrame()
+      ? `Drag the decoration · ${draft.wasActive ? 'Save' : 'Activate'} in the sidebar`
+      : `Adjust it in the sidebar · ${draft.wasActive ? 'Save' : 'Activate'} there too`,
+    secondary: 'Zoom is locked to the whole room · Right-click to exit',
+  }
+}
+
 export function draftPlacement(): Placement | null {
   const draft = decorationDraft()
   return draft ? placementOf(draft.active) : null
@@ -92,6 +112,52 @@ export function decorationPreviewItem(): ApiRoomDecorationItem | null {
     decoration: draft.decoration,
     active: { ...draft.active, ...draft.original },
   }
+}
+
+/**
+ * Open the editor with nothing selected yet, so the sidebar offers the decorations that
+ * are not placed anywhere. The camera parks on the room straight away — you pick what to
+ * place while looking at where it will go.
+ */
+export function startDecorationPlacement(): void {
+  setDecorationDraft(null)
+  setRoomViewMode('decorate')
+}
+
+/**
+ * Start placing a decoration that is not active yet.
+ *
+ * The schema's defaults put a graffiti at the room's origin, which is under the edge wall
+ * and easy to miss, so a positionable decoration starts centred instead.
+ */
+export function beginDecorationPlacement(
+  decorationId: string,
+  decoration: ApiRoomDecorationDef,
+  room: string,
+  shard: string | null,
+): void {
+  const active = buildActiveState(decoration, null)
+  active.room = room
+  if (shard != null) active.shard = shard
+
+  if (editorCapabilities(decoration).positionable) {
+    const placement = placementOf(active)
+    Object.assign(active, clampPlacement({
+      ...placement,
+      x: Math.round((50 - placement.width) / 2),
+      y: Math.round((50 - placement.height) / 2),
+    }, sizeBounds(decoration)))
+  }
+
+  setDecorationDraft({
+    id: decorationId,
+    decoration,
+    active,
+    initial: active,
+    original: placementOf(active),
+    wasActive: false,
+  })
+  setRoomViewMode('decorate')
 }
 
 export function beginDecorationEdit(target: DecorationEditTarget): void {
