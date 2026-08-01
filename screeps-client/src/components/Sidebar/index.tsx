@@ -145,7 +145,12 @@ export function Sidebar(props: SidebarProps) {
           when={props.mapMode}
           fallback={
             <>
-              <RoomDecorationsPanel />
+              {/* The decorations placed in the room are the editor's counterpart to the
+                  picker's unplaced ones, so they belong to decorate mode rather than to
+                  every mode's sidebar. */}
+              <Show when={roomViewMode() === 'decorate'}>
+                <RoomDecorationsPanel />
+              </Show>
               <RoomModePanel shard={props.shard} />
               <CustomUiPanel mode="room" shard={props.shard ?? null} room={props.room} />
             </>

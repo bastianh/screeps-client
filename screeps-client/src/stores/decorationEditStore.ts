@@ -7,6 +7,7 @@ import {
   type EditorCapabilities, type Placement, type SizeBounds,
 } from '~/components/inventory/positionEditor.js'
 import { userInfo } from './clientStore.js'
+import { showRoomDecorations } from './settingsStore.js'
 import { roomViewMode, setRoomViewMode, resetRoomViewMode } from './roomViewStore.js'
 
 // The decoration currently being edited straight in the room view. Only one at a time,
@@ -46,6 +47,12 @@ const [decorationBusy, setDecorationBusy] = createSignal(false)
 createRoot(() => {
   createEffect(() => {
     if (roomViewMode() !== 'decorate') setDecorationDraft(null)
+  })
+
+  // Switching decorations off takes the mode button away and stops the room from drawing
+  // any of them, so an editor left open would have nothing to show and no way back.
+  createEffect(() => {
+    if (!showRoomDecorations() && untrack(roomViewMode) === 'decorate') resetRoomViewMode()
   })
 })
 

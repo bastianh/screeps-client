@@ -5,6 +5,7 @@ import { BG, PANEL, BTN, BORDER, TEXT, MUTED, DIM, GREEN, RED, ACCENT } from '~/
 import { currentRoom, currentShard } from '~/stores/roomDataStore.js'
 import { goToGame } from '~/stores/routeStore.js'
 import { beginDecorationEdit } from '~/stores/decorationEditStore.js'
+import { showRoomDecorations } from '~/stores/settingsStore.js'
 import { DECORATION_TYPE_LABELS, rarityColor } from './sorting.js'
 import { blockedRooms, buildActiveState, findRoomOption, needsRoom, roomKey } from './activation.js'
 import { DecorationPositionEditor } from './DecorationPositionEditor.js'
@@ -93,10 +94,12 @@ export function DecorationDialog(props: DialogProps) {
 
   /**
    * The in-room editor only reaches decorations of the room already on screen, so the
-   * hand-off is offered when this decoration is placed there and nowhere else.
+   * hand-off is offered when this decoration is placed there and nowhere else — and only
+   * while the room actually draws decorations, since the editor closes with that setting.
    */
   const editableInRoom = () =>
     wasActive()
+    && showRoomDecorations()
     && showPositionEditor()
     && selectedRoomName() === currentRoom()
     && selectedShard() === currentShard()

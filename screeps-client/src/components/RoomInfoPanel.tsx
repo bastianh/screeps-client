@@ -6,7 +6,7 @@ import { capabilities } from '~/stores/capabilities.js'
 import { roomViewMode, setRoomViewMode, type RoomViewMode } from '~/stores/roomViewStore.js'
 import { startDecorationPlacement } from '~/stores/decorationEditStore.js'
 import { historyMode, exitHistoryMode } from '~/stores/historyStore.js'
-import { showCreepLabels, setShowCreepLabels, showRoomVisuals, setShowRoomVisuals } from '~/stores/settingsStore.js'
+import { showCreepLabels, setShowCreepLabels, showRoomVisuals, setShowRoomVisuals, showRoomDecorations } from '~/stores/settingsStore.js'
 import { CONTROLLER_LEVEL_TOTAL } from '~/utils/gameConstants.js'
 import { UserLink } from '~/components/UserLink.js'
 
@@ -25,8 +25,11 @@ const ROOM_VIEW_MODES: Array<{ mode: RoomViewMode; label: string; icon: () => JS
 ]
 
 export function RoomInfoPanel(props: RoomInfoPanelProps) {
+  // With decorations switched off the room draws none of them, so the editor would place
+  // into an empty view — hide its entry point along with them.
   const modes = createMemo(() =>
-    ROOM_VIEW_MODES.filter(entry => entry.mode !== 'decorate' || capabilities().hasInventory))
+    ROOM_VIEW_MODES.filter(entry => entry.mode !== 'decorate'
+      || (capabilities().hasInventory && showRoomDecorations())))
 
   return (<div style={{ padding: '8px', 'border-bottom': '1px solid #30363d', 'flex-shrink': 0 }}>
     <div style={{

@@ -84,7 +84,10 @@ function DecorationRow(props: { item: ApiRoomDecorationItem }) {
   )
 }
 
-/** Lists the decorations placed in the current room. Hidden when there are none. */
+/**
+ * Lists the decorations placed in the current room, for decorate mode's sidebar. Hidden
+ * when there are none.
+ */
 export function RoomDecorationsPanel() {
   const items = createMemo(() => roomDecorationItems().filter(i => LISTED_TYPES.has(i.decoration.type)))
 
