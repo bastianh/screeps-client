@@ -1,6 +1,5 @@
 import { defineConfig, loadEnv } from 'vite'
 import solid from 'vite-plugin-solid'
-import devtools from 'solid-devtools/vite'
 import { readFileSync } from 'node:fs'
 import { HttpsProxyAgent } from 'https-proxy-agent'
 import { screepsTsLibs } from './vite-plugin-ts-libs.js'
@@ -31,7 +30,6 @@ export default defineConfig(({ mode }) => {
   return {
     base,
     plugins: [
-      devtools({ autoname: true }),
       solid(),
       screepsTsLibs(),
     ],
@@ -51,10 +49,15 @@ export default defineConfig(({ mode }) => {
         output: {
           manualChunks(id) {
             if (id.includes('/node_modules/pixi.js/')) return 'vendor-pixi'
+            // solid-codemirror must NOT be listed here: forcing it into the
+            // vendor chunk drags its solid-js dependency in with it, and since
+            // the whole app needs solid-js the entry chunk then statically
+            // imports (and preloads) all of CodeMirror — even though the three
+            // editor panels are lazy(). Left unassigned, solid-codemirror rides
+            // along in the editor chunks and solid-js stays in the eager graph.
             if (
               id.includes('/node_modules/codemirror/') ||
-              id.includes('/node_modules/@codemirror/') ||
-              id.includes('/node_modules/solid-codemirror/')
+              id.includes('/node_modules/@codemirror/')
             ) {
               return 'vendor-codemirror'
             }
@@ -84,7 +87,6 @@ export default defineConfig(({ mode }) => {
       },
     },
     resolve: {
-      conditions: ['development'],
       alias: {
         '~/': '/src/',
       },
