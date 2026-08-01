@@ -11,7 +11,8 @@ import { addToast } from '~/stores/toastStore.js'
 import { createLogger } from '~/utils/log.js'
 import { LS, getStr, setStr, getJson, setJson } from '~/utils/storage.js'
 import { parseServerModules, serializeModules, tsModuleNames, type ModuleLang, type LogicalModule } from '~/editor/codeModules.js'
-import { getTsWorker, syncModuleToWorker, tsExtensions, modulePath } from '~/editor/tsClient.js'
+import { getTsWorker, syncModuleToWorker, modulePath } from '~/editor/tsClient.js'
+import { tsExtensions } from '~/editor/tsExtensions.js'
 
 const { error } = createLogger('code')
 

@@ -1,13 +1,4 @@
 import * as Comlink from 'comlink'
-import { autocompletion } from '@codemirror/autocomplete'
-import type { Extension } from '@codemirror/state'
-import {
-  tsFacetWorker,
-  tsSyncWorker,
-  tsAutocompleteWorker,
-  tsLinterWorker,
-  tsHoverWorker,
-} from '@valtown/codemirror-ts'
 import type { WorkerShape } from '@valtown/codemirror-ts/worker'
 import type { ScreepsWorkerApi } from './tsWorker.js'
 
@@ -42,15 +33,4 @@ export function getTsWorker(): Promise<ScreepsTsWorker> {
 export async function syncModuleToWorker(name: string, lang: ModuleLang, source: string) {
   const worker = await getTsWorker()
   await worker.updateFile({ path: modulePath(name, lang), code: source })
-}
-
-/** CodeMirror extensions that wire the editor to the worker for the given TS file path. */
-export function tsExtensions(worker: ScreepsTsWorker, path: string): Extension {
-  return [
-    tsFacetWorker.of({ worker, path }),
-    tsSyncWorker(),
-    autocompletion({ override: [tsAutocompleteWorker()] }),
-    tsLinterWorker(),
-    tsHoverWorker(),
-  ]
 }
