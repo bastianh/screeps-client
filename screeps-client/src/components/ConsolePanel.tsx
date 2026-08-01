@@ -3,7 +3,8 @@ import { Trash2, Pause, Play, X, Plus, Filter } from 'lucide-solid'
 import { client } from '~/stores/clientStore.js'
 import { SubscriptionGroup } from 'screeps-connectivity'
 import type { ConsoleMessage } from 'screeps-connectivity'
-import { showLog, showConsole, showMemory, showSegments, toggleShowLog, toggleShowConsole, toggleShowMemory, toggleShowSegments, consoleInput, setConsoleInput, registerConsoleInput } from '~/stores/consoleStore.js'
+import { showLog, showConsole, showMemory, showSegments, toggleShowLog, toggleShowConsole, toggleShowMemory, toggleShowSegments, consoleInput, setConsoleInput, registerConsoleInput, loadConsoleHistory, pushConsoleHistory, historyPrev, historyNext, resetHistoryCursor } from '~/stores/consoleStore.js'
+import { completeConsole, type ConsoleCompletionResult } from '~/editor/consoleCompletion.js'
 import { watches, tempWatch, memoryValues, addWatch, removeWatch, clearTempWatch, initMemorySubscriptions } from '~/stores/memoryStore.js'
 import { isCustomUiLine } from '~/stores/customUiStore.js'
 import { hideCustomUiProtocol } from '~/stores/settingsStore.js'
@@ -289,35 +290,127 @@ export function ConsolePanel(props: { shard?: string | null; isCollapsed?: boole
     window.removeEventListener('pointermove', handlePointerMove)
   }
 
-  const [history, setHistory] = createSignal<string[]>([])
-  const [historyIdx, setHistoryIdx] = createSignal<number | null>(null)
-  const [historyDraft, setHistoryDraft] = createSignal('')
+  onMount(() => loadConsoleHistory())
+
+  // --- Command line: history + TypeScript completions ---
+  // The two share the arrow keys. Because we own the dropdown state, the rule is
+  // just: list open → navigate the list, otherwise → walk the history.
+
+  let commandInputEl: HTMLInputElement | undefined
+  let completionListEl: HTMLDivElement | undefined
+  const [completions, setCompletions] = createSignal<ConsoleCompletionResult | null>(null)
+  const [completionIdx, setCompletionIdx] = createSignal(0)
+  const completionsOpen = () => completions() !== null
+
+  const closeCompletions = () => {
+    setCompletions(null)
+    setCompletionIdx(0)
+  }
+
+  const caretPos = () => commandInputEl?.selectionStart ?? consoleInput().length
+
+  // Loads the TypeScript worker on first use, so a session that never triggers a
+  // completion never pays for the compiler chunk.
+  const requestCompletions = (source: string, pos: number, explicit: boolean) => {
+    completeConsole(source, pos, explicit)
+      .then((result) => {
+        // A response that no longer matches the input is stale — the user kept
+        // typing, or stepped into the history while the request was in flight.
+        if (source !== consoleInput()) return
+        if (!result) {
+          closeCompletions()
+          return
+        }
+        setCompletions(result)
+        setCompletionIdx(0)
+      })
+      .catch((err) => {
+        error('completion failed:', err)
+        closeCompletions()
+      })
+  }
+
+  const handleInput = (e: InputEvent & { currentTarget: HTMLInputElement }) => {
+    const value = e.currentTarget.value
+    const pos = e.currentTarget.selectionStart ?? value.length
+    resetHistoryCursor()
+    setConsoleInput(value)
+    // Only pop open on '.', where completions are unambiguously wanted. Opening
+    // on every word character would make ArrowUp unreachable and fire a worker
+    // round-trip per keystroke. Once open, keep refining as the user narrows.
+    if (value.slice(pos - 1, pos) === '.' || completionsOpen()) requestCompletions(value, pos, false)
+    else closeCompletions()
+  }
+
+  const moveCompletion = (delta: number) => {
+    const options = completions()?.options
+    if (!options) return
+    const next = (completionIdx() + delta + options.length) % options.length
+    setCompletionIdx(next)
+  }
+
+  const acceptCompletion = () => {
+    const result = completions()
+    if (!result) return
+    const option = result.options[completionIdx()]
+    if (!option) return
+    const value = consoleInput()
+    const cursor = result.from + option.label.length
+    setConsoleInput(value.slice(0, result.from) + option.label + value.slice(caretPos()))
+    closeCompletions()
+    requestAnimationFrame(() => commandInputEl?.setSelectionRange(cursor, cursor))
+  }
+
+  // Keep the highlighted entry visible while arrowing through a long list.
+  createEffect(() => {
+    completions()
+    const el = completionListEl?.children[completionIdx()] as HTMLElement | undefined
+    el?.scrollIntoView({ block: 'nearest' })
+  })
 
   const handleKeyDown = (e: KeyboardEvent) => {
-    const h = history()
-    if (h.length === 0) return
+    if (e.key === ' ' && e.ctrlKey) {
+      e.preventDefault()
+      requestCompletions(consoleInput(), caretPos(), true)
+      return
+    }
+
+    if (completionsOpen()) {
+      switch (e.key) {
+        case 'ArrowDown':
+          e.preventDefault()
+          moveCompletion(1)
+          return
+        case 'ArrowUp':
+          e.preventDefault()
+          moveCompletion(-1)
+          return
+        case 'Enter':
+        case 'Tab':
+          // preventDefault also stops the form from submitting the half-typed command.
+          e.preventDefault()
+          acceptCompletion()
+          return
+        case 'Escape':
+          e.preventDefault()
+          closeCompletions()
+          return
+      }
+      return
+    }
+
     if (e.key === 'ArrowUp') {
       e.preventDefault()
-      const idx = historyIdx()
-      if (idx === null) {
-        setHistoryDraft(consoleInput())
-        setHistoryIdx(h.length - 1)
-        setConsoleInput(h[h.length - 1])
-      } else if (idx > 0) {
-        setHistoryIdx(idx - 1)
-        setConsoleInput(h[idx - 1])
-      }
+      const entry = historyPrev(consoleInput())
+      if (entry !== null) setConsoleInput(entry)
     } else if (e.key === 'ArrowDown') {
       e.preventDefault()
-      const idx = historyIdx()
-      if (idx === null) return
-      if (idx < h.length - 1) {
-        setHistoryIdx(idx + 1)
-        setConsoleInput(h[idx + 1])
-      } else {
-        setHistoryIdx(null)
-        setConsoleInput(historyDraft())
-      }
+      const entry = historyNext()
+      if (entry !== null) setConsoleInput(entry)
+    } else if (e.key === 'Escape') {
+      e.preventDefault()
+      resetHistoryCursor()
+      setConsoleInput('')
     }
   }
 
@@ -326,12 +419,13 @@ export function ConsolePanel(props: { shard?: string | null; isCollapsed?: boole
     const c = client()
     const cmd = consoleInput().trim()
     if (!c || !cmd) return
+    closeCompletions()
+    // Recorded before the request: a command that fails is exactly the one worth
+    // recalling and fixing.
+    pushConsoleHistory(cmd)
+    setConsoleInput('')
     try {
       await c.http.user.console(cmd, props.shard ?? 'shard0')
-      setHistory((prev) => [...prev, cmd])
-      setHistoryIdx(null)
-      setHistoryDraft('')
-      setConsoleInput('')
     } catch (err) {
       error('command failed:', err)
     }
@@ -613,16 +707,65 @@ export function ConsolePanel(props: { shard?: string | null; isCollapsed?: boole
               </div>
               <form
                 onSubmit={handleSubmit}
-                style={{ display: 'flex', gap: '6px', padding: '8px', 'border-top': '1px solid #30363d' }}
+                style={{ display: 'flex', gap: '6px', padding: '8px', 'border-top': '1px solid #30363d', position: 'relative' }}
               >
+                <Show when={completions()}>
+                  {(result) => (
+                    <div
+                      ref={(el) => { completionListEl = el }}
+                      style={{
+                        position: 'absolute',
+                        bottom: '100%',
+                        left: '20px',
+                        'max-height': '220px',
+                        'min-width': '220px',
+                        'max-width': 'calc(100% - 28px)',
+                        'overflow-y': 'auto',
+                        background: '#161b22',
+                        border: '1px solid #30363d',
+                        'border-radius': '4px',
+                        'box-shadow': '0 4px 12px rgba(0, 0, 0, 0.4)',
+                        'z-index': 10,
+                      }}
+                    >
+                      <For each={result().options}>
+                        {(option, i) => (
+                          <div
+                            // Mousedown rather than click: it fires before the input
+                            // loses focus, so preventDefault keeps the caret put.
+                            onMouseDown={(e) => { e.preventDefault(); setCompletionIdx(i()); acceptCompletion() }}
+                            style={{
+                              display: 'flex',
+                              gap: '8px',
+                              padding: '3px 8px',
+                              cursor: 'pointer',
+                              'font-size': '12px',
+                              'font-family': 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                              background: i() === completionIdx() ? '#1f6feb' : 'transparent',
+                              color: i() === completionIdx() ? '#fff' : '#c9d1d9',
+                            }}
+                          >
+                            <span style={{ color: i() === completionIdx() ? '#c9d1d9' : '#8b949e', 'min-width': '52px' }}>
+                              {option.type ?? ''}
+                            </span>
+                            <span>{option.label}</span>
+                          </div>
+                        )}
+                      </For>
+                    </div>
+                  )}
+                </Show>
                 <span style={{ color: '#8b949e', 'font-size': '13px', 'line-height': '28px' }}>&gt;</span>
                 <input
                   type="text"
-                  ref={(el) => registerConsoleInput(el)}
+                  ref={(el) => { commandInputEl = el; registerConsoleInput(el) }}
                   value={consoleInput()}
-                  onInput={(e) => { setHistoryIdx(null); setConsoleInput(e.currentTarget.value) }}
+                  onInput={handleInput}
                   onKeyDown={handleKeyDown}
-                  placeholder="Game.creeps.Harvester1.moveTo(10, 10)"
+                  onBlur={closeCompletions}
+                  autocomplete="off"
+                  spellcheck={false}
+                  placeholder="Game.creeps.Harvester1.moveTo(10, 10)   ·   Ctrl+Space"
                   style={{
                     flex: 1,
                     padding: '6px 8px',

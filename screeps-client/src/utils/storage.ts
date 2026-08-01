@@ -19,6 +19,7 @@ export const LS = {
   consoleHeight: 'screeps:consoleHeight',
   consoleSplit: 'screeps:consoleSplit',
   consoleWeights: 'screeps:consoleWeights',
+  consoleHistory: 'screeps:console:history',
   memoryWatches: 'screeps:memoryWatches',
   mapZoom: 'screeps:mapZoom',
   codeBranch: 'screeps:code:branch',
