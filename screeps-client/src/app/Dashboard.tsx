@@ -26,7 +26,7 @@ const MapViewer = lazy(() =>
 import { client, disconnect, isGuest, userInfo, gameTime, isPrivateServer, serverVersion } from '~/stores/clientStore.js'
 import { capabilities } from '~/stores/capabilities.js'
 import { historyMode, historyTick, enterHistoryMode, exitHistoryMode, seekToTick } from '~/stores/historyStore.js'
-import { widescreenMode } from '~/stores/settingsStore.js'
+import { widescreenMode, showRoomDecorations } from '~/stores/settingsStore.js'
 import { showSegments, setShowSegments, showCustomUiEditor, setShowCustomUiEditor } from '~/stores/consoleStore.js'
 import { setRoomViewMode } from '~/stores/roomViewStore.js'
 import { startDecorationPlacement } from '~/stores/decorationEditStore.js'
@@ -376,7 +376,7 @@ export function Dashboard() {
         if (!isGuest()) {
           if (e.key === '2') setRoomViewMode('flag')
           if (e.key === '3') setRoomViewMode('build')
-          if (e.key === '4' && capabilities().hasInventory) startDecorationPlacement()
+          if (e.key === '4' && capabilities().hasInventory && showRoomDecorations()) startDecorationPlacement()
         }
         if (e.key === 'm') openMap(room())
       }
