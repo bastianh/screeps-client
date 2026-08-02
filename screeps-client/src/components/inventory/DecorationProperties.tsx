@@ -59,7 +59,13 @@ interface PropertiesProps {
 }
 
 export function DecorationProperties(props: PropertiesProps) {
-  const groups = createMemo(() => editorGroups(props.decoration))
+  // The definition is read out of the live draft, so it invalidates on every edit even
+  // though the schema itself never changes. Settling on its identity first keeps
+  // `editorGroups` from handing `For` a fresh array on each keystroke or slider step —
+  // that rebuilt every row, and the browser drops a drag the moment its input is
+  // replaced, so a slider let go after a couple of pixels.
+  const definition = createMemo(() => props.decoration)
+  const groups = createMemo(() => editorGroups(definition()))
   const set = (name: string, value: unknown) => props.onSet(name, value)
   const labelWidth = () => props.labelWidth
 
