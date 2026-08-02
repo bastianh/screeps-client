@@ -123,11 +123,13 @@ function extract(url) {
 }
 
 // The client only ever requests these backend paths through the proxy
-// (HttpClient → /api + /room-history, SocketClient → /socket). Anything else
-// arriving in wrapped form is a browser navigation — e.g. a pasted
-// steamless-client-style URL like `/(https://screeps.com)/` — and must reach
-// the SPA, not the backend's website.
-const PROXY_ENDPOINTS = /^\/(api|socket|room-history)(\/|\?|$)/
+// (HttpClient → /api + /room-history, SocketClient → /socket, plus /assets for
+// server-hosted assets). Anything else arriving in wrapped form is a browser
+// navigation — e.g. a pasted steamless-client-style URL like
+// `/(https://screeps.com)/` — and must reach the SPA, not the backend's
+// website. The client's own build assets live under `_client/`, so claiming
+// `/assets` here doesn't shadow them.
+const PROXY_ENDPOINTS = /^\/(api|socket|room-history|assets)(\/|\?|$)/
 
 // ── proxy ────────────────────────────────────────────────────────────────────
 
