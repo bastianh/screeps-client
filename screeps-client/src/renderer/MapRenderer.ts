@@ -36,6 +36,8 @@ const CLEAR_PADDING = 50
 const POOL_SIZE = 2600 // max visible rooms plus padding
 // Wait this long after the last viewport change before firing onVisibleRoomsChanged
 const VISIBLE_DEBOUNCE_MS = 5
+// Same, for onCenterChanged — longer, because it ends up in the address bar.
+const CENTER_DEBOUNCE_MS = 250
 
 const MIN_ZOOM = 0.1
 const MAX_ZOOM = 5
@@ -81,6 +83,11 @@ export interface MapRendererCallbacks {
   onRoomClick: (room: string) => void
   onVisibleRoomsChanged: (rooms: string[]) => void
   onZoomChanged?: (zoom: number) => void
+  /**
+   * Viewport centre in room units (a whole number is a room corner, `.5` its
+   * centre), debounced so a drag reports once it settles rather than per frame.
+   */
+  onCenterChanged?: (center: { x: number; y: number }) => void
 }
 
 export class MapRenderer {
@@ -128,6 +135,7 @@ export class MapRenderer {
   private pinchStartScale = 0
   private lastVisibleKey = ''
   private visibleDebounceTimer: ReturnType<typeof setTimeout> | null = null
+  private centerDebounceTimer: ReturnType<typeof setTimeout> | null = null
   private selectedRoom: string | null = null
   private currentUserId: string | null = null
   private readonly badgeCache = new BadgeTextureCache()
@@ -240,9 +248,25 @@ export class MapRenderer {
     this.redrawSafeMode()
   }
 
+  // Viewport centre in room units — the inverse of centerOnPoint, and what the
+  // /map URL carries so a bookmarked view comes back to the same place.
+  get center(): { x: number; y: number } {
+    const scale = this.world?.scale.x ?? 1
+    return {
+      x: (this.app.screen.width / 2 - (this.world?.x ?? 0)) / scale / MAP_ROOM_SIZE,
+      y: (this.app.screen.height / 2 - (this.world?.y ?? 0)) / scale / MAP_ROOM_SIZE,
+    }
+  }
+
   centerOn(rx: number, ry: number, animated = false): void {
-    const cx = rx * MAP_ROOM_SIZE + MAP_ROOM_SIZE / 2
-    const cy = ry * MAP_ROOM_SIZE + MAP_ROOM_SIZE / 2
+    this.centerOnPoint(rx + 0.5, ry + 0.5, animated)
+  }
+
+  // Centre on an arbitrary point in room units, so a position between rooms
+  // (as restored from the URL) survives a round trip unchanged.
+  centerOnPoint(x: number, y: number, animated = false): void {
+    const cx = x * MAP_ROOM_SIZE
+    const cy = y * MAP_ROOM_SIZE
     const scale = this.world.scale.x
     const destX = this.app.screen.width  / 2 - cx * scale
     const destY = this.app.screen.height / 2 - cy * scale
@@ -961,6 +985,10 @@ export class MapRenderer {
       clearTimeout(this.visibleDebounceTimer)
       this.visibleDebounceTimer = null
     }
+    if (this.centerDebounceTimer !== null) {
+      clearTimeout(this.centerDebounceTimer)
+      this.centerDebounceTimer = null
+    }
     for (const [, entry] of this.activeRooms) {
       if (entry.texLo && !entry.texLo.destroyed) entry.texLo.destroy(true)
       if (entry.texHi && !entry.texHi.destroyed) entry.texHi.destroy(true)
@@ -1305,6 +1333,16 @@ export class MapRenderer {
     this.lastCheckX = worldX
     this.lastCheckY = worldY
     this.lastCheckScale = scale
+
+    // Report the centre only once the view settles — this drives a URL rewrite,
+    // and browsers rate-limit history updates well below one per frame.
+    if (this.callbacks.onCenterChanged) {
+      if (this.centerDebounceTimer !== null) clearTimeout(this.centerDebounceTimer)
+      this.centerDebounceTimer = setTimeout(() => {
+        this.centerDebounceTimer = null
+        this.callbacks.onCenterChanged?.(this.center)
+      }, CENTER_DEBOUNCE_MS)
+    }
 
     const left   = (-worldX) / scale
     const top    = (-worldY) / scale

@@ -46,7 +46,7 @@ const DEFAULT_BADGE: Badge = { type: 1, color1: '#4a5060', color2: '#7a9ec0', co
 
 import { parseRoomName } from '~/utils/roomName.js'
 import { basePath } from '~/utils/embedded.js'
-import { buildMapUrl, buildRoomUrl } from '~/utils/gameRoutes.js'
+import { buildMapUrl, buildRoomUrl, parseMapView, type MapView } from '~/utils/gameRoutes.js'
 import { isTypingTarget } from '~/utils/dom.js'
 import { LS, getStr, setStr, removeLocal, getNum, setNum } from '~/utils/storage.js'
 
@@ -73,13 +73,13 @@ function parseRoomUrl(): { room: string | null; shard: string | null; tick: numb
   return { room, shard, tick }
 }
 
-function parseMapUrl(): { shard: string | null } | null {
+function parseMapUrl(): { shard: string | null; view: MapView } | null {
   const mapPath = `${basePath()}/map`
   const path = window.location.pathname
   if (path !== mapPath && !path.startsWith(`${mapPath}/`)) return null
   const rest = path.slice(mapPath.length).replace(/^\//, '')
   const pathShard = rest ? decodeURIComponent(rest.split('/')[0]) : null
-  return { shard: pathShard ?? legacyQueryShard() }
+  return { shard: pathShard ?? legacyQueryShard(), view: parseMapView(window.location.search) }
 }
 
 function HeaderButton(props: {
@@ -114,9 +114,17 @@ function HeaderButton(props: {
 
 export function Dashboard() {
   const urlState = parseRoomUrl()
+  const initialMapUrl = parseMapUrl()
   const [room, setRoom] = createSignal(urlState.room ?? getStr(LS.room) ?? 'W1N1')
   const [shard, setShard] = createSignal<string | null>(urlState.shard ?? getStr(LS.shard))
-  const [mapMode, setMapMode] = createSignal(parseMapUrl() !== null || !urlState.room)
+  const [mapMode, setMapMode] = createSignal(initialMapUrl !== null || !urlState.room)
+
+  // Two one-way channels between the map camera and the URL, deliberately not
+  // one signal: `mapCenterPos` is URL → map (deep link, back/forward) and is only
+  // ever written from a URL read, `mapView` is map → URL. Feeding panning back
+  // into mapCenterPos would have the map fighting its own camera.
+  const [mapCenterPos, setMapCenterPos] = createSignal<{ x: number; y: number } | null>(initialMapUrl?.view.pos ?? null)
+  const [mapView, setMapView] = createSignal<MapView | null>(initialMapUrl?.view ?? null)
 
   // Server message-of-the-day, shown once over the map for guest sessions after
   // connecting. Dismissed manually or by its own timer; never re-shown afterwards.
@@ -167,7 +175,9 @@ export function Dashboard() {
   const [hoveredRoomInfo, setHoveredRoomInfo] = createSignal<RoomInfo | null>(null)
   const [selectedRoomInfo, setSelectedRoomInfo] = createSignal<RoomInfo | null>(null)
   const savedMapZoom = getStr(LS.mapZoom)
-  const [mapZoom, setMapZoom] = createSignal<number | null>(urlState.room && savedMapZoom ? Number(savedMapZoom) : null)
+  const [mapZoom, setMapZoom] = createSignal<number | null>(
+    initialMapUrl?.view.zoom ?? (urlState.room && savedMapZoom ? Number(savedMapZoom) : null),
+  )
   const [mapSubsActive, setMapSubsActive] = createSignal<boolean | null>(null)
   // Size of a history chunk, mirroring the fallback in RoomViewer (private servers
   // default to 20, the official server to 100).
@@ -207,6 +217,20 @@ export function Dashboard() {
     } else {
       history.replaceState(null, '', base)
     }
+  })
+
+  // Mirror the map camera into the URL so a view can be bookmarked or shared.
+  // Always replaceState: panning isn't navigation, and a history entry per drag
+  // would make Back useless. MapViewer only reports a settled view, so this runs
+  // once a gesture ends rather than per frame.
+  // The route check is not redundant with mapMode: an overlay route owns the URL
+  // while the map stays mounted underneath, and a settled-view event landing just
+  // after (say) the Leaderboard button was clicked would otherwise overwrite it.
+  createEffect(() => {
+    if (!mapMode() || route() !== 'game') return
+    const view = mapView()
+    if (!view?.pos) return
+    history.replaceState(null, '', buildMapUrl(shard(), view))
   })
 
   const [sidebarWidth, setSidebarWidth] = createSignal(getNum(LS.sidebarWidth, 300))
@@ -292,6 +316,10 @@ export function Dashboard() {
   const syncViewFromUrl = () => {
     const mapState = parseMapUrl()
     if (mapState) {
+      // Before setMapMode, so a map mounting for this transition already sees the
+      // position it should open at.
+      setMapCenterPos(mapState.view.pos)
+      setMapView(mapState.view)
       setMapMode(true)
       if (mapState.shard !== null) setShard(mapState.shard)
       if (untrack(historyMode)) exitHistoryMode()
@@ -319,15 +347,21 @@ export function Dashboard() {
     return r
   })
 
+  // Same coordinates on the new shard — every shard shares the world grid, and
+  // dropping to the start room on a shard switch loses the spot being compared.
   const handleShardChange = (s: string) => {
     setShard(s)
     setStr(LS.shard, s)
-    history.pushState(null, '', buildMapUrl(s))
+    history.pushState(null, '', buildMapUrl(s, mapView() ?? undefined))
   }
 
   const openMap = (originRoom: string) => {
     if (untrack(historyMode)) exitHistoryMode()
     setMapOriginRoom(originRoom)
+    // The map opens on the room we came from, so any position left over from a
+    // previous visit must not reach the freshly mounted MapViewer or the URL.
+    setMapCenterPos(null)
+    setMapView(null)
     setMapMode(true)
     history.pushState(null, '', buildMapUrl(shard()))
   }
@@ -403,9 +437,11 @@ export function Dashboard() {
             shard={shard()}
             originRoom={mapOriginRoom()}
             initialZoom={mapZoom() ?? undefined}
+            centerPos={mapCenterPos() ?? undefined}
             onNavigateToRoom={(r) => handleNavigate(r, shard())}
             onHoveredRoomChanged={setHoveredRoomInfo}
             onSelectedRoomChanged={setSelectedRoomInfo}
+            onCenterChanged={(pos) => setMapView({ pos, zoom: untrack(mapZoom) })}
             onZoomChanged={(z) => {
               setMapZoom(z)
               setNum(LS.mapZoom, z)
