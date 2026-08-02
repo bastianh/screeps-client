@@ -30,6 +30,7 @@ import { createRuinVisual } from './ruin.js'
 import { createTombstoneVisual } from './tombstone.js'
 import { createPowerBankVisual } from './powerBank.js'
 import { createKeeperLairVisual } from './keeperLair.js'
+import { createPortalVisual } from './portal.js'
 import {
   createEnergyVisual,
   createRoadVisual,
@@ -69,6 +70,7 @@ const CREATORS: Record<string, (ctx: VisualBuildContext) => void> = {
   tombstone: createTombstoneVisual,
   powerBank: createPowerBankVisual,
   keeperLair: createKeeperLairVisual,
+  portal: createPortalVisual,
 }
 
 // Types that draw on the shared body Graphics `g` and rely on the dispatcher

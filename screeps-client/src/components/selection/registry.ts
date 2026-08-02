@@ -9,6 +9,7 @@ import { ExtensionDetails } from './ExtensionDetails.js'
 import { StoreStructureDetails } from './StoreStructureDetails.js'
 import { PowerBankDetails } from './PowerBankDetails.js'
 import { RuinDetails } from './RuinDetails.js'
+import { PortalDetails } from './PortalDetails.js'
 
 export { DefaultDetails }
 
@@ -29,4 +30,5 @@ export const CUSTOM_DETAILS: Record<string, (props: { item: SelectedObject }) =>
   powerSpawn: StoreStructureDetails,
   powerBank: PowerBankDetails,
   ruin: RuinDetails,
+  portal: PortalDetails,
 }

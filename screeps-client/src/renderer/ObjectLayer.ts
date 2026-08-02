@@ -59,6 +59,7 @@ import { KL_PULSE_ALPHA, KL_PULSE_MAX_R, KL_PULSE_MIN_R, KL_PULSE_MS } from './o
 import { getLabContents, updateLabFill } from './objects/lab.js'
 import { calcLinkFillFraction, updateLinkFill } from './objects/link.js'
 import { getNukerContents, updateNukerFill } from './objects/nuker.js'
+import { animatePortal } from './objects/portal.js'
 import { calcPowerBankRadius, drawPowerBankEllipse, getPowerBankPower } from './objects/powerBank.js'
 import { getPowerSpawnPower, updatePowerSpawnPower } from './objects/powerSpawn.js'
 import {
@@ -358,6 +359,9 @@ export class ObjectLayer {
         visual.__keeperGlow.width = visual.__keeperGlow.height = radius * 2
         visual.__keeperGlow.alpha = KL_PULSE_ALPHA * Math.sin(Math.PI * p)   // smooth in/out, no pop at wrap
       }
+      // Portal: cyan ring wells up and is swallowed by the trailing dark disc, on the same
+      // free-running wall clock as the keeper pulse (see animatePortal for the wave shapes).
+      if (visual.__portalCyanWave) animatePortal(visual, now)
     }
 
     // Fill tweens (extension/creep/tower/storage/container/terminal/factory/lab/nuker/link/source)

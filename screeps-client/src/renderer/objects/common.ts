@@ -1,3 +1,4 @@
+import { Texture } from 'pixi.js'
 import type { RoomObject } from 'screeps-connectivity'
 import { defaultSpriteTheme } from '../themes/default.js'
 import { TILE_SIZE } from '../RoomRenderer.js'
@@ -15,6 +16,7 @@ export function lerpColor(a: number, b: number, t: number): number {
 }
 
 export const EXTRACTOR_Z_INDEX = 1    // ring spins above the mineral
+export const PORTAL_Z_INDEX    = 3    // the well swallows roads and containers under it
 export const TOMBSTONE_Z_INDEX = 4    // sits above roads and containers, below creeps
 
 // Converts screeps tile-relative coords (tile center = origin, 1 unit = TILE_SIZE px) to flat pixel array
@@ -62,10 +64,36 @@ export function computeZIndex(obj: RoomObject): number {
     : obj.type === 'tombstone' ? TOMBSTONE_Z_INDEX
     : obj.type === 'mineral' ? (defaultSpriteTheme.mineral?.zIndex ?? 0)
     : obj.type === 'extractor' ? EXTRACTOR_Z_INDEX
+    : obj.type === 'portal' ? PORTAL_Z_INDEX
     : 0
   return baseZ + specZ
 }
 
 export function destroyVisual(visual: ContainerWithTarget): void {
   visual.destroy({ children: true })
+}
+
+// Soft, tintable radial glow (opaque centre → transparent edge) baked once and shared by every
+// visual that needs one (keeper-lair pulse, portal halo); lazily built so it only touches the
+// DOM/GPU when such an object first renders.
+// Shared, so it must outlive per-object teardown: destroyVisual uses container.destroy({ children: true }),
+// whose object form leaves options.texture undefined, so a child sprite's destroy never frees this
+// texture. A refactor to destroy(true) (boolean) WOULD free it and blank every other user — don't.
+let glowTexture: Texture | null = null
+export function softGlowTexture(): Texture {
+  if (glowTexture) return glowTexture
+  const SIZE = 128
+  const canvas = document.createElement('canvas')
+  canvas.width = canvas.height = SIZE
+  const ctx = canvas.getContext('2d')!
+  const r = SIZE / 2
+  const grad = ctx.createRadialGradient(r, r, 0, r, r, r)
+  grad.addColorStop(0, 'rgba(255,255,255,1)')
+  grad.addColorStop(0.45, 'rgba(255,255,255,0.72)')
+  grad.addColorStop(0.75, 'rgba(255,255,255,0.22)')
+  grad.addColorStop(1, 'rgba(255,255,255,0)')
+  ctx.fillStyle = grad
+  ctx.fillRect(0, 0, SIZE, SIZE)
+  glowTexture = Texture.from(canvas)
+  return glowTexture
 }
