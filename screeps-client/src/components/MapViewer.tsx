@@ -1,4 +1,4 @@
-import { createEffect, createSignal, onCleanup, onMount } from 'solid-js'
+import { createEffect, createSignal, onCleanup, onMount, untrack } from 'solid-js'
 import { MapRenderer } from '~/renderer/MapRenderer.js'
 import { buildMapDecoration } from '~/renderer/mapDecorations.js'
 import { client, userInfo, worldBounds, setWorldBounds } from '~/stores/clientStore.js'
@@ -33,10 +33,17 @@ interface MapViewerProps {
   shard: string | null
   originRoom?: string
   initialZoom?: number
+  /**
+   * Viewport centre in room units, from the URL's `?pos=`. Takes precedence over
+   * `originRoom` / the account's start room. A fresh object on every URL read, so
+   * back/forward re-centres even when the coordinates repeat.
+   */
+  centerPos?: { x: number; y: number }
   onNavigateToRoom: (room: string) => void
   onHoveredRoomChanged?: (info: RoomInfo | null) => void
   onSelectedRoomChanged?: (info: RoomInfo | null) => void
   onZoomChanged?: (zoom: number) => void
+  onCenterChanged?: (center: { x: number; y: number }) => void
   onSubscriptionStateChanged?: (active: boolean) => void
 }
 
@@ -46,6 +53,9 @@ export function MapViewer(props: MapViewerProps) {
 
   const [visibleRooms, setVisibleRooms] = createSignal<string[]>([])
   const [zoom, setZoom] = createSignal(1)
+  // Applied once by onMount; every later value is a browser back/forward landing
+  // on a different ?pos=, handled by the effect further down.
+  const initialCenterPos = untrack(() => props.centerPos)
   const origin = () => props.originRoom
   const [selectedRoom, setSelectedRoom] = createSignal<string | null>(origin() ?? null)
   let lastSubsActive: boolean | null = null
@@ -234,6 +244,7 @@ export function MapViewer(props: MapViewerProps) {
           setZoom(z)
           props.onZoomChanged?.(z)
         },
+        onCenterChanged: (c) => props.onCenterChanged?.(c),
       })
 
       await renderer.init(canvasRef!)
@@ -246,7 +257,15 @@ export function MapViewer(props: MapViewerProps) {
       const initialBounds = worldBounds()
       if (initialBounds) renderer.setBounds(initialBounds.minX, initialBounds.maxX, initialBounds.minY, initialBounds.maxY)
 
-      if (props.originRoom) {
+      // A bookmarked/deep-linked position wins over both the room the map was
+      // opened from and the account's start room.
+      if (initialCenterPos) {
+        renderer.centerOnPoint(initialCenterPos.x, initialCenterPos.y)
+        if (props.originRoom) {
+          renderer.setSelectedRoom(props.originRoom)
+          props.onSelectedRoomChanged?.(buildRoomInfo(props.originRoom))
+        }
+      } else if (props.originRoom) {
         const coord = parseRoomName(props.originRoom)
         if (coord) renderer.centerOn(coord.x, coord.y)
         renderer.setSelectedRoom(props.originRoom)
@@ -282,6 +301,14 @@ export function MapViewer(props: MapViewerProps) {
     map2Subs.clear()
     renderer?.destroy()
     renderer = null
+  })
+
+  // Browser back/forward landing on a /map URL with a different ?pos=. The map
+  // stays mounted across those, so nothing else would move the camera.
+  createEffect(() => {
+    const p = props.centerPos
+    if (!p || p === initialCenterPos) return
+    renderer?.centerOnPoint(p.x, p.y)
   })
 
   // Arrow key navigation (moves map selection) + 'm' to enter room view
