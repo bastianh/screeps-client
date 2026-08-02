@@ -1,5 +1,22 @@
 # screeps-client
 
+## 0.22.0
+
+### Minor Changes
+
+- 35df8bd: Render portals in the room view — an animated well with a cyan ring welling up and being swallowed by a dark disc, plus a violet halo — and show their destination (linked, inter-shard aware) and decay countdown in the selection panel
+
+### Patch Changes
+
+- 0adbd5f: Stop the Custom UI editor's option fields from losing focus on every keystroke
+- 564ce4e: Fix custom UI buttons often needing several presses before they react. The room's owner and controller reservation were rebuilt as fresh objects on every room update, so their signals fired once per tick; combined with the panel's per-run rebuild of its element list this recreated every button's DOM node each tick, and a button replaced between mousedown and mouseup never fires a click. Both signals now compare by value, and the sidebar panel and the per-object actions reuse stable entry objects.
+
+  The structure counts and the room's user map are compared by value too, which stops the build panel and the room info panel from re-rendering on every tick of an idle room.
+
+- b510e92: Pin the custom UI panel to the bottom of the sidebar in map view, matching room view
+- b510e92: Label the controller level chip in the map sidebar's Selected/Cursor boxes as "RCL"
+- b6b228d: Let server-hosted `/assets` requests through to the backend: the Vite dev server proxies `/assets` to `VITE_PROXY_TARGET`, and `screeps-client-proxy` forwards wrapped `/assets` paths instead of falling through to the SPA. Assets now load in dev and behind the proxy the same way they do when the client is served by the backend itself.
+
 ## 0.21.0
 
 ### Minor Changes
