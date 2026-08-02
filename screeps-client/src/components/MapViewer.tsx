@@ -4,6 +4,7 @@ import { buildMapDecoration } from '~/renderer/mapDecorations.js'
 import { client, userInfo, worldBounds, setWorldBounds } from '~/stores/clientStore.js'
 import { showMapRoomNames, showUnclaimableRooms, showMapVisuals, showRoomDecorations } from '~/stores/settingsStore.js'
 import { mapOverlayMode } from '~/stores/mapOverlayStore.js'
+import { allianceMembers, loadAlliances, setAllianceRoomCounts } from '~/stores/allianceStore.js'
 import { parseRoomName, formatRoomName, isRoomInWorld, isBusRoom, isCenterRoom } from '~/utils/roomName.js'
 import { useRoomNavigationKeys } from '~/utils/useRoomNavigationKeys.js'
 import { createLogger } from '~/utils/log.js'
@@ -98,6 +99,46 @@ export function MapViewer(props: MapViewerProps) {
     }
   }
 
+  // Push the owner's alliance tint for one room. Reads the roster non-reactively —
+  // the effect below re-runs this for every known room once the roster lands.
+  const applyAlliance = (room: string) => {
+    const stat = roomStats.get(room)
+    // Owned only — map-stats encodes a reservation as own with level 0, and tinting
+    // every remote buried the actual territory.
+    const owned = !!stat?.own && stat.own.level >= 1
+    const alliance = owned ? allianceMembers().get((stat!.username ?? '').toLowerCase()) : undefined
+    renderer?.setRoomAlliance(
+      room,
+      alliance ? { abbreviation: alliance.abbreviation, color: alliance.color } : null,
+    )
+  }
+
+  // Alliance room tally for the sidebar legend. Owner stats stream in per room, so a
+  // recount per event would be O(viewport) on every message — coalesce into one pass.
+  const COUNT_DEBOUNCE_MS = 250
+  let countTimer: ReturnType<typeof setTimeout> | null = null
+
+  const recountAlliances = () => {
+    const members = allianceMembers()
+    const counts = new Map<string, number>()
+    if (members.size > 0) {
+      for (const room of visibleRooms()) {
+        const stat = roomStats.get(room)
+        // Owned only — map-stats encodes a reservation as own with level 0.
+        if (!stat?.own || stat.own.level < 1) continue
+        const alliance = members.get((stat.username ?? '').toLowerCase())
+        if (!alliance) continue
+        counts.set(alliance.abbreviation, (counts.get(alliance.abbreviation) ?? 0) + 1)
+      }
+    }
+    setAllianceRoomCounts(counts)
+  }
+
+  const scheduleAllianceRecount = () => {
+    if (countTimer !== null || mapOverlayMode() !== 'alliance') return
+    countTimer = setTimeout(() => { countTimer = null; recountAlliances() }, COUNT_DEBOUNCE_MS)
+  }
+
   // Terrain is fetched progressively in batches, sorted center-out
   const TERRAIN_BATCH_SIZE = 200
   const TERRAIN_BATCH_MS = 0
@@ -127,6 +168,7 @@ export function MapViewer(props: MapViewerProps) {
           if (unclaimable !== undefined) renderer?.setRoomOwned(room, unclaimable)
           const stat = roomStats.get(room)
           if (stat) renderer?.setRoomMineral(room, stat.mineral, stat.density)
+          applyAlliance(room)
         }
         for (const room of batch) {
           if (!terrainMap.has(room)) renderer?.markRoomFetched(room)
@@ -232,6 +274,8 @@ export function MapViewer(props: MapViewerProps) {
 
   onCleanup(() => {
     if (terrainTimer !== null) { clearTimeout(terrainTimer); terrainTimer = null }
+    if (countTimer !== null) { clearTimeout(countTimer); countTimer = null }
+    setAllianceRoomCounts(new Map())
     terrainQueue = []
     requested.clear()
     for (const sub of map2Subs.values()) sub.dispose()
@@ -365,6 +409,29 @@ export function MapViewer(props: MapViewerProps) {
     c.stores.mapStats.request(rooms, MapStatName.minerals, shard ?? undefined)
   })
 
+  // Load the LOAN roster the first time the alliance overlay is selected — it's a
+  // third-party request, so it never fires for users who don't ask for the overlay.
+  createEffect(() => {
+    if (mapOverlayMode() !== 'alliance') return
+    void loadAlliances()
+  })
+
+  // Re-tint everything we already have stats for whenever the roster changes.
+  // Owner stats usually arrive long before the (async, cached) roster does.
+  createEffect(() => {
+    allianceMembers()
+    for (const room of roomStats.keys()) applyAlliance(room)
+  })
+
+  // Recount for the legend when the viewport moves, the roster lands, or the mode
+  // is switched on — stat events cover the rest.
+  createEffect(() => {
+    visibleRooms()
+    allianceMembers()
+    if (mapOverlayMode() !== 'alliance') return
+    scheduleAllianceRecount()
+  })
+
   // Fetch world bounds with the correct shard whenever client or shard changes.
   createEffect(() => {
     const c = client()
@@ -470,6 +537,9 @@ export function MapViewer(props: MapViewerProps) {
         if (existing?.mineral !== undefined) {
           renderer?.setRoomMineral(room, existing.mineral, existing.density)
         }
+
+        applyAlliance(room)
+        scheduleAllianceRecount()
 
         renderer?.setRoomDecoration(room, stat.decorations ? buildMapDecoration(stat.decorations) : undefined)
 

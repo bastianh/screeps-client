@@ -55,7 +55,7 @@ src/
 ├── editor/                      # CodeMirror TS integration: tsserver worker, virtual libs, module graph
 ├── renderer/
 │   ├── RoomRenderer.ts          # PixiJS Application: drag/zoom world container, nav zones
-│   ├── MapRenderer.ts           # World map renderer (owner/mineral overlays, minimap tiles)
+│   ├── MapRenderer.ts           # World map renderer (owner/mineral/alliance overlays, minimap tiles)
 │   ├── TerrainLayer.ts          # Plain/Wall/Swamp tiles
 │   ├── ObjectLayer.ts           # Object lifecycle: diffs, fill tweens, movement/animation ticker
 │   ├── objects/                 # Per-object visual modules (creep, spawn, tower, …) +
@@ -84,7 +84,8 @@ src/
 │   ├── memoryStore.ts           # Memory tree watches
 │   ├── customUiStore.ts         # Custom UI panels driven by a memory segment
 │   ├── historyStore.ts + HistoryPlayer.ts  # Room history playback
-│   ├── mapOverlayStore.ts       # World map overlay mode (owner | mineral | none)
+│   ├── mapOverlayStore.ts       # World map overlay mode (owner | mineral | alliance | none)
+│   ├── allianceStore.ts        # LOAN alliance roster (lazy fetch + cache, derived colours)
 │   ├── capabilities.ts          # Server capability flags
 │   └── toastStore.ts            # Toast notification queue
 ├── types/
@@ -112,6 +113,53 @@ src/
 `RoomViewer.tsx` subscribes to `RoomStore` and `UserStore`, creates `TerrainLayer` and `ObjectLayer`, hands them to `RoomRenderer`.
 
 `RoomRenderer.ts` wraps a PixiJS `Application` in a `world` container with pointer-drag panning, wheel zoom, navigation zones (edge-scroll), and a view-reset method.
+
+## Alliance map overlay
+
+`allianceStore` fetches the League of Automated Nations roster from
+`https://www.leagueofautomatednations.com/alliances.js` — a flat JSON object keyed by
+alliance abbreviation, served with `Access-Control-Allow-Origin: *`, so the browser
+fetches it directly with no proxy. The request is **lazy** and deduped: it fires the first time
+the `alliance` overlay mode is selected, or when a player profile is opened. Responses are
+cached in `localStorage` for 6h, and a stale cache is still used if the network fails.
+
+`MapInfoPanel` hides the mode button when `isPrivateServer() === true` — the roster describes
+nobody there — and resets an active alliance overlay back to `owner`, so connecting to a
+private server mid-session can't strand the map in a mode with no button to leave it. `null`
+(version probe still pending) shows the button: better than having it pop in late on the
+server where it does work. `Profile` gates its roster fetch on the same flag.
+
+Beyond the map, membership surfaces in `RoomInfoBox` (hovered/selected room, any overlay mode)
+and as a chip next to the username in `Profile`, both in the alliance's map colour.
+
+Two things the feed does not give you:
+
+- **Colours.** Every alliance ships `"color": "#000000"`, so the field is unusable. Colours
+  are derived locally: hash the abbreviation into a 20-entry palette, linear-probe on
+  collision, assigning in sorted-abbreviation order. Stable across sessions.
+- **A key convention.** `"name"` is a real alliance abbreviation, not metadata — entries are
+  filtered by shape (`Array.isArray(members)`), never by key name.
+
+Membership is indexed lower-cased, since the roster's casing doesn't always match the
+server's usernames. `MapRenderer.setRoomAlliance` tints **owned** rooms only (map-stats
+encodes a reservation as `own.level === 0`) and stamps the abbreviation along the room's
+bottom edge; owner badges stay visible in this mode, so the tint says which alliance and
+the badge still says which player. The unclaimable wash is suppressed while the mode is
+active — otherwise red over every foreign room drowns out the alliance colours.
+
+Badge, mineral icon and alliance label arrive in an order that varies per room, so their
+child index is derived (`decorInsertIndex`) rather than assumed: the tint sits directly
+above the unclaimable wash, the label above everything but the room name.
+
+Owner stats almost always arrive before the roster does, so `MapViewer` re-applies the
+tint for every room it has stats for whenever `allianceMembers()` changes.
+
+The sidebar legend is sorted by how many owned rooms each alliance holds in the current
+viewport, with alphabetical as the tiebreak so panning doesn't reshuffle it arbitrarily.
+`MapViewer` owns that tally (it has both the viewport and the stats) and publishes it through
+`allianceRoomCounts`. Owner stats stream in one room at a time, so recounting per event would
+be O(viewport) per message — triggers are coalesced into a single 250 ms-debounced pass, and
+only while the overlay is actually on.
 
 ## In-room decoration editor
 

@@ -38,6 +38,7 @@ export const LS = {
   smoothAnimations: 'screeps:settings:smoothAnimations',
   showMapVisuals: 'screeps:settings:showMapVisuals',
   hideCustomUiProtocol: 'screeps:settings:hideCustomUiProtocol',
+  alliances: 'screeps:alliances',
   // Per-server prefixes — the active server URL is appended as ':<url>'.
   customUiSegment: 'screeps:customUi:segment',
   customUiShard: 'screeps:customUi:shard',

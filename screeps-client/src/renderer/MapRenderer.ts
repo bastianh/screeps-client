@@ -37,13 +37,21 @@ const POOL_SIZE = 2600 // max visible rooms plus padding
 // Wait this long after the last viewport change before firing onVisibleRoomsChanged
 const VISIBLE_DEBOUNCE_MS = 5
 
-const MIN_ZOOM = 0.2
+const MIN_ZOOM = 0.1
 const MAX_ZOOM = 5
 
 // Minimap dot/terrain palette + dot spec live in ~/renderer/minimap.js (shared
 // with the terrain worker and the Overview room-preview tiles).
 
 const MINERAL_WORLD_SIZES = [80, 104, 128, 160] // world-space px per density — scales naturally with zoom
+
+// Alliance overlay: a translucent room tint plus the abbreviation. Below this zoom
+// a room is too small for the label to be anything but clutter — the tint carries
+// the signal on its own.
+const ALLIANCE_LABEL_ZOOM_THRESHOLD = 0.3
+const ALLIANCE_FILL_ALPHA = 0.3
+// World-space gap between the label baseline and the room's bottom edge.
+const ALLIANCE_LABEL_MARGIN = 5
 
 interface RoomEntry {
   container: Container
@@ -58,6 +66,10 @@ interface RoomEntry {
   badgeSprite?: Sprite
   badgeLevel?: number
   nameLabel: Text
+  allianceOverlay?: Graphics
+  allianceLabel?: Text
+  /** `abbreviation:color` of what's currently drawn, '' for none — skips redundant redraws. */
+  allianceKey?: string
   mineralSprite?: Sprite
   mineralType?: string
   mineralDensity?: number
@@ -456,15 +468,25 @@ export class MapRenderer {
       g.rect(0, 0, MAP_ROOM_SIZE, MAP_ROOM_SIZE)
       g.fill({ color: 0x000066, alpha: 0.35 })
     }
-    g.visible = state === 'prohibited' || this.showUnclaimableOverlay
+    g.visible = this.ownerOverlayVisible(entry)
     this.revealIfReady(roomName, entry)
+  }
+
+  /**
+   * The unclaimable wash is suppressed in alliance mode — a red tint over every
+   * foreign room would drown out the alliance colours. Out-of-borders stays
+   * shaded regardless: it marks territory that doesn't exist.
+   */
+  private ownerOverlayVisible(entry: RoomEntry): boolean {
+    if (entry.ownerState === 'prohibited') return true
+    return this.showUnclaimableOverlay && this.overlayMode !== 'alliance'
   }
 
   setUnclaimableOverlayVisible(show: boolean): void {
     if (this.showUnclaimableOverlay === show) return
     this.showUnclaimableOverlay = show
     for (const entry of this.activeRooms.values()) {
-      entry.ownerOverlay.visible = entry.ownerState === 'prohibited' || show
+      entry.ownerOverlay.visible = this.ownerOverlayVisible(entry)
     }
   }
 
@@ -553,9 +575,7 @@ export class MapRenderer {
         sprite.anchor.set(0.5)
         sprite.x = MAP_ROOM_SIZE / 2
         sprite.y = MAP_ROOM_SIZE / 2
-        // Insert before nameLabel so the label stays on top
-        const nameIndex = entry.container.getChildIndex(entry.nameLabel)
-        entry.container.addChildAt(sprite, nameIndex)
+        entry.container.addChildAt(sprite, this.decorInsertIndex(entry))
         entry.badgeSprite = sprite
       }
 
@@ -611,8 +631,7 @@ export class MapRenderer {
       sprite.anchor.set(0.5)
       sprite.x = MAP_ROOM_SIZE / 2
       sprite.y = MAP_ROOM_SIZE / 2
-      const nameIndex = entry.container.getChildIndex(entry.nameLabel)
-      entry.container.addChildAt(sprite, nameIndex)
+      entry.container.addChildAt(sprite, this.decorInsertIndex(entry))
       entry.mineralSprite = sprite
       entry.mineralType = mineral
 
@@ -630,13 +649,111 @@ export class MapRenderer {
     this.applyOverlayMode(entry)
   }
 
+  /**
+   * Tint a room in its owner's alliance colour. `null` clears it — which is also
+   * what an unowned room, an unaligned owner, or a roster that hasn't loaded gets.
+   */
+  setRoomAlliance(roomName: string, alliance: { abbreviation: string; color: number } | null): void {
+    const entry = this.activeRooms.get(roomName)
+    if (!entry) return
+
+    const key = alliance ? `${alliance.abbreviation}:${alliance.color}` : ''
+    if (entry.allianceKey === key) return
+
+    if (!alliance) {
+      this.releaseAllianceVisuals(entry)
+      return
+    }
+    entry.allianceKey = key
+
+    // The tint goes straight above the unclaimable wash so the owner badge, the
+    // mineral icon and the labels all stay readable on top of it.
+    if (!entry.allianceOverlay) {
+      const g = new Graphics()
+      entry.container.addChildAt(g, entry.container.getChildIndex(entry.ownerOverlay) + 1)
+      entry.allianceOverlay = g
+    }
+    const g = entry.allianceOverlay
+    g.clear()
+    g.rect(0, 0, MAP_ROOM_SIZE, MAP_ROOM_SIZE)
+    g.fill({ color: alliance.color, alpha: ALLIANCE_FILL_ALPHA })
+    g.rect(0, 0, MAP_ROOM_SIZE, MAP_ROOM_SIZE)
+    // alignment: 1 = inner stroke, so neighbouring alliance rooms read as one block.
+    g.stroke({ color: alliance.color, width: 4, alignment: 1, alpha: 0.85 })
+
+    if (!entry.allianceLabel) {
+      const t = new Text({
+        text: '',
+        style: {
+          fontSize: 36,
+          fill: 0xffffff,
+          fontFamily: 'ui-monospace, monospace',
+          fontWeight: 'bold',
+          stroke: { color: 0x000000, width: 5 },
+        },
+      })
+      // Bottom edge, centred — the badge owns the middle of the room.
+      t.anchor.set(0.5, 1)
+      t.x = MAP_ROOM_SIZE / 2
+      t.y = MAP_ROOM_SIZE - ALLIANCE_LABEL_MARGIN
+      entry.container.addChildAt(t, entry.container.getChildIndex(entry.nameLabel))
+      entry.allianceLabel = t
+    }
+    entry.allianceLabel.text = alliance.abbreviation
+    entry.allianceLabel.style.fill = alliance.color
+
+    this.applyAllianceLabel(entry, this.zoom)
+    this.applyOverlayMode(entry)
+  }
+
+  private releaseAllianceVisuals(entry: RoomEntry): void {
+    if (entry.allianceOverlay) {
+      entry.container.removeChild(entry.allianceOverlay)
+      entry.allianceOverlay.destroy()
+      entry.allianceOverlay = undefined
+    }
+    if (entry.allianceLabel) {
+      entry.container.removeChild(entry.allianceLabel)
+      entry.allianceLabel.destroy()
+      entry.allianceLabel = undefined
+    }
+    entry.allianceKey = ''
+  }
+
+  private applyAllianceLabel(entry: RoomEntry, zoom: number): void {
+    const label = entry.allianceLabel
+    if (!label) return
+    // Same shape as the room-name scale: √zoom growth with a screen-pixel floor.
+    const MIN_PX = 13
+    label.scale.set(Math.max(0.42 / Math.sqrt(zoom), MIN_PX / (36 * zoom)))
+    label.visible = this.overlayMode === 'alliance' && zoom >= ALLIANCE_LABEL_ZOOM_THRESHOLD
+  }
+
+  /**
+   * Where badges and mineral icons go in the child list: below the alliance label
+   * (so the abbreviation is never covered), above everything else. Arrival order of
+   * badge vs. alliance data varies per room, so the index is derived, not assumed.
+   */
+  private decorInsertIndex(entry: RoomEntry): number {
+    return entry.container.getChildIndex(entry.allianceLabel ?? entry.nameLabel)
+  }
+
   private applyOverlayMode(entry: RoomEntry): void {
     if (entry.badgeSprite) {
-      entry.badgeSprite.visible = this.overlayMode === 'owner'
+      // Badges stay up in alliance mode — the tint says which alliance, the badge
+      // still says which player.
+      entry.badgeSprite.visible = this.overlayMode === 'owner' || this.overlayMode === 'alliance'
     }
     if (entry.mineralSprite) {
       entry.mineralSprite.visible = this.overlayMode === 'mineral'
     }
+    if (entry.allianceOverlay) {
+      entry.allianceOverlay.visible = this.overlayMode === 'alliance'
+    }
+    if (entry.allianceLabel) {
+      entry.allianceLabel.visible = this.overlayMode === 'alliance' && this.zoom >= ALLIANCE_LABEL_ZOOM_THRESHOLD
+    }
+    entry.ownerOverlay.visible = this.ownerOverlayVisible(entry)
   }
 
   private applyMineralSize(entry: RoomEntry, zoom: number): void {
@@ -665,6 +782,7 @@ export class MapRenderer {
       this.applyBadgeSize(entry, zoom)
       this.updateNameLabelScale(entry, zoom)
       this.applyMineralSize(entry, zoom)
+      this.applyAllianceLabel(entry, zoom)
     }
   }
 
@@ -789,6 +907,7 @@ export class MapRenderer {
     }
     entry.mineralType = undefined
     entry.mineralDensity = undefined
+    this.releaseAllianceVisuals(entry)
     entry.container.visible = false
     this.safeModeRooms.delete(roomName)
 
@@ -934,6 +1053,9 @@ export class MapRenderer {
     }
     entry.mineralType = undefined
     entry.mineralDensity = undefined
+
+    // Reset pooled alliance tint/label so a previous room's alliance doesn't leak through
+    this.releaseAllianceVisuals(entry)
 
     // Keep overlays on top
     if (this.safeModeGraphics) {

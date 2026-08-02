@@ -1,7 +1,8 @@
-import { createResource, createSignal, For, Show } from 'solid-js'
+import { createEffect, createResource, createSignal, For, Show } from 'solid-js'
 import { X, Mail } from 'lucide-solid'
 import { OverlayPage } from '~/components/OverlayPage.js'
-import { client, userInfo } from '~/stores/clientStore.js'
+import { client, userInfo, isPrivateServer } from '~/stores/clientStore.js'
+import { allianceForUser, hexColor, loadAlliances } from '~/stores/allianceStore.js'
 import { capabilities } from '~/stores/capabilities.js'
 import { profileUsername, goToGame, goToRoom, goToRoomOverview, goToUser, goToMessagesUser } from '~/stores/routeStore.js'
 import { GCL_RING, GCL_TEXT, GPL_RING, GPL_TEXT } from '~/components/RankRing.js'
@@ -63,6 +64,13 @@ export function Profile() {
   )
 
   const userId = () => user()?._id
+
+  // The LOAN roster only describes the official MMO, so it stays unrequested on a
+  // private server. Elsewhere a profile view is reason enough to fetch it — the
+  // store dedupes and caches, so this is at most one request per 6h.
+  createEffect(() => {
+    if (isPrivateServer() !== true) void loadAlliances()
+  })
 
   // Owned rooms for the minimap grid (public, keyed by user id).
   const [rooms] = createResource(userId, async (id) => {
@@ -127,6 +135,38 @@ export function Profile() {
                 <div style={{ display: 'flex', 'align-items': 'center', gap: '10px', padding: '0 0 14px', 'border-bottom': `1px solid ${BORDER}`, 'margin-bottom': '24px' }}>
                   <PlayerBadge badge={u().badge} size={28} />
                   <h1 style={{ margin: 0, 'font-size': '22px', 'font-weight': 600, color: TEXT }}>{u().username}</h1>
+                  {/* Alliance chip — same colour the world map tints their rooms with. */}
+                  <Show when={allianceForUser(u().username)}>
+                    {(a) => (
+                      <span
+                        title={a().name}
+                        style={{
+                          display: 'flex',
+                          'align-items': 'center',
+                          gap: '5px',
+                          padding: '3px 8px',
+                          'border-radius': '10px',
+                          border: `1px solid ${hexColor(a().color)}`,
+                          background: `${hexColor(a().color)}22`,
+                          color: TEXT,
+                          'font-size': '12px',
+                          'font-weight': 600,
+                          'white-space': 'nowrap',
+                        }}
+                      >
+                        <span
+                          style={{
+                            width: '8px',
+                            height: '8px',
+                            'border-radius': '2px',
+                            background: hexColor(a().color),
+                            flex: '0 0 auto',
+                          }}
+                        />
+                        {a().abbreviation}
+                      </span>
+                    )}
+                  </Show>
                   <Show when={isOwnProfile()}>
                     <span
                       title="Your account overview"
