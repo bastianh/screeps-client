@@ -1,5 +1,6 @@
-import { Graphics, Sprite, Texture } from 'pixi.js'
+import { Graphics, Sprite } from 'pixi.js'
 import { TILE_SIZE } from '../RoomRenderer.js'
+import { softGlowTexture } from './common.js'
 import { type ContainerWithTarget, type VisualBuildContext } from './types.js'
 
 // Keeper-lair visuals: near-black disc with a red pupil and an expanding pulse glow.
@@ -18,29 +19,6 @@ export const KL_PULSE_MIN_R = TILE_SIZE * 0.10   // pulse starts near the centre
 export const KL_PULSE_MAX_R = TILE_SIZE * 0.42   // …and swells to almost fill the black disc
 export const KL_PULSE_ALPHA = 0.6                // peak opacity mid-ping
 
-// Soft, tintable radial glow (opaque centre → transparent edge) baked once and shared by every
-// lair's pulse sprite; lazily built so it only touches the DOM/GPU when a lair first renders.
-// Shared, so it must outlive per-lair teardown: destroyVisual uses container.destroy({ children: true }),
-// whose object form leaves options.texture undefined, so the child sprite's destroy never frees this
-// texture. A refactor to destroy(true) (boolean) WOULD free it and blank every other lair — don't.
-let klGlowTexture: Texture | null = null
-export function keeperGlowTexture(): Texture {
-  if (klGlowTexture) return klGlowTexture
-  const SIZE = 128
-  const canvas = document.createElement('canvas')
-  canvas.width = canvas.height = SIZE
-  const ctx = canvas.getContext('2d')!
-  const r = SIZE / 2
-  const grad = ctx.createRadialGradient(r, r, 0, r, r, r)
-  grad.addColorStop(0, 'rgba(255,255,255,1)')
-  grad.addColorStop(0.45, 'rgba(255,255,255,0.72)')
-  grad.addColorStop(0.75, 'rgba(255,255,255,0.22)')
-  grad.addColorStop(1, 'rgba(255,255,255,0)')
-  ctx.fillStyle = grad
-  ctx.fillRect(0, 0, SIZE, SIZE)
-  klGlowTexture = Texture.from(canvas)
-  return klGlowTexture
-}
 export function createKeeperLairVisual(ctx: VisualBuildContext): void {
   const { obj, container, g, cx, cy } = ctx
   // Black disc with a dark rim.
@@ -52,7 +30,7 @@ export function createKeeperLairVisual(ctx: VisualBuildContext): void {
 
   // Pulse glow (welling up from the centre) — sits above the disc, below the pupil.
   // Sized/faded each frame in tick(); starts at the minimum radius, invisible.
-  const glow = new Sprite(keeperGlowTexture())
+  const glow = new Sprite(softGlowTexture())
   glow.anchor.set(0.5)
   glow.position.set(cx, cy)
   glow.tint = KL_RED

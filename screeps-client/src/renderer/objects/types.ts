@@ -122,6 +122,10 @@ export type ContainerWithTarget = Container & {
   __powerBankRadius?: number
   __keeperGlow?: Sprite   // keeper-lair pulse glow; scale + alpha driven each frame
   __keeperPhase?: number  // per-lair ping phase offset in [0,1)
+  __portalCyanWave?: Graphics  // portal's leading cyan ring; scale + alpha driven each frame
+  __portalDarkWave?: Graphics  // portal's trailing dark disc that swallows the cyan ring
+  __portalGlow?: Sprite        // portal halo; breathes with the wave cycle
+  __portalPhase?: number       // per-portal wave phase offset in [0,1)
   __decorations?: Container[]  // creep/object decoration overlays attached to this visual
   __decoSpawning?: boolean     // spawning state the overlays were built for; creep decorations skip spawning creeps
 }
