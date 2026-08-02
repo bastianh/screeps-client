@@ -1,5 +1,102 @@
 # screeps-client
 
+## 0.21.0
+
+### Minor Changes
+
+- 5253263: Carry the world map position in the URL so a view can be bookmarked.
+
+  The map now writes its centre and zoom into the query as `?zoom=<z>&pos=<x>,<y>` — the same room
+  coordinates the official client uses, where `.5` is a room's centre. Panning and zooming update the
+  URL with `replaceState` once the view settles, so it never adds history entries and Back still leaves
+  the map. Opening such a URL (or using Back/Forward) restores that exact view instead of dropping back
+  to the account's start room, and switching shards keeps the position.
+
+- afb753d: Give the console command line a persistent history and TypeScript autocompletion.
+
+  The command history now survives a reload. It is stored per server — commands referencing a private
+  server's creeps are meaningless on MMO — capped at 200 entries, and no longer records a command
+  twice in a row. Failed commands are kept as well, since a rejected command is exactly the one worth
+  recalling and fixing.
+
+  Typing `.` opens a completion list drawn from the same in-browser TypeScript service the code editor
+  uses, so `Game`, `Memory`, the room-object API and every game constant complete from
+  `@types/screeps`. `Ctrl+Space` requests completions anywhere. The arrow keys drive the list while it
+  is open and walk the history otherwise; `Escape` closes the list, or clears the input when there is
+  no list.
+
+  The TypeScript worker is only loaded once completions are actually requested, so a session that
+  never uses them does not pay for it.
+
+- 127adca: Add an alliance overlay to the world map, backed by the League of Automated Nations roster.
+
+  A fourth overlay mode next to Owner / Mineral / None — on the official server only, since the
+  roster describes nobody on a private one — tints each owned room in its alliance's colour and
+  stamps the abbreviation along the room's bottom edge. Owner badges stay visible, so the tint
+  says which alliance and the badge still says which player. The sidebar gains a colour legend
+  while the mode is active, listing each alliance's rooms in the current viewport and sorted by
+  them, so panning tells you who actually holds the region you're looking at. The room info box
+  shows the owner's alliance for hover and selection regardless of overlay mode, and a player's
+  profile page carries an alliance chip next to their name.
+
+  The roster comes from `leagueofautomatednations.com/alliances.js`, fetched lazily the first
+  time the overlay is selected — never for users who don't ask for it — and cached in
+  `localStorage` for 6h, with a stale cache used as a fallback when the network fails. The feed
+  ships `#000000` as the colour for every alliance, so colours are derived locally by hashing the
+  abbreviation into a fixed palette, which keeps them stable across sessions.
+
+### Patch Changes
+
+- ef5eba7: Fix the decoration editor's inputs losing a drag or keystroke.
+
+  The property list was rebuilt on every edit, so the browser lost the element it was dragging: a
+  slider let go after a couple of pixels, a text field dropped focus after one character, and the
+  colour picker closed itself. The controls now stay put while the values change, in the room
+  sidebar's decorate panel and in the inventory dialog alike.
+
+- 66bf09f: Drop solid-devtools and ship Solid's production runtime.
+
+  The devtools are no longer used, so the `solid-devtools/vite` plugin, the `@solid-devtools/debugger`
+  setup import in `index.tsx` and both dev dependencies are gone. With them goes
+  `resolve.conditions: ['development']`, which was there to force Solid's `development` export for the
+  debugger — it applied to production builds too, so releases shipped `solid-js/dist/dev.js` and the
+  matching dev builds of `solid-js/web` and `solid-js/store`, with their warning paths and reactive
+  bookkeeping. Builds now resolve `solid.js` / `web.js` / `store.js`.
+
+  The dev server is unaffected: vite-plugin-solid adds the `development` condition itself when the
+  command is `serve`.
+
+- b6df4b5: Hide the room sidebar's Decorate button while room decorations are switched off.
+
+  With the decorations setting off the room draws none of them and the client fetches none, so the
+  editor's entry point led into an empty view. The mode button and its `4` shortcut are now gone
+  along with the decorations, and the inventory's "edit in room" hand-off is offered only while they
+  are on.
+
+  Turning the setting off with the editor already open closes it back to view mode instead of leaving
+  it stranded.
+
+  The list of decorations placed in the room moved into decorate mode's sidebar as well — it is the
+  counterpart to the picker's unplaced ones, and no longer takes up room above the selection, flag and
+  build panels.
+
+- 682f31e: Group the player profile's owned rooms by shard.
+
+  The public profile listed every room in one flat grid, so on a multishard server a player's rooms
+  from different shards sat side by side with nothing to tell them apart. They are now grouped under a
+  shard heading, the same as the account overview already did. Single-shard servers still render one
+  unlabeled grid.
+
+- 66bf09f: Keep the CodeMirror bundle off the first load — it is roughly 162 kB gzip that no longer blocks
+  startup.
+
+  The three editor panels (script, segments, custom UI) were already `lazy()`, but the `vendor-codemirror`
+  manual chunk also claimed `solid-codemirror`, which pulled solid-js in with it. Since the whole app
+  needs solid-js, the entry chunk ended up statically importing the vendor chunk and `index.html`
+  preloaded it, so every visitor paid for CodeMirror whether or not they opened an editor. Leaving
+  `solid-codemirror` unassigned keeps solid-js in the eager graph and CodeMirror behind the dynamic
+  imports it belongs to.
+
 ## 0.20.0
 
 ### Minor Changes
