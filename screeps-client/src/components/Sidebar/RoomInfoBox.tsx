@@ -3,8 +3,14 @@ import { badgeToSvg } from 'screeps-connectivity'
 import type { Badge } from 'screeps-connectivity'
 import type { RoomInfo } from '~/components/MapViewer.js'
 import { UserLink } from '~/components/UserLink.js'
+import { allianceForUser, hexColor } from '~/stores/allianceStore.js'
 
 const DENSITY_LABELS = ['Low', 'Medium', 'High', 'Ultra'] as const
+
+/** Reactive: fills in on its own once the LOAN roster loads. */
+function alliance(info: RoomInfo) {
+  return allianceForUser(info.owner ?? info.reservation)
+}
 
 function densityLabel(density: number): string {
   return DENSITY_LABELS[density - 1] ?? String(density)
@@ -155,6 +161,37 @@ export function RoomInfoBox(props: { label: string; info: RoomInfo | null; dim?:
               >
                 <div style={{ padding: '3px 8px', color: '#8b949e' }}>Reservation</div>
                 <PlayerValue name={info().reservation} badge={info().badge} />
+              </Show>
+              <Show when={alliance(info())}>
+                {(a) => (
+                  <>
+                    <div style={{ padding: '3px 8px', color: '#8b949e' }}>Alliance</div>
+                    <div
+                      title={a().name}
+                      style={{
+                        padding: '3px 8px',
+                        color: '#c9d1d9',
+                        display: 'flex',
+                        'align-items': 'center',
+                        gap: '5px',
+                        'min-width': 0,
+                      }}
+                    >
+                      <span
+                        style={{
+                          width: '9px',
+                          height: '9px',
+                          'border-radius': '2px',
+                          background: hexColor(a().color),
+                          flex: '0 0 auto',
+                        }}
+                      />
+                      <span style={{ overflow: 'hidden', 'text-overflow': 'ellipsis', 'white-space': 'nowrap' }}>
+                        {a().name}
+                      </span>
+                    </div>
+                  </>
+                )}
               </Show>
               <Show when={info().mineral}>
                 <div style={{ padding: '3px 8px', color: '#8b949e' }}>Mineral</div>
