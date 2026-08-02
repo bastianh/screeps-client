@@ -135,7 +135,7 @@ export function RoomInfoBox(props: { label: string; info: RoomInfo | null; dim?:
                       'font-variant-numeric': 'tabular-nums',
                     }}
                   >
-                    {level()}
+                    RCL {level()}
                   </span>
                 )}
               </Show>
