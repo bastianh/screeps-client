@@ -82,6 +82,11 @@ export default defineConfig(({ mode }) => {
         ...(proxyTarget ? {
           '/api': { target: proxyTarget, changeOrigin: true, agent: debugAgent, secure: !debugAgent },
           '/room-history': { target: proxyTarget, changeOrigin: true, agent: debugAgent, secure: !debugAgent },
+          // Server-hosted assets (badges, textures, …). In production the client
+          // is served by the backend itself, so /assets resolves natively there;
+          // in dev it has to be proxied. Safe to claim: the build writes its own
+          // assets to VITE_ASSETS_DIR (_client/), not /assets.
+          '/assets': { target: proxyTarget, changeOrigin: true, agent: debugAgent, secure: !debugAgent },
           '/socket': { target: proxyTarget, changeOrigin: true, ws: true, agent: debugAgent, secure: !debugAgent },
         } : {}),
       },
