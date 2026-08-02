@@ -1,5 +1,18 @@
 # screeps-client-proxy
 
+## 0.1.7
+
+### Patch Changes
+
+- b6b228d: Let server-hosted `/assets` requests through to the backend: the Vite dev server proxies `/assets` to `VITE_PROXY_TARGET`, and `screeps-client-proxy` forwards wrapped `/assets` paths instead of falling through to the SPA. Assets now load in dev and behind the proxy the same way they do when the client is served by the backend itself.
+- Updated dependencies [0adbd5f]
+- Updated dependencies [564ce4e]
+- Updated dependencies [b510e92]
+- Updated dependencies [b510e92]
+- Updated dependencies [35df8bd]
+- Updated dependencies [b6b228d]
+  - screeps-client@0.22.0
+
 ## 0.1.6
 
 ### Patch Changes

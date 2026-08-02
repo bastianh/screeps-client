@@ -1,6 +1,6 @@
 {
   "name": "screeps-client-proxy",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Standalone proxy that serves the new screeps-client and forwards /api + /socket to any Screeps server, bypassing browser CORS.",
   "type": "commonjs",
   "bin": {
