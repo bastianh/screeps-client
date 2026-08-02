@@ -156,11 +156,15 @@ export function Sidebar(props: SidebarProps) {
             </>
           }
         >
-          <div style={{ 'padding-bottom': '8px', overflow: 'auto', 'min-height': 0 }}>
-            <RoomInfoBox label="Selected" info={props.selectedRoomInfo ?? null} />
-            <RoomInfoBox label="Cursor" info={props.hoveredRoomInfo ?? null} dim />
+          <>
+            {/* Same split as room view: the info boxes take the free space and
+                scroll, so the custom UI stays pinned to the bottom. */}
+            <div style={{ flex: 1, overflow: 'auto', 'min-height': 0, 'padding-bottom': '8px' }}>
+              <RoomInfoBox label="Selected" info={props.selectedRoomInfo ?? null} />
+              <RoomInfoBox label="Cursor" info={props.hoveredRoomInfo ?? null} dim />
+            </div>
             <CustomUiPanel mode="map" shard={props.shard ?? null} selectedRoomInfo={props.selectedRoomInfo ?? null} />
-          </div>
+          </>
         </Show>
       </div>
     </div>
