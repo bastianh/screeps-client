@@ -4,10 +4,18 @@ import type { ApiRoomDecorationItem, Badge } from 'screeps-connectivity'
 export type RoomUsersMap = Record<string, { _id: string; username: string; badge?: Badge }>
 
 const [roomObjectCount, setRoomObjectCount] = createSignal<number | null>(null)
-const [roomOwner, setRoomOwner] = createSignal<{ userId: string; username: string } | null>(null)
+// Owner and reservation are rebuilt from the controller on every room update, i.e.
+// once per tick. Compared by value so an unchanged owner doesn't notify consumers
+// through a fresh object identity — a per-tick notification tears down and recreates
+// DOM that never changed, which loses clicks on any button inside it.
+const [roomOwner, setRoomOwner] = createSignal<{ userId: string; username: string } | null>(null, {
+  equals: (a, b) => a?.userId === b?.userId && a?.username === b?.username,
+})
 const [controllerLevel, setControllerLevel] = createSignal<number | null>(null)
 const [controllerProgress, setControllerProgress] = createSignal<number | null>(null)
-const [controllerReservation, setControllerReservation] = createSignal<{ user: string; endTime: number } | null>(null)
+const [controllerReservation, setControllerReservation] = createSignal<{ user: string; endTime: number } | null>(null, {
+  equals: (a, b) => a?.user === b?.user && a?.endTime === b?.endTime,
+})
 const [structureCounts, setStructureCounts] = createSignal<Record<string, number>>({})
 const [roomUsers, setRoomUsers] = createSignal<RoomUsersMap | null>(null)
 const [currentShard, setCurrentShard] = createSignal<string | null>(null)
