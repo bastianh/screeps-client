@@ -10,7 +10,7 @@ import { PlayerBadge } from '~/components/PlayerBadge.js'
 import { RoomPreviewTile } from '~/components/RoomPreviewTile.js'
 import { StatTileRow, totalsFromStats } from '~/components/AccountStatTiles.js'
 import { LeaderboardRankTiles } from '~/components/leaderboard/RankTiles.js'
-import { extractOwnedRooms } from '~/utils/ownedRooms.js'
+import { extractOwnedRooms, groupRoomsByShard } from '~/utils/ownedRooms.js'
 import { gclProgress, gplProgress, type LevelProgress } from '~/utils/levels.js'
 
 // Public account dashboard for any player, keyed by username — the same layout
@@ -101,6 +101,8 @@ export function Profile() {
       }
     },
   )
+
+  const roomsByShard = () => groupRoomsByShard(rooms() ?? [])
 
   // Whether this public profile is the logged-in player's own account — drives
   // the shortcut link over to their private overview.
@@ -213,15 +215,24 @@ export function Profile() {
                 </select>
                 <StatTileRow totals={totals()} />
 
-                {/* Owned-room minimaps */}
+                {/* Owned-room minimaps, grouped by shard */}
                 <Show when={rooms()?.length}>
                   <div style={{ 'margin-top': '24px' }}>
                     <div style={{ color: MUTED, 'font-size': '11px', 'text-transform': 'uppercase', 'margin-bottom': '12px' }}>Rooms</div>
-                    <div style={{ display: 'flex', 'flex-wrap': 'wrap', gap: '16px' }}>
-                      <For each={rooms()}>
-                        {(r) => <RoomPreviewTile room={r.room} shard={r.shard} ownerId={u()._id} onClick={() => goToRoom(r.room, r.shard)} onOverview={() => goToRoomOverview(r.room, r.shard)} />}
-                      </For>
-                    </div>
+                    <For each={roomsByShard()}>
+                      {([shard, list]) => (
+                        <div style={{ 'margin-bottom': '20px' }}>
+                          <Show when={shard}>
+                            <div style={{ color: TEXT, 'font-size': '13px', 'font-weight': 600, 'margin-bottom': '10px' }}>{shard}</div>
+                          </Show>
+                          <div style={{ display: 'flex', 'flex-wrap': 'wrap', gap: '16px' }}>
+                            <For each={list}>
+                              {(r) => <RoomPreviewTile room={r.room} shard={r.shard} ownerId={u()._id} onClick={() => goToRoom(r.room, r.shard)} onOverview={() => goToRoomOverview(r.room, r.shard)} />}
+                            </For>
+                          </div>
+                        </div>
+                      )}
+                    </For>
                   </div>
                 </Show>
               </>

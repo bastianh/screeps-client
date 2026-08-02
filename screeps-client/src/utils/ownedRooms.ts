@@ -15,3 +15,16 @@ export function extractOwnedRooms(res: ApiUserRoomsResponse): OwnedRoom[] {
   }
   return (res.rooms ?? []).map((room) => ({ room, shard: null }))
 }
+
+// Group owned rooms by shard for the minimap grids. Multishard servers key
+// rooms by shard; single-shard servers report shard: null, which collapses to
+// one unlabeled group. Sort shards by name so the order is stable.
+export function groupRoomsByShard(rooms: OwnedRoom[]): [string | null, OwnedRoom[]][] {
+  const groups = new Map<string | null, OwnedRoom[]>()
+  for (const r of rooms) {
+    const arr = groups.get(r.shard)
+    if (arr) arr.push(r)
+    else groups.set(r.shard, [r])
+  }
+  return [...groups.entries()].sort(([a], [b]) => (a ?? '').localeCompare(b ?? ''))
+}
