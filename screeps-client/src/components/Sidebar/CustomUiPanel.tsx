@@ -1,4 +1,4 @@
-import { createEffect, createSignal, For, Match, onCleanup, Show, Switch } from 'solid-js'
+import { createEffect, createMemo, createSignal, For, Match, onCleanup, Show, Switch } from 'solid-js'
 import { createStore } from 'solid-js/store'
 import { RefreshCw } from 'lucide-solid'
 import {
@@ -84,25 +84,38 @@ export function CustomUiPanel(props: CustomUiPanelProps) {
     return true
   }
 
+  // `For` diffs by reference, so a freshly built entry object makes it drop the
+  // row's DOM and mount a replacement. A button swapped out between mousedown and
+  // mouseup never fires its click, which is why entries are cached per key: a
+  // re-run over an unchanged config hands `For` the very same objects back.
+  const entryCache = new Map<string, TreeEntry>()
+  const entryFor = (el: CustomUiElement, child: boolean, key: string): TreeEntry => {
+    const cached = entryCache.get(key)
+    if (cached && cached.el === el && cached.child === child) return cached
+    const entry: TreeEntry = { el, child, key }
+    entryCache.set(key, entry)
+    return entry
+  }
+
   // Flat render list. A header's showIf gates its whole group; a header that
   // has items but no visible ones disappears along with them.
-  const visibleTree = (): TreeEntry[] => {
+  const visibleTree = createMemo((): TreeEntry[] => {
     const out: TreeEntry[] = []
     allElements().forEach((el, i) => {
       if (!isVisible(el)) return
       const key = `${props.mode}:${i}`
       if (el.type === 'header' && el.items && el.items.length > 0) {
         const children = el.items
-          .map((sub, j): TreeEntry => ({ el: sub, child: true, key: `${key}.${j}` }))
+          .map((sub, j) => entryFor(sub, true, `${key}.${j}`))
           .filter((entry) => isVisible(entry.el))
         if (children.length === 0) return
-        out.push({ el, child: false, key }, ...children)
+        out.push(entryFor(el, false, key), ...children)
         return
       }
-      out.push({ el, child: false, key })
+      out.push(entryFor(el, false, key))
     })
     return out
-  }
+  })
 
   // Live values for status elements: subscribe each path on the shard being
   // viewed; re-run when the config or shard changes. All configured paths are

@@ -1,4 +1,4 @@
-import { createSignal, For, Show, onCleanup } from 'solid-js'
+import { createMemo, createSignal, For, Show, onCleanup } from 'solid-js'
 import { createStore } from 'solid-js/store'
 import {
   uiConfig, dispatchCustomUi, pendingIds, matchesObject,
@@ -8,6 +8,11 @@ import { selection, type SelectedObject } from '~/stores/selectionStore.js'
 import { pendingTile } from '~/stores/roomViewStore.js'
 import { currentRoom, currentShard } from '~/stores/roomDataStore.js'
 import { historyMode } from '~/stores/historyStore.js'
+
+interface ActionEntry {
+  el: CustomUiElement
+  key: string
+}
 
 // Player-defined actions attached to a selected object's card in the
 // SelectionList: every `objects` element of the custom UI config whose
@@ -25,13 +30,26 @@ export function CustomObjectActions(props: { item: SelectedObject }) {
     return typeof user === 'string' ? user : null
   }
 
-  const elements = (): { el: CustomUiElement; key: string }[] => {
+  // `For` diffs by reference, so rebuilding these wrappers on every re-run would
+  // replace each button's DOM node — and a button swapped out between mousedown
+  // and mouseup never fires its click. Cached per key so an unchanged config
+  // yields the identical objects again.
+  const entryCache = new Map<string, ActionEntry>()
+  const entryFor = (el: CustomUiElement, key: string): ActionEntry => {
+    const cached = entryCache.get(key)
+    if (cached && cached.el === el) return cached
+    const entry: ActionEntry = { el, key }
+    entryCache.set(key, entry)
+    return entry
+  }
+
+  const elements = createMemo((): ActionEntry[] => {
     const cfg = uiConfig()
     if (!cfg || historyMode()) return []
     return cfg.objects
-      .map((el, i) => ({ el, key: `obj:${i}:${props.item.id}` }))
+      .map((el, i) => entryFor(el, `obj:${i}:${props.item.id}`))
       .filter(({ el }) => matchesObject(el, props.item.type, objUser()))
-  }
+  })
 
   const isPending = (key: string): boolean => {
     const id = inflight[key]
