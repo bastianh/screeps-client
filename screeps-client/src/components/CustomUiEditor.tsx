@@ -3,7 +3,7 @@
 // structured form: sections for the map / room / object sidebars, one card per
 // element, plus a raw-JSON view and a live preview of how the sidebar renders.
 // Opened from Settings → Custom UI; it loads and saves the configured segment.
-import { createSignal, createMemo, createEffect, onCleanup, For, Show, Switch, Match, type JSX } from 'solid-js'
+import { createSignal, createMemo, createEffect, onCleanup, For, Index, Show, Switch, Match, type JSX } from 'solid-js'
 import { createStore, produce } from 'solid-js/store'
 import { createCodeMirror, createEditorControlledValue } from 'solid-codemirror'
 import { basicSetup } from 'codemirror'
@@ -212,18 +212,21 @@ function TextInput(props: { value: string; placeholder?: string; onInput: (v: st
 function StringList(props: { values: string[]; addLabel: string; placeholder?: string; onChange: (v: string[]) => void }) {
   return (
     <div style={{ display: 'flex', 'flex-direction': 'column', gap: '4px' }}>
-      <For each={props.values}>
+      {/* `Index` rather than `For`: the rows are keyed by position, so editing a
+          value updates the existing input instead of dropping it for a fresh one —
+          which is what made the field lose focus on every keystroke. */}
+      <Index each={props.values}>
         {(v, i) => (
           <div style={{ display: 'flex', gap: '4px' }}>
             <input
               type="text"
-              value={v}
+              value={v()}
               placeholder={props.placeholder}
-              onInput={(e) => props.onChange(props.values.map((x, j) => (j === i() ? e.currentTarget.value : x)))}
+              onInput={(e) => props.onChange(props.values.map((x, j) => (j === i ? e.currentTarget.value : x)))}
               style={inputStyle}
             />
             <button
-              onClick={() => props.onChange(props.values.filter((_, j) => j !== i()))}
+              onClick={() => props.onChange(props.values.filter((_, j) => j !== i))}
               title="Remove"
               style={{ ...headerBtnStyle(true), 'flex-shrink': 0, padding: '4px 8px' }}
             >
@@ -231,7 +234,7 @@ function StringList(props: { values: string[]; addLabel: string; placeholder?: s
             </button>
           </div>
         )}
-      </For>
+      </Index>
       <button
         onClick={() => props.onChange([...props.values, ''])}
         style={{ ...headerBtnStyle(true), 'align-self': 'flex-start', color: '#58a6ff' }}
