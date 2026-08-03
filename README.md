@@ -2,6 +2,8 @@
 
 A browser-based client for [Screeps](https://screeps.com) — a real-time strategy game where you program your units in JavaScript. This monorepo contains a reusable connectivity library, a SolidJS + PixiJS frontend, and a Tauri desktop wrapper for it.
 
+**➡️ [Feature overview](https://bastianh.github.io/screeps-client/)** — what the client does and how it extends the official Screeps client.
+
 ## Packages
 
 | Package | Description |
