@@ -14,6 +14,8 @@ export interface PopoutRpc {
   subscribe: (topic: string) => Subscription
   /** Listen for events forwarded by the host (topic = connectivity event name). */
   on: (topic: string, callback: (data: never) => void) => Subscription
+  /** Announce this window is about to show the world map; other map views yield. */
+  postMapClose: () => void
 }
 
 interface PendingCall {
@@ -95,6 +97,15 @@ export function createPopoutRpc(sid: string): PopoutRpc {
         else entry.reject(new Error(msg.error ?? 'Unknown popout error'))
         break
       }
+      case 'mapclose': {
+        // Deliberately not host-filtered — a takeover must reach this popout even
+        // while it is bound to a host id that died in a main-window reload.
+        const callbacks = listeners.get('mapclose')
+        if (callbacks) {
+          for (const callback of callbacks) callback(undefined as never)
+        }
+        break
+      }
     }
   }
 
@@ -151,5 +162,9 @@ export function createPopoutRpc(sid: string): PopoutRpc {
     }
   }
 
-  return { hostAlive, call, subscribe, on }
+  const postMapClose = () => {
+    channel.postMessage({ kind: 'mapclose' } satisfies PopoutMessage)
+  }
+
+  return { hostAlive, call, subscribe, on, postMapClose }
 }

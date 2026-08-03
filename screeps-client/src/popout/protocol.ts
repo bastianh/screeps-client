@@ -9,12 +9,25 @@
 // (re-issuing its subscriptions) when the heartbeat goes silent and a new host
 // appears — so a main-window reload heals automatically.
 
+import type { ServerVersion, UserInfo } from 'screeps-connectivity'
+
 export const POPOUT_PARAM = 'popout'
 
 /** True when this window was opened as a popout (?popout in the URL). */
 export const isPopoutWindow = new URLSearchParams(window.location.search).has(POPOUT_PARAM)
 
-export type PopoutMethod = 'console.exec' | 'memory.get' | 'memory.set' | 'subscribe' | 'unsubscribe'
+export type PopoutMethod =
+  | 'console.exec'
+  | 'memory.get'
+  | 'memory.set'
+  | 'subscribe'
+  | 'unsubscribe'
+  | 'session.state'
+  | 'room.terrainBulk'
+  | 'mapStats.request'
+  | 'server.worldInfo'
+  | 'user.worldStartRoom'
+  | 'navigation.navigateTo'
 
 export interface PopoutRequest {
   kind: 'request'
@@ -58,6 +71,15 @@ export interface PopoutBye {
   popoutId: string
 }
 
+/**
+ * "A window is about to show the world map — every other map view yields."
+ * Deliberately not host-filtered: it must reach a popout that is still bound to
+ * a dead host id after a main-window reload.
+ */
+export interface PopoutMapClose {
+  kind: 'mapclose'
+}
+
 export type PopoutMessage =
   | PopoutRequest
   | PopoutResponse
@@ -65,6 +87,7 @@ export type PopoutMessage =
   | PopoutHeartbeat
   | PopoutPing
   | PopoutBye
+  | PopoutMapClose
 
 /**
  * Channel name for one server+user session. The sid is passed to the popout via
@@ -78,6 +101,30 @@ export function popoutChannelName(sid: string): string {
 /** Subscription topic for a memory watch path. */
 export function memoryTopic(path: string, shard: string | null): string {
   return `memory:${shard ?? ''}:${path}`
+}
+
+/** Subscription topic for one room's map2 (dots/roads/walls) channel. */
+export function map2Topic(room: string, shard: string | null): string {
+  return `map2:${shard ?? ''}:${room}`
+}
+
+/** Subscription topic for a shard's map visuals. */
+export function mapVisualTopic(shard: string | null): string {
+  return `mapVisual:${shard ?? ''}`
+}
+
+/** Forwarding gate for mapStats:room events — no server subscription behind it. */
+export const MAP_STATS_TOPIC = 'mapStats'
+
+/** Forwarding gate for navigation:change events from the main window. */
+export const NAVIGATION_TOPIC = 'navigation'
+
+/** Snapshot of the main window's session, served to `session.state`. */
+export interface PopoutSessionState {
+  userInfo: UserInfo | null
+  serverVersion: ServerVersion | null
+  room: string | null
+  shard: string | null
 }
 
 export const HOST_HEARTBEAT_MS = 2000

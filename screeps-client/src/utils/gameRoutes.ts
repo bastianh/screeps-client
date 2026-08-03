@@ -26,12 +26,19 @@ function round(v: number): number {
 // with replaceState, so it should never look like a distinct page.
 export function buildMapUrl(shard: string | null, view?: MapView): string {
   const path = shard ? `${basePath()}/map/${encodeURIComponent(shard)}` : `${basePath()}/map`
-  // Assembled by hand rather than with URLSearchParams, which would escape the
-  // separating comma to %2C — legal, but unreadable in the address bar.
+  const params = mapViewQuery(view)
+  return params.length > 0 ? `${path}?${params.join('&')}` : path
+}
+
+// Camera query fragments, shared by buildMapUrl and the map popout (which
+// carries the camera in its own popout URL). Assembled by hand rather than with
+// URLSearchParams, which would escape the separating comma to %2C — legal, but
+// unreadable in the address bar.
+export function mapViewQuery(view?: MapView): string[] {
   const params: string[] = []
   if (view?.zoom) params.push(`zoom=${round(view.zoom)}`)
   if (view?.pos) params.push(`pos=${round(view.pos.x)},${round(view.pos.y)}`)
-  return params.length > 0 ? `${path}?${params.join('&')}` : path
+  return params
 }
 
 // Camera state from a /map URL's query. Anything missing or malformed comes back
