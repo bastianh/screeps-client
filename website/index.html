@@ -1,0 +1,402 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>screeps-client — Features</title>
+<meta name="description" content="A modern, embeddable web client for Screeps — what it does and how it extends the official client.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="hero">
+  <h1><code>screeps-client</code></h1>
+  <p class="tagline">A modern, open-source web client for
+    <a href="https://screeps.com">Screeps</a> — rebuilt from scratch with SolidJS and PixiJS,
+    embeddable anywhere, and extended well beyond the official client.</p>
+  <div class="links">
+    <a class="primary" href="https://github.com/bastianh/screeps-client">GitHub</a>
+    <a href="https://www.npmjs.com/package/screeps-client">npm</a>
+  </div>
+</header>
+
+<nav class="toc">
+  <a href="#deployment">Run it anywhere</a>
+  <a href="#custom-ui">Custom UI</a>
+  <a href="#dev-tools">Developer tools</a>
+  <a href="#world-map">World map</a>
+  <a href="#room-view">Room view</a>
+  <a href="#parity">Parity</a>
+  <a href="#performance">Performance</a>
+  <a href="#packages">Packages</a>
+</nav>
+
+<main>
+
+<section id="about">
+  <h2>What is this?</h2>
+  <p>
+    A from-scratch reimplementation of the Screeps game client. The UI is built with
+    <a href="https://www.solidjs.com/">SolidJS</a>, rooms and the world map are rendered with
+    <a href="https://pixijs.com/">PixiJS</a> (WebGL), and all server communication goes through
+    <code>screeps-connectivity</code>, a zero-dependency TypeScript library. It connects to the
+    official <a href="https://screeps.com">screeps.com</a> servers (World and Season), classic
+    private servers, and <a href="https://github.com/laverdet/xxscreeps">xxscreeps</a> — and
+    adapts its UI to each server's advertised capabilities.
+  </p>
+  <p class="lead">
+    This page focuses on what the client <em>adds</em> compared to the official client;
+    the <a href="#parity">parity section</a> summarizes the familiar features it reimplements.
+  </p>
+</section>
+
+<section id="deployment">
+  <h2>Run it anywhere</h2>
+  <p class="lead">The official client is tied to screeps.com and the Steam app. This client is
+    packaged so it can be served, embedded, or installed wherever your server lives.</p>
+
+  <div class="quickstart">
+    <h3>Quick start — play on the official servers</h3>
+    <pre><code>npx screeps-client-proxy</code></pre>
+    <p>This is the recommended way to use the client with <strong>screeps.com</strong> (World
+      and Season) or any other server you don't control. It starts a small local proxy that
+      serves the client at <code>http://localhost:8080/</code> with a server-list login and
+      forwards API + WebSocket traffic to whichever backend you pick — sidestepping browser
+      CORS entirely. One instance handles any number of servers.
+      <span class="prs"><a href="https://github.com/bastianh/screeps-client/pull/212">#212</a>,
+      <a href="https://github.com/bastianh/screeps-client/pull/247">#247</a></span></p>
+  </div>
+
+  <div class="cards">
+    <div class="card">
+      <h3>Embedded in private servers</h3>
+      <p><code>screepsmod-client-new</code> serves the client directly from any classic Screeps
+        server at <code>/client</code> — no separate hosting, and the server seeds the page with
+        its own version info for an instantly configured login.</p>
+      <p class="prs"><a href="https://github.com/bastianh/screeps-client/pull/231">#231</a></p>
+    </div>
+    <div class="card">
+      <h3>xxscreeps support</h3>
+      <p><code>xxscreeps-mod-client</code> wires the client into
+        <a href="https://github.com/laverdet/xxscreeps">xxscreeps</a>. The login screen adapts to
+        the server's <code>.screepsrc.yaml</code> — guest access, e-mail registration, and Steam
+        login buttons appear only when the backend actually offers them.</p>
+      <p class="prs"><a href="https://github.com/bastianh/screeps-client/pull/175">#175</a>,
+        <a href="https://github.com/bastianh/screeps-client/pull/191">#191</a></p>
+    </div>
+    <div class="card">
+      <h3>Desktop app</h3>
+      <p>A lightweight <a href="https://tauri.app">Tauri v2</a> desktop app for macOS, Windows,
+        and Linux with a server-list login screen. Credentials are stored in the OS keychain
+        (macOS Keychain, Windows Credential Manager, Linux Secret Service), and native HTTP makes
+        every server reachable without CORS tricks.</p>
+      <div class="callout warn">⚠️ The pre-built desktop binaries are released manually and are
+        currently out of date most of the time. For an up-to-date client, prefer
+        <code>npx screeps-client-proxy</code> above.</div>
+      <p class="prs"><a href="https://github.com/bastianh/screeps-client/pull/159">#159</a>,
+        <a href="https://github.com/bastianh/screeps-client/pull/165">#165</a></p>
+    </div>
+    <div class="card">
+      <h3>Guest &amp; spectator mode</h3>
+      <p>On servers that allow it, the client connects as a read-only guest without any login —
+        straight onto the world map, with the server's message of the day shown as a dismissable
+        overlay. Build/flag tools and the code editor are hidden for guests.</p>
+      <p class="prs"><a href="https://github.com/bastianh/screeps-client/pull/98">#98</a>,
+        <a href="https://github.com/bastianh/screeps-client/pull/99">#99</a>,
+        <a href="https://github.com/bastianh/screeps-client/pull/22">#22</a></p>
+    </div>
+    <div class="card">
+      <h3>Mobile &amp; touch</h3>
+      <p>Room and map views support two-finger pinch-to-zoom with simultaneous panning, and the
+        renderer includes fixes specifically for mobile browsers — the client is usable from a
+        phone or tablet.</p>
+      <p class="prs"><a href="https://github.com/bastianh/screeps-client/pull/33">#33</a>,
+        <a href="https://github.com/bastianh/screeps-client/pull/27">#27</a></p>
+    </div>
+    <div class="card wide">
+      <h3>Flexible login &amp; per-server capabilities</h3>
+      <p>Steam, Discord, e-mail/password, and API-token login are all supported, including the
+        username-selection flow for brand-new OAuth signups. A unified capabilities layer reads
+        each server's <code>/api/version</code> and shows only what the server supports — market,
+        messaging, room history, decorations, server-password fields, and login providers all
+        gate themselves automatically. Session handling understands both static API tokens and
+        the rotating tokens used by <code>screepsmod-auth</code>.</p>
+      <p class="prs"><a href="https://github.com/bastianh/screeps-client/pull/180">#180</a>,
+        <a href="https://github.com/bastianh/screeps-client/pull/176">#176</a>,
+        <a href="https://github.com/bastianh/screeps-client/pull/178">#178</a>,
+        <a href="https://github.com/bastianh/screeps-client/pull/182">#182</a></p>
+    </div>
+  </div>
+</section>
+
+<section id="custom-ui">
+  <h2>Custom UI panels <span class="badge new">unique</span></h2>
+  <p>
+    Your bot can define its own UI. A JSON document in a memory segment describes buttons,
+    dropdowns, status lines, and collapsible headers, and the client renders them in the map and
+    room sidebars. Clicking an element calls a handler function in your bot code through the
+    console API — with the current view context (shard, selected room, selected objects, marked
+    tile) — and the bot's reply is turned into toasts, room navigation, console-input insertion,
+    or a config reload. Elements can be conditional on selection type or room standing, carry
+    confirmation prompts, and per-object action menus appear in the selection panel.
+  </p>
+  <p>
+    A visual editor in the settings (structured form and raw-JSON CodeMirror mode, with live
+    validation) makes building these panels comfortable without hand-writing the segment.
+  </p>
+  <p class="prs" style="color: var(--muted); font-size: 0.85rem;">
+    <a href="https://github.com/bastianh/screeps-client/pull/206">#206</a>,
+    <a href="https://github.com/bastianh/screeps-client/pull/210">#210</a>,
+    <a href="https://github.com/bastianh/screeps-client/pull/250">#250</a> ·
+    <a href="https://github.com/bastianh/screeps-client/blob/main/docs/custom-ui.md">format documentation</a>
+  </p>
+</section>
+
+<section id="dev-tools">
+  <h2>Developer tools</h2>
+  <div class="cards">
+    <div class="card">
+      <h3>TypeScript in the code editor <span class="badge new">unique</span></h3>
+      <p>Write your Screeps modules in TypeScript with full in-browser IntelliSense — completion,
+        hover type info, and inline diagnostics for the Screeps API, powered by a TypeScript
+        language service in a Web Worker. Branches can mix <code>.ts</code> and <code>.js</code>
+        modules, conversion works both ways, and on save the TS transpiles to JS for the server
+        while the original source is kept alongside it.</p>
+      <p><a href="typescript.html">How it works →</a></p>
+      <p class="prs"><a href="https://github.com/bastianh/screeps-client/pull/205">#205</a></p>
+    </div>
+    <div class="card">
+      <h3>Smarter console</h3>
+      <p>TypeScript-powered completion on the console input, command history that persists across
+        reloads (per server, 200 entries), a true Pause that buffers incoming messages instead of
+        just stopping the scroll, errors interleaved in arrival order, and a regex message
+        filter.</p>
+      <p class="prs"><a href="https://github.com/bastianh/screeps-client/pull/241">#241</a>,
+        <a href="https://github.com/bastianh/screeps-client/pull/209">#209</a>,
+        <a href="https://github.com/bastianh/screeps-client/pull/76">#76</a></p>
+    </div>
+    <div class="card">
+      <h3>Memory &amp; segment editor</h3>
+      <p>A lazy-loading memory tree in the bottom panel, plus a full-screen editor for all 100
+        raw memory segments: JSON highlighting, format/minify, lz-string compress/decompress,
+        a live character counter against the 100&nbsp;KB limit, shard selection, and dirty-state
+        protection.</p>
+      <p class="prs"><a href="https://github.com/bastianh/screeps-client/pull/58">#58</a>,
+        <a href="https://github.com/bastianh/screeps-client/pull/207">#207</a></p>
+    </div>
+    <div class="card">
+      <h3>Branch &amp; module management</h3>
+      <p>Create branches, activate the branch that runs on the server, and add or delete modules
+        directly in the code panel — with a live "running on server" indicator that updates even
+        when the active branch is switched from another session.</p>
+      <p class="prs"><a href="https://github.com/bastianh/screeps-client/pull/203">#203</a></p>
+    </div>
+  </div>
+</section>
+
+<section id="world-map">
+  <h2>World map</h2>
+  <div class="cards">
+    <div class="card">
+      <h3>Alliance overlay <span class="badge new">unique</span></h3>
+      <p>A map overlay backed by the
+        <a href="https://www.leagueofautomatednations.com/">League of Automated Nations</a>
+        roster: owned rooms are tinted in their alliance's colour with the alliance tag along the
+        room edge, a sidebar legend counts rooms per alliance in view, and player profiles and
+        room sidebars show alliance membership.</p>
+      <p class="prs"><a href="https://github.com/bastianh/screeps-client/pull/243">#243</a></p>
+    </div>
+    <div class="card">
+      <h3>Shareable URLs</h3>
+      <p>The shard travels in the URL path (<code>/map/shard0</code>,
+        <code>/room/shard0/W11N11</code>) and the map mirrors its camera into the URL
+        (<code>?zoom=…&amp;pos=…</code>) — any map spot or room can be bookmarked and shared.</p>
+      <p class="prs"><a href="https://github.com/bastianh/screeps-client/pull/181">#181</a>,
+        <a href="https://github.com/bastianh/screeps-client/pull/245">#245</a></p>
+    </div>
+    <div class="card">
+      <h3>Overlays &amp; toggles</h3>
+      <p>Owner and mineral overlays with a shard selector, a "show unclaimable rooms" highlight
+        for highways, keeper sectors, and restricted rooms, an out-of-borders overlay for
+        respawn-area maps, and <code>Game.map.visual</code> rendering with its own toggle.</p>
+      <p class="prs"><a href="https://github.com/bastianh/screeps-client/pull/166">#166</a>,
+        <a href="https://github.com/bastianh/screeps-client/pull/26">#26</a>,
+        <a href="https://github.com/bastianh/screeps-client/pull/90">#90</a></p>
+    </div>
+    <div class="card">
+      <h3>Richer room info</h3>
+      <p>The map sidebar distinguishes reserved from owned rooms, shows the controller level as
+        a chip and the controller sign with the signer's badge, and highway power banks and
+        deposits are drawn as prominent white dots instead of easily-missed specks.</p>
+      <p class="prs"><a href="https://github.com/bastianh/screeps-client/pull/123">#123</a>,
+        <a href="https://github.com/bastianh/screeps-client/pull/106">#106</a></p>
+    </div>
+  </div>
+</section>
+
+<section id="room-view">
+  <h2>Room view</h2>
+  <div class="cards">
+    <div class="card">
+      <h3>In-client history playback</h3>
+      <p>Scrub through a room's past on servers that store tick history: a timeline slider
+        spanning up to 200,000 ticks, ±10/±100 stepping, playback speeds from 0.5 to 20
+        ticks/second, and estimated real-world timestamps — without leaving the client.</p>
+      <p class="prs"><a href="https://github.com/bastianh/screeps-client/pull/59">#59</a>,
+        <a href="https://github.com/bastianh/screeps-client/pull/188">#188</a></p>
+    </div>
+    <div class="card">
+      <h3>In-room decoration editor</h3>
+      <p>Room decorations render fully (wall graffiti, floor/wall textures, badges) — and are
+        edited in place: drag, resize, and rotate a decoration over the live, ticking room, with
+        the artwork previewed wall-masked and tinted exactly as it will look.</p>
+      <p class="prs"><a href="https://github.com/bastianh/screeps-client/pull/235">#235</a>,
+        <a href="https://github.com/bastianh/screeps-client/pull/238">#238</a></p>
+    </div>
+    <div class="card">
+      <h3>Better selection panel</h3>
+      <p>A damage-graded hits bar (green/amber/red) on injured creeps and structures, structured
+        detail views per object type with resource breakdowns and RCL progress, an optional
+        verbose mode exposing every creep property, and clickable owner names that open player
+        profiles.</p>
+      <p class="prs"><a href="https://github.com/bastianh/screeps-client/pull/225">#225</a>,
+        <a href="https://github.com/bastianh/screeps-client/pull/70">#70</a>,
+        <a href="https://github.com/bastianh/screeps-client/pull/84">#84</a></p>
+    </div>
+    <div class="card">
+      <h3>Quality of life</h3>
+      <p>A "smooth animations" toggle that snaps tick animations for a lower-distraction view,
+        context-sensitive mode hints (build/flag/move) with right-click to exit any mode,
+        double-click to enter a room from the map, and configurable creep-name and room-visual
+        toggles.</p>
+      <p class="prs"><a href="https://github.com/bastianh/screeps-client/pull/208">#208</a>,
+        <a href="https://github.com/bastianh/screeps-client/pull/64">#64</a>,
+        <a href="https://github.com/bastianh/screeps-client/pull/4">#4</a></p>
+    </div>
+  </div>
+</section>
+
+<section id="parity">
+  <h2>Feature parity with the official client</h2>
+  <p class="lead">Beyond the extensions above, the client reimplements the day-to-day features
+    you expect, matched against the official client's behaviour and rendering.</p>
+  <ul class="compact">
+    <li>Full room rendering: every structure with its vanilla look and animations — tower aim
+      and action beams, lab reactions and cooldown glows, spawn progress ring and energy fill,
+      resource-typed store fills, terminal send pulse, extractor spin, power spawn meter,
+      power banks, portals, keeper lairs, invader/Source&nbsp;Keeper gems, tombstones, ruins
+      <span class="prs">(<a href="https://github.com/bastianh/screeps-client/pull/117">#117</a>,
+      <a href="https://github.com/bastianh/screeps-client/pull/132">#132</a>,
+      <a href="https://github.com/bastianh/screeps-client/pull/125">#125</a>,
+      <a href="https://github.com/bastianh/screeps-client/pull/252">#252</a>, …)</span></li>
+    <li>Creeps with player badges, tick-synced interpolated movement, and say bubbles
+      <span class="prs">(<a href="https://github.com/bastianh/screeps-client/pull/74">#74</a>)</span></li>
+    <li>RoomVisuals and disabled-structure marking, crisp at every zoom
+      <span class="prs">(<a href="https://github.com/bastianh/screeps-client/pull/94">#94</a>,
+      <a href="https://github.com/bastianh/screeps-client/pull/236">#236</a>)</span></li>
+    <li>Flags (create, move across rooms, colors) and construction with build panel
+      <span class="prs">(<a href="https://github.com/bastianh/screeps-client/pull/50">#50</a>)</span></li>
+    <li>Market: order books per resource, price history, my orders, credit ledger — read-only,
+      with the target room pre-filled from the room you came from
+      <span class="prs">(<a href="https://github.com/bastianh/screeps-client/pull/143">#143</a>,
+      <a href="https://github.com/bastianh/screeps-client/pull/197">#197</a>)</span></li>
+    <li>World and power leaderboards with season browsing and rank search
+      <span class="prs">(<a href="https://github.com/bastianh/screeps-client/pull/232">#232</a>)</span></li>
+    <li>Account overview and public player profiles with GCL/GPL rings, stat tiles, and
+      owned-room minimaps
+      <span class="prs">(<a href="https://github.com/bastianh/screeps-client/pull/138">#138</a>,
+      <a href="https://github.com/bastianh/screeps-client/pull/160">#160</a>,
+      <a href="https://github.com/bastianh/screeps-client/pull/194">#194</a>)</span></li>
+    <li>In-game messaging with conversation deep links (<code>/messages/&lt;user&gt;</code>)
+      <span class="prs">(<a href="https://github.com/bastianh/screeps-client/pull/162">#162</a>,
+      <a href="https://github.com/bastianh/screeps-client/pull/195">#195</a>)</span></li>
+    <li>Power creep management: create, upgrade, rename, delete
+      <span class="prs">(<a href="https://github.com/bastianh/screeps-client/pull/140">#140</a>)</span></li>
+    <li>Per-room overview page with stat tiles and history graph
+      <span class="prs">(<a href="https://github.com/bastianh/screeps-client/pull/199">#199</a>)</span></li>
+    <li>Badge editor with designs, colours, variations, and auto-onboarding for new players
+      <span class="prs">(<a href="https://github.com/bastianh/screeps-client/pull/41">#41</a>,
+      <a href="https://github.com/bastianh/screeps-client/pull/51">#51</a>)</span></li>
+    <li>Notification preferences, respawn flow with world-status polling, and password
+      management from the user menu
+      <span class="prs">(<a href="https://github.com/bastianh/screeps-client/pull/158">#158</a>,
+      <a href="https://github.com/bastianh/screeps-client/pull/131">#131</a>,
+      <a href="https://github.com/bastianh/screeps-client/pull/129">#129</a>)</span></li>
+  </ul>
+  <p style="color: var(--muted); font-size: 0.9rem; margin-top: 20px;">
+    Known gaps: there is no simulation room or tutorial, and market orders are created and
+    cancelled through the in-game API rather than the UI.
+  </p>
+</section>
+
+<section id="performance">
+  <h2>Performance</h2>
+  <p class="lead">The renderer was built for large worlds and long sessions.</p>
+  <ul class="compact">
+    <li>Map terrain is baked in a Web Worker and cached as WebP tiles via the Cache API, per
+      shard, room, and zoom level — panning and reloads reuse tiles instead of re-rendering
+      <span class="prs">(<a href="https://github.com/bastianh/screeps-client/pull/5">#5</a>,
+      <a href="https://github.com/bastianh/screeps-client/pull/102">#102</a>)</span></li>
+    <li>Room terrain renders once into a GPU texture; walls and ramparts redraw only when they
+      actually change
+      <span class="prs">(<a href="https://github.com/bastianh/screeps-client/pull/28">#28</a>,
+      <a href="https://github.com/bastianh/screeps-client/pull/121">#121</a>)</span></li>
+    <li>Night-time light pools follow moving creeps through a GPU lightmap driven by the
+      renderer's own interpolation loop
+      <span class="prs">(<a href="https://github.com/bastianh/screeps-client/pull/105">#105</a>)</span></li>
+    <li>Sprite pooling on the map, batched terrain geometry, and per-frame allocation trimming
+      in hot paths
+      <span class="prs">(<a href="https://github.com/bastianh/screeps-client/pull/8">#8</a>,
+      <a href="https://github.com/bastianh/screeps-client/pull/27">#27</a>)</span></li>
+    <li>Aggressive code splitting: the editor, map, and CodeMirror load lazily, keeping the
+      initial download small
+      <span class="prs">(<a href="https://github.com/bastianh/screeps-client/pull/16">#16</a>,
+      <a href="https://github.com/bastianh/screeps-client/pull/242">#242</a>)</span></li>
+  </ul>
+</section>
+
+<section id="packages">
+  <h2>Packages</h2>
+  <table>
+    <tr><th>Package</th><th>What it is</th></tr>
+    <tr>
+      <td><a href="https://www.npmjs.com/package/screeps-connectivity"><code>screeps-connectivity</code></a></td>
+      <td>Zero-dependency TypeScript library: HTTP API, WebSocket, stores, caching, storage.
+        Usable on its own for bots and tools.</td>
+    </tr>
+    <tr>
+      <td><a href="https://www.npmjs.com/package/screeps-client"><code>screeps-client</code></a></td>
+      <td>The SolidJS + PixiJS browser client itself.</td>
+    </tr>
+    <tr>
+      <td><a href="https://www.npmjs.com/package/screepsmod-client-new"><code>screepsmod-client-new</code></a></td>
+      <td>Mod for classic Screeps servers — serves the embedded client at <code>/client</code>.</td>
+    </tr>
+    <tr>
+      <td><a href="https://www.npmjs.com/package/xxscreeps-mod-client"><code>xxscreeps-mod-client</code></a></td>
+      <td>Mod for xxscreeps — serves and wires up the embedded client.</td>
+    </tr>
+    <tr>
+      <td><a href="https://www.npmjs.com/package/screeps-client-proxy"><code>screeps-client-proxy</code></a></td>
+      <td>Standalone proxy server: wraps any backend and serves the client with a server-list
+        login. Run it with <code>npx screeps-client-proxy</code>.</td>
+    </tr>
+    <tr>
+      <td><code>screeps-desktop</code></td>
+      <td>Tauri desktop app (not published to npm) — grab builds from
+        <a href="https://github.com/bastianh/screeps-client/releases">GitHub releases</a>
+        (often outdated; prefer the proxy).</td>
+    </tr>
+  </table>
+</section>
+
+</main>
+
+<footer>
+  ISC licensed · <a href="https://github.com/bastianh/screeps-client">bastianh/screeps-client</a> ·
+  This page is generated from the project's merged pull requests — see the
+  <a href="https://github.com/bastianh/screeps-client/blob/main/website/PR-COVERAGE.md">PR coverage ledger</a>.
+</footer>
+
+</body>
+</html>

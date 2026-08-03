@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TypeScript in the code editor — screeps-client</title>
+<meta name="description" content="How screeps-client lets you write your Screeps modules in TypeScript, with in-browser IntelliSense and transparent transpilation on save.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="hero sub">
+  <p class="breadcrumb"><a href="index.html">← screeps-client features</a></p>
+  <h1>TypeScript in the code editor</h1>
+  <p class="tagline">Write your bot modules in TypeScript directly in the client — with real
+    IntelliSense, no build pipeline, and plain JavaScript deployed to the server.</p>
+</header>
+
+<main>
+
+<section id="what-you-get">
+  <h2>What you get</h2>
+  <ul>
+    <li><strong>Full IntelliSense in the browser:</strong> completion, hover type information,
+      and inline diagnostics for the entire Screeps API — <code>Game</code>,
+      <code>Memory</code>, room objects, and every game constant come from
+      <code>@types/screeps</code>.</li>
+    <li><strong>Per-module language:</strong> choose <code>.ts</code> or <code>.js</code> when
+      creating a module. Branches can mix both freely.</li>
+    <li><strong>Convert in place:</strong> a <em>Convert to TS / Convert to JS</em> button
+      switches an existing module — including the protected <code>main</code> entry module.</li>
+    <li><strong>Visible generated output:</strong> every TS module gets a read-only
+      <code>&lt;name&gt;.js (generated)</code> entry showing the live transpiled JavaScript.</li>
+    <li><strong>Type errors never block:</strong> diagnostics squiggle in the editor, but Save
+      always works — exactly like a local <code>ts-node</code>-style workflow.</li>
+  </ul>
+</section>
+
+<section id="architecture">
+  <h2>How it works in the browser</h2>
+  <p>
+    A real TypeScript language service runs inside a <strong>Web Worker</strong>, against a
+    virtual file system that holds your branch's modules. The worker is lazily loaded: branches
+    that only contain JavaScript never download the ~4.3&nbsp;MB compiler chunk, and the main
+    thread only ever talks to the worker through a thin message channel — typing stays smooth
+    while the compiler churns in the background.
+  </p>
+  <p>
+    The TypeScript standard-library typings and <code>@types/screeps</code> are
+    <strong>bundled offline</strong> with the client — nothing is fetched from a CDN. That
+    means IntelliSense works everywhere the client runs, including embedded on a private
+    server without internet access.
+  </p>
+  <p>The language environment is tuned to the Screeps runtime:</p>
+  <ul>
+    <li>Target <code>ES2019</code>, CommonJS modules, <strong>no DOM types</strong> — matching
+      the server's isolated VM, so the editor won't suggest <code>document</code> or accept
+      APIs the runtime doesn't have.</li>
+    <li><code>strict</code> mode is on.</li>
+    <li>The runtime's ambient globals are declared: <code>_</code> (lodash),
+      <code>require()</code>, <code>module.exports</code> / <code>exports</code>, and
+      <code>global</code> — so both idiomatic <code>import</code>/<code>export</code> and
+      classic <code>module.exports</code> styles type-check.</li>
+    <li>Bare imports like <code>import { x } from 'utils'</code> resolve against your branch's
+      flat module list, mirroring how Screeps' <code>require('utils')</code> works — sibling
+      modules see each other's types from the first keystroke.</li>
+  </ul>
+</section>
+
+<section id="storage">
+  <h2>How your code is stored on the server</h2>
+  <p>
+    The Screeps server stores a branch as a flat <code>name&nbsp;→&nbsp;source</code> map of
+    runnable JavaScript modules and has no notion of TypeScript. The client bridges that with
+    a simple naming convention: a TypeScript module is persisted as <strong>two</strong> server
+    keys.
+  </p>
+  <table>
+    <tr><th>In the editor</th><th>On the server</th><th>Role</th></tr>
+    <tr>
+      <td rowspan="2"><code>main.ts</code></td>
+      <td><code>main</code></td>
+      <td>The compiled JavaScript — this is what the runtime actually
+        <code>require</code>s and runs.</td>
+    </tr>
+    <tr>
+      <td><code>main.ts</code></td>
+      <td>The original TypeScript source. Never <code>require</code>d by the runtime, so it is
+        completely inert — it just rides along in the branch.</td>
+    </tr>
+    <tr>
+      <td><code>utils.js</code></td>
+      <td><code>utils</code></td>
+      <td>A hand-written JS module maps straight to its key, as always.</td>
+    </tr>
+  </table>
+  <p>
+    When loading a branch, a runnable key with a matching <code>&lt;name&gt;.ts</code> sibling
+    is recognized as the compiled artifact of a TS module and hidden from the module list —
+    you edit the TypeScript, and the generated JS is shown read-only. A runnable key without a
+    sibling is ordinary JavaScript.
+  </p>
+  <p>
+    Because everything lives in the branch itself, your TypeScript source
+    <strong>survives reloads, other devices, and client updates</strong> — there is no local
+    state to lose, and cloning a branch clones the sources with it.
+  </p>
+  <div class="callout warn">⚠️ Two things to be aware of: other clients (including the official
+    one) will show both <code>main</code> and <code>main.ts</code> as plain modules — don't
+    edit the compiled <code>main</code> there, since the next save from this client regenerates
+    it from the TypeScript source. And a hand-written JS module literally named
+    <code>foo.ts</code> would be mistaken for TS source; the <code>.ts</code> suffix is
+    reserved by convention.</div>
+</section>
+
+<section id="save-flow">
+  <h2>What happens on save</h2>
+  <ol>
+    <li>Every TypeScript module in the branch is transpiled to JavaScript in the worker.</li>
+    <li>The branch is written back to the server: compiled JS under the runnable keys,
+      TypeScript sources under their <code>.ts</code> keys.</li>
+    <li>The server picks up the new code like any other commit — the runtime only ever sees
+      plain JavaScript.</li>
+  </ol>
+  <p>
+    Transpilation is syntactic (types are stripped, not enforced): outstanding type errors are
+    shown in the editor but never prevent deploying — you decide when a squiggle matters.
+  </p>
+</section>
+
+<section id="console">
+  <h2>Bonus: the console uses it too</h2>
+  <p>
+    The console command line completes against the same in-browser TypeScript service — typing
+    <code>.</code> or pressing <kbd>Ctrl</kbd>+<kbd>Space</kbd> on <code>Game.</code> offers
+    the real API surface, ranked by your typed prefix. The worker loads on the first completion
+    request, so sessions that never use it don't pay for it. Combined with the persistent
+    per-server command history, the console feels like a small REPL.
+  </p>
+  <p class="prs" style="color: var(--muted); font-size: 0.85rem;">
+    Source PRs: <a href="https://github.com/bastianh/screeps-client/pull/205">#205</a>
+    (editor), <a href="https://github.com/bastianh/screeps-client/pull/241">#241</a>
+    (console completion)
+  </p>
+</section>
+
+</main>
+
+<footer>
+  ISC licensed · <a href="https://github.com/bastianh/screeps-client">bastianh/screeps-client</a> ·
+  <a href="index.html">Back to the feature overview</a>
+</footer>
+
+</body>
+</html>
