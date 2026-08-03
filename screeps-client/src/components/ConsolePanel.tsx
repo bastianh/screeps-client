@@ -1,5 +1,5 @@
 import { createEffect, createMemo, createSignal, onCleanup, onMount, For, Show } from 'solid-js'
-import { Trash2, Pause, Play, X, Plus, Filter } from 'lucide-solid'
+import { Trash2, Pause, Play, X, Plus, Filter, ExternalLink } from 'lucide-solid'
 import { client } from '~/stores/clientStore.js'
 import { SubscriptionGroup } from 'screeps-connectivity'
 import type { ConsoleMessage } from 'screeps-connectivity'
@@ -12,6 +12,9 @@ import { MemoryTree } from '~/components/MemoryTree.js'
 import { currentShard } from '~/stores/roomDataStore.js'
 import { createLogger } from '~/utils/log.js'
 import { LS, getJson, setJson } from '~/utils/storage.js'
+import { isPopoutWindow } from '~/popout/protocol.js'
+import { openPopoutWindow, popoutSid } from '~/popout/host.js'
+import { isTauri } from '~/utils/tauri.js'
 
 const { error } = createLogger('console')
 
@@ -509,6 +512,19 @@ export function ConsolePanel(props: { shard?: string | null; isCollapsed?: boole
     })
   }
 
+  // Open the currently visible panes in a popout window served by this window
+  const openPopout = () => {
+    const sid = popoutSid()
+    if (!sid) return
+    const panes = [showLog() && 'log', showConsole() && 'console', showMemory() && 'memory']
+      .filter((pane): pane is string => Boolean(pane))
+    openPopoutWindow({
+      sid,
+      panes: panes.length > 0 ? panes : ['log', 'console'],
+      shard: props.shard ?? currentShard(),
+    })
+  }
+
   // Resume the feed: flush any messages buffered while paused, then scroll down.
   const resumeConsole = () => {
     if (pendingEntries.length > 0) {
@@ -541,9 +557,21 @@ export function ConsolePanel(props: { shard?: string | null; isCollapsed?: boole
         <button onClick={toggleShowLog} style={toggleBtnStyle(showLog())}>Log</button>
         <button onClick={toggleShowConsole} style={toggleBtnStyle(showConsole())}>Console</button>
         <button onClick={toggleShowMemory} style={toggleBtnStyle(showMemory())}>Memory</button>
-        <div style={{ width: '1px', height: '16px', background: '#30363d' }} />
-        {/* Not a pane toggle — opens the full-canvas segment editor overlay. */}
-        <button onClick={toggleShowSegments} title="View and edit raw memory segments" style={toggleBtnStyle(showSegments())}>Segments</button>
+        <Show when={!isPopoutWindow}>
+          <div style={{ width: '1px', height: '16px', background: '#30363d' }} />
+          {/* Not a pane toggle — opens the full-canvas segment editor overlay. */}
+          <button onClick={toggleShowSegments} title="View and edit raw memory segments" style={toggleBtnStyle(showSegments())}>Segments</button>
+        </Show>
+        {/* Tauri webviews can't window.open; popouts are browser/embedded only */}
+        <Show when={!isPopoutWindow && !isTauri() && popoutSid()}>
+          <button
+            onClick={openPopout}
+            title="Open these panes in a separate window"
+            style={{ ...iconBtnStyle, 'margin-left': 'auto' }}
+          >
+            <ExternalLink size={14} />
+          </button>
+        </Show>
       </div>
 
       <style>{`

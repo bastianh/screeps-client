@@ -142,6 +142,15 @@ export const isPrivateServer = () => {
 
 export { client, status, error, sessionError, rateLimitError, setRateLimitError, userInfo, serverVersion, gameTime, setGameTime, tickDuration, setTickDuration, isGuest, authMethod, worldBounds, setWorldBounds, userFlags, worldStatus }
 
+/**
+ * Popout windows install an RPC-backed client shim instead of connecting
+ * themselves — the main window proxies for them over a BroadcastChannel.
+ */
+export function installPopoutClient(c: ScreepsClient): void {
+  setClient(c)
+  setStatus('connected')
+}
+
 export async function connect(opts: {
   url: string
   auth: 'password' | 'token' | 'guest'

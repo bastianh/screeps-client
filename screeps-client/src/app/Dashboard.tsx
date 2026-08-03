@@ -24,6 +24,7 @@ const MapViewer = lazy(() =>
   import('~/components/MapViewer.js').then((m) => ({ default: m.MapViewer })),
 )
 import { client, disconnect, isGuest, userInfo, gameTime, isPrivateServer, serverVersion } from '~/stores/clientStore.js'
+import { initPopoutHost, popoutSid } from '~/popout/host.js'
 import { capabilities } from '~/stores/capabilities.js'
 import { historyMode, historyTick, enterHistoryMode, exitHistoryMode, seekToTick } from '~/stores/historyStore.js'
 import { widescreenMode, showRoomDecorations } from '~/stores/settingsStore.js'
@@ -365,6 +366,15 @@ export function Dashboard() {
     setMapMode(true)
     history.pushState(null, '', buildMapUrl(shard()))
   }
+
+  // Serve popout windows for this session. Reactive rather than onMount: the
+  // sid needs the user id, which can arrive after the Dashboard mounts.
+  createEffect(() => {
+    const c = client()
+    const sid = popoutSid()
+    if (!c || !sid) return
+    onCleanup(initPopoutHost(c, sid))
+  })
 
   onMount(() => {
     // Ensure URL reflects the active view even when loaded without a path.
