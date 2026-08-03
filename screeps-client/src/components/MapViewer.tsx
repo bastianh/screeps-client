@@ -39,6 +39,12 @@ interface MapViewerProps {
    * back/forward re-centres even when the coordinates repeat.
    */
   centerPos?: { x: number; y: number }
+  /**
+   * Live external selection (e.g. the main window's room, pushed into a map
+   * popout). Mount-time seeding still goes through `originRoom`; this only
+   * handles later changes.
+   */
+  selectedRoom?: string | null
   onNavigateToRoom: (room: string) => void
   onHoveredRoomChanged?: (info: RoomInfo | null) => void
   onSelectedRoomChanged?: (info: RoomInfo | null) => void
@@ -309,6 +315,19 @@ export function MapViewer(props: MapViewerProps) {
     const p = props.centerPos
     if (!p || p === initialCenterPos) return
     renderer?.centerOnPoint(p.x, p.y)
+  })
+
+  // External selection pushed in while the map stays mounted (popout following
+  // the main window's room view). Local clicks/arrow keys still own selectedRoom;
+  // this only reconciles when the outside value actually differs.
+  createEffect(() => {
+    const room = props.selectedRoom
+    if (room == null || room === untrack(selectedRoom)) return
+    setSelectedRoom(room)
+    renderer?.setSelectedRoom(room)
+    const coord = parseRoomName(room)
+    if (coord) renderer?.centerOn(coord.x, coord.y, true)
+    props.onSelectedRoomChanged?.(buildRoomInfo(room))
   })
 
   // Arrow key navigation (moves map selection) + 'm' to enter room view

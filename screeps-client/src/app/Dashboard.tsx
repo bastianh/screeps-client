@@ -1,5 +1,5 @@
 import { createEffect, createSignal, lazy, onCleanup, onMount, Show, untrack, type JSX } from 'solid-js'
-import { Map, Code2, Settings, LogIn, LayoutDashboard, Store, Clock, BarChart3, Trophy, Package } from 'lucide-solid'
+import { Map, Code2, Settings, LogIn, LayoutDashboard, Store, Clock, BarChart3, Trophy, Package, ExternalLink } from 'lucide-solid'
 import { ConnectionStatus } from '~/components/ConnectionStatus.js'
 import { RoomViewer } from '~/components/RoomViewer.js'
 import { ToastContainer } from '~/components/ToastContainer.js'
@@ -24,7 +24,8 @@ const MapViewer = lazy(() =>
   import('~/components/MapViewer.js').then((m) => ({ default: m.MapViewer })),
 )
 import { client, disconnect, isGuest, userInfo, gameTime, isPrivateServer, serverVersion } from '~/stores/clientStore.js'
-import { initPopoutHost, popoutSid } from '~/popout/host.js'
+import { broadcastMapClose, initPopoutHost, mapCloseRequests, openPopoutWindow, popoutHostReady, popoutSid } from '~/popout/host.js'
+import { isTauri } from '~/utils/tauri.js'
 import { capabilities } from '~/stores/capabilities.js'
 import { historyMode, historyTick, enterHistoryMode, exitHistoryMode, seekToTick } from '~/stores/historyStore.js'
 import { widescreenMode, showRoomDecorations } from '~/stores/settingsStore.js'
@@ -47,7 +48,7 @@ const DEFAULT_BADGE: Badge = { type: 1, color1: '#4a5060', color2: '#7a9ec0', co
 
 import { parseRoomName } from '~/utils/roomName.js'
 import { basePath } from '~/utils/embedded.js'
-import { buildMapUrl, buildRoomUrl, parseMapView, type MapView } from '~/utils/gameRoutes.js'
+import { buildMapUrl, buildRoomUrl, mapViewQuery, parseMapView, type MapView } from '~/utils/gameRoutes.js'
 import { isTypingTarget } from '~/utils/dom.js'
 import { LS, getStr, setStr, removeLocal, getNum, setNum } from '~/utils/storage.js'
 
@@ -373,8 +374,44 @@ export function Dashboard() {
     const c = client()
     const sid = popoutSid()
     if (!c || !sid) return
-    onCleanup(initPopoutHost(c, sid))
+    onCleanup(initPopoutHost(c, sid, { session: () => ({ room: room(), shard: shard() }) }))
   })
+
+  // Only one map at a time, in whichever window: entering map mode here tells a
+  // live map popout to yield. Also gated on the host being up, so a reload
+  // landing on /map still reaches a popout that survived it.
+  createEffect(() => {
+    if (mapMode() && popoutHostReady()) broadcastMapClose()
+  })
+
+  // …and the same rule in reverse: a map popout announcing itself takes the map
+  // away from this window.
+  createEffect((prev: number | undefined) => {
+    const n = mapCloseRequests()
+    if (prev !== undefined && n !== prev && untrack(mapMode)) {
+      setMapMode(false)
+      history.pushState(null, '', buildRoomUrl(untrack(room), untrack(shard)))
+    }
+    return n
+  }, undefined)
+
+  // Hand the map off to a popout window: same camera, main window drops back to
+  // the room view. Not under Tauri (its webview can't window.open), and only
+  // with a session id (logged-in user), matching the console popout gates.
+  const openMapPopout = () => {
+    const sid = popoutSid()
+    if (!sid) return
+    openPopoutWindow({
+      sid,
+      panes: ['map'],
+      shard: shard(),
+      room: room(),
+      extraQuery: mapViewQuery(mapView() ?? undefined),
+      features: 'popup,width=1280,height=800',
+    })
+    setMapMode(false)
+    history.pushState(null, '', buildRoomUrl(room(), shard()))
+  }
 
   onMount(() => {
     // Ensure URL reflects the active view even when loaded without a path.
@@ -443,21 +480,45 @@ export function Dashboard() {
       <Show
         when={!mapMode()}
         fallback={
-          <MapViewer
-            shard={shard()}
-            originRoom={mapOriginRoom()}
-            initialZoom={mapZoom() ?? undefined}
-            centerPos={mapCenterPos() ?? undefined}
-            onNavigateToRoom={(r) => handleNavigate(r, shard())}
-            onHoveredRoomChanged={setHoveredRoomInfo}
-            onSelectedRoomChanged={setSelectedRoomInfo}
-            onCenterChanged={(pos) => setMapView({ pos, zoom: untrack(mapZoom) })}
-            onZoomChanged={(z) => {
-              setMapZoom(z)
-              setNum(LS.mapZoom, z)
-            }}
-            onSubscriptionStateChanged={setMapSubsActive}
-          />
+          <>
+            <MapViewer
+              shard={shard()}
+              originRoom={mapOriginRoom()}
+              initialZoom={mapZoom() ?? undefined}
+              centerPos={mapCenterPos() ?? undefined}
+              onNavigateToRoom={(r) => handleNavigate(r, shard())}
+              onHoveredRoomChanged={setHoveredRoomInfo}
+              onSelectedRoomChanged={setSelectedRoomInfo}
+              onCenterChanged={(pos) => setMapView({ pos, zoom: untrack(mapZoom) })}
+              onZoomChanged={(z) => {
+                setMapZoom(z)
+                setNum(LS.mapZoom, z)
+              }}
+              onSubscriptionStateChanged={setMapSubsActive}
+            />
+            <Show when={!isTauri() && popoutSid()}>
+              <button
+                onClick={openMapPopout}
+                title="Open map in a separate window"
+                style={{
+                  position: 'absolute',
+                  top: '8px',
+                  left: '8px',
+                  'z-index': 5,
+                  padding: '12px',
+                  'border-radius': '6px',
+                  border: '1px solid #30363d',
+                  background: 'rgba(33,38,45,0.85)',
+                  color: '#c9d1d9',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  'align-items': 'center',
+                }}
+              >
+                <ExternalLink size={24} />
+              </button>
+            </Show>
+          </>
         }
       >
         <RoomViewer room={room()} shard={shard()} onNavigate={handleNavigate} />

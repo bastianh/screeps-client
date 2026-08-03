@@ -1,5 +1,6 @@
 import { Show, type JSX } from 'solid-js'
 import { goToProfile } from '~/stores/routeStore.js'
+import { isPopoutWindow } from '~/popout/protocol.js'
 
 // NPC owners (Invader, Source Keeper) have no public profile and are never sent
 // in the room `users` map; guard by name too in case a map-stats payload carries
@@ -21,7 +22,8 @@ export function UserLink(props: {
   // Overrides the rendered content (e.g. badge + name); defaults to the name.
   children?: JSX.Element
 }) {
-  const linkable = () => !!props.username && !NPC_USERNAMES.has(props.username)
+  // Popout windows have no routes — goToProfile would corrupt the popout URL.
+  const linkable = () => !isPopoutWindow && !!props.username && !NPC_USERNAMES.has(props.username)
   return (
     <Show when={linkable()} fallback={<>{props.username ?? props.fallback}</>}>
       <span
