@@ -96,6 +96,10 @@ nav.toc {
   border-bottom: 1px solid var(--border);
   padding: 10px 16px;
   text-align: center;
+  /* Stay a single row everywhere so the sticky bar has a known height
+     and anchor targets can offset themselves with scroll-margin-top. */
+  white-space: nowrap;
+  overflow-x: auto;
 }
 nav.toc a {
   color: var(--muted);
@@ -110,7 +114,8 @@ main {
   margin: 0 auto;
   padding: 24px 24px 80px;
 }
-section { margin-top: 56px; }
+/* scroll-margin keeps anchored headings clear of the sticky nav bar */
+section { margin-top: 56px; scroll-margin-top: 60px; }
 section > h2 {
   font-size: 1.6rem;
   border-bottom: 1px solid var(--border);
