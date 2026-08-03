@@ -40,9 +40,13 @@ const iconBtnStyle = {
   'flex-shrink': 0,
 } as const
 
-/** Convert a Memory.x.y path to the API path (strips leading "Memory.") */
+/**
+ * Convert a Memory.x.y path to the API path: strips the leading "Memory." and
+ * rewrites bracket indices ("list[3]") to the dot form ("list.3") the server's
+ * dot-split path resolution understands.
+ */
 function toApiPath(memPath: string): string {
-  return memPath.replace(/^Memory\.?/, '')
+  return memPath.replace(/^Memory\.?/, '').replace(/\[(\d+)\]/g, '.$1')
 }
 
 function MemoryNode(props: MemoryTreeProps) {
@@ -235,8 +239,8 @@ function MemoryNode(props: MemoryTreeProps) {
         {/* Insert-to-console action */}
         <button
           style={iconBtnStyle}
-          title={`Insert Memory.${toApiPath(props.path)} = into console`}
-          onClick={() => insertConsole(`Memory.${toApiPath(props.path)} = `)}
+          title={`Insert ${props.path} = into console`}
+          onClick={() => insertConsole(`${props.path} = `)}
         >
           <Terminal size={11} />
         </button>
