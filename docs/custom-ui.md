@@ -55,9 +55,14 @@ and you may want to share the segment with other data of your own.
 | `options` | Choices of a `select` element; the picked one is sent as `value` in the payload. |
 | `path` | Memory path a `status` element displays live (subscribed on the shard you are viewing). |
 | `items` | Child elements of a `header` (one level, no nested headers). They render indented, and the header's `showIf` gates the whole group; a header whose children are all hidden disappears too. |
-| `needs` | Context the element requires; it is disabled otherwise. Any of `room` (selected room on the map / current room), `selection` (selected objects, room view), `tile` (marked tile, room view). |
+| `needs` | Context the element requires; it is disabled otherwise. Any of `room` (selected room on the map / current room), `selection` (selected objects, room view), `tile` (marked tile, room view). `selection` and `tile` can never be met on the map, and `objects` entries ignore `needs` altogether — their context is implied by the object they hang on. |
 | `confirm` | `true` → the element asks for a second click before firing. |
-| `showIf` | Visibility conditions; the element is hidden when unmet. `selType`: at least one selected object of this type (room view). `room`: the room's standing from your perspective — one value or an array of `own` (owned by you), `reserved` (reserved by you), `empty` (unclaimed), `foreign` (owned or reserved by someone else); on the map this applies to the selected room, in room view to the visited room. |
+| `showIf` | Visibility conditions; the element is hidden when unmet. `selType`: at least one selected object of this type — room sidebar only, never met on the map, and superseded by `obj` in `objects`. `room`: the room's standing from your perspective — one value or an array of `own` (owned by you), `reserved` (reserved by you), `empty` (unclaimed), `foreign` (owned or reserved by someone else); on the map this applies to the selected room, in room view to the visited room. Works in all three sections. |
+
+The editor (Settings → Custom UI) only offers the fields the respective sidebar
+evaluates, so these restrictions are hard to run into from the form. Configs
+written by hand may still contain the ineffective combinations — the parser
+accepts them; opening such a config in the form view drops them.
 
 While a command awaits its response, the triggering element is disabled and
 shows an ellipsis; it re-enables when the response, an error, or the timeout
