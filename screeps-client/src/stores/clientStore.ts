@@ -155,10 +155,19 @@ export function installPopoutClient(c: ScreepsClient): void {
  * Popout windows seed session-level signals from the host's `session.state`
  * answer — the map needs userInfo for own-room colouring, and the shard select
  * in MapInfoPanel needs serverVersion. The setters stay module-private.
+ *
+ * The server URL is adopted too: it keys the per-server settings (custom UI
+ * segment), and a popout opened by hand in a new tab has no sessionStorage copy
+ * of its own. Nothing else in a popout reads it — they never connect.
  */
-export function applyPopoutSessionState(state: { userInfo: UserInfo | null; serverVersion: ServerVersion | null }): void {
+export function applyPopoutSessionState(state: {
+  userInfo: UserInfo | null
+  serverVersion: ServerVersion | null
+  url?: string | null
+}): void {
   setUserInfo(state.userInfo)
   setServerVersion(state.serverVersion)
+  if (state.url) setSession(SS.url, state.url)
 }
 
 export async function connect(opts: {

@@ -395,7 +395,10 @@ function handleConsoleMessage(msg: ConsoleMessage): void {
     }
     const cmd = pending.get(resp.id)
     if (!cmd) {
-      warn(`response id "${resp.id}" matches no pending command`)
+      // Expected whenever another window (a map popout, the main window) sent
+      // the command: every window sees the console stream, only the sender
+      // knows the id.
+      log(`response id "${resp.id}" matches no pending command here`)
       continue
     }
     window.clearTimeout(cmd.timer)
