@@ -1,5 +1,18 @@
 # xxscreeps-mod-client
 
+## 0.3.13
+
+### Patch Changes
+
+- 1accbd8: Update the required `screeps-client` version for both mod packages after the next client release.
+  Adjust this summary if the release notes should say something more specific.
+- Updated dependencies [1accbd8]
+- Updated dependencies [0b62464]
+- Updated dependencies [3d31ab2]
+- Updated dependencies [ae911fa]
+- Updated dependencies [3020fec]
+  - screeps-client@0.23.0
+
 ## 0.3.12
 
 ### Patch Changes
