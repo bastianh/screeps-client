@@ -1,4 +1,4 @@
-import { Container, Graphics, BlurFilter, NoiseFilter, Rectangle, Sprite, TilingSprite, type DestroyOptions, type Renderer, type StrokeStyle } from 'pixi.js'
+import { AlphaFilter, Container, Graphics, BlurFilter, NoiseFilter, Rectangle, Sprite, TilingSprite, type DestroyOptions, type Renderer, type StrokeStyle } from 'pixi.js'
 import { TerrainType, RoomTerrain } from 'screeps-connectivity'
 import { TILE_SIZE } from './RoomRenderer.js'
 import { loadDecorationTexture } from './decorationTextures.js'
@@ -246,8 +246,16 @@ function createFloorBase(colors: ResolvedColors): Graphics {
 
 function createSwampShapes(terrain: RoomTerrain, colors: ResolvedColors): Graphics {
   const g = new Graphics()
+  const swampStroke: StrokeStyle = { color: colors.swampBorderColor, width: TILE_SIZE * colors.swampBorderWidth, alignment: 0, cap: 'round', join: 'round' }
+  drawTerrainQuadrants(g, terrain, TerrainType.Swamp, (gg) => gg.stroke(swampStroke))
   drawTerrainQuadrants(g, terrain, TerrainType.Swamp, (gg) => gg.fill(colors.swampFillColor))
-  g.alpha = 0.4
+  // Fade via AlphaFilter, not `g.alpha`: plain alpha is applied per-vertex, so the
+  // translucent fill blends with the border strokes underneath instead of covering
+  // them — every quadrant sub-path gets outlined and the seams show through as a grid.
+  // The filter fades the shape as a whole, like the reference renderer's flattened
+  // SVG sprite. Walls don't need this; their fill is opaque and hides the inner strokes.
+  g.filters = [new AlphaFilter({ alpha: 0.4 })]
+  g.filterArea = new Rectangle(0, 0, 50 * TILE_SIZE, 50 * TILE_SIZE)
   return g
 }
 
@@ -317,7 +325,7 @@ export function createTerrainLayer(terrain: RoomTerrain, renderer: Renderer, dec
   }
 
   container.addChild(createFloorBase(colors))           // index 0: plain floor colour
-  container.addChild(createSwampShapes(terrain, colors)) // index 1: swamp fill at alpha 0.4 (fill only, no stroke)
+  container.addChild(createSwampShapes(terrain, colors)) // index 1: swamp border + fill at alpha 0.4
   container.addChild(createWallShapes(terrain, colors))  // index 2: wall fills + borders + exits + room border
   container.addChild(createSwampGlow(terrain, colors))   // index 3
   container.addChild(wallNoise)                          // index 4
