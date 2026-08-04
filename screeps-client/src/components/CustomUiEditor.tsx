@@ -22,7 +22,6 @@ import { LS, getStr, setStr } from '~/utils/storage.js'
 const { error } = createLogger('customUiEditor')
 
 const SEGMENT_LIMIT = 100 * 1024
-const NEEDS: readonly CustomUiNeed[] = ['room', 'selection', 'tile']
 
 interface EditConfig {
   handler: string
@@ -32,6 +31,46 @@ interface EditConfig {
 }
 
 type Section = 'map' | 'room' | 'objects'
+
+// What each sidebar actually evaluates at render time. Offering the rest would
+// only let players build elements that can never work: an unsatisfiable `needs`
+// leaves the button permanently disabled, an unevaluated `showIf` hides it for
+// good, and `needs` in an object card is ignored outright.
+interface SectionCaps {
+  types: readonly CustomUiElementType[]
+  /** Context requirements this sidebar can satisfy; empty hides the whole group. */
+  needs: readonly CustomUiNeed[]
+  /** `showIf.selType` — only the room sidebar has a selection to test. */
+  selType: boolean
+  /** `obj` / `owner` filters, which decide what an object card attaches to. */
+  objFilter: boolean
+}
+
+/** Canonical order the `needs` array is written in, so edits stay stable. */
+const NEED_ORDER: readonly CustomUiNeed[] = ['room', 'selection', 'tile']
+
+const SECTION_CAPS: Record<Section, SectionCaps> = {
+  // The map has a selected room but no selection and no marked tile
+  // (CustomUiPanel.needMet / isVisible short-circuit on mode !== 'room').
+  map: { types: ['button', 'select', 'status', 'header'], needs: ['room'], selType: false, objFilter: false },
+  room: { types: ['button', 'select', 'status', 'header'], needs: NEED_ORDER, selType: true, objFilter: false },
+  // Object cards always render inside a room on a selected object, so the
+  // context is implicit — CustomObjectActions honours confirm and the obj/owner
+  // filters, nothing else.
+  objects: { types: ['button', 'select'], needs: [], selType: false, objFilter: true },
+}
+
+// Header children are their section minus nesting; precomputed so the caps
+// objects stay referentially stable across renders.
+const CHILD_CAPS: Record<Section, SectionCaps> = {
+  map: { ...SECTION_CAPS.map, types: SECTION_CAPS.map.types.filter((t) => t !== 'header') },
+  room: { ...SECTION_CAPS.room, types: SECTION_CAPS.room.types.filter((t) => t !== 'header') },
+  objects: { ...SECTION_CAPS.objects, types: SECTION_CAPS.objects.types.filter((t) => t !== 'header') },
+}
+
+function capsFor(section: Section, nested: boolean): SectionCaps {
+  return (nested ? CHILD_CAPS : SECTION_CAPS)[section]
+}
 
 function defaultConfig(): EditConfig {
   return { handler: 'uiCommand', map: [], room: [], objects: [] }
@@ -48,26 +87,33 @@ function newElement(type: CustomUiElementType): CustomUiElement {
 
 // ---- JSON <-> form model -------------------------------------------------
 
-function elementFromRaw(raw: unknown, objects: boolean): CustomUiElement {
+// Normalizing on the way in keeps the form model free of fields the section
+// cannot use, so form, preview and serialized JSON always agree. Dropping them
+// here is a fix rather than a loss: the renderer ignores them anyway, and a
+// stray `showIf.selType` on the map is what made an element invisible.
+function elementFromRaw(raw: unknown, caps: SectionCaps, section: Section): CustomUiElement {
   const e = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>
-  const type = (['button', 'select', 'status', 'header'].includes(e.type as string)
-    ? (e.type as CustomUiElementType)
-    : 'button')
+  const type = caps.types.includes(e.type as CustomUiElementType) ? (e.type as CustomUiElementType) : 'button'
   const el: CustomUiElement = { type, label: typeof e.label === 'string' ? e.label : '' }
   if (typeof e.cmd === 'string') el.cmd = e.cmd
   if (Array.isArray(e.options)) el.options = e.options.filter((o): o is string => typeof o === 'string')
   if (typeof e.path === 'string') el.path = e.path
-  if (Array.isArray(e.items)) el.items = e.items.map((x) => elementFromRaw(x, false))
-  if (objects && e.obj !== undefined) {
+  if (Array.isArray(e.items)) {
+    const childCaps = capsFor(section, true)
+    el.items = e.items.map((x) => elementFromRaw(x, childCaps, section))
+  }
+  if (caps.objFilter && e.obj !== undefined) {
     el.obj = (Array.isArray(e.obj) ? e.obj : [e.obj]).filter((o): o is string => typeof o === 'string')
   }
-  if (e.owner === 'own' || e.owner === 'foreign') el.owner = e.owner
-  if (Array.isArray(e.needs)) el.needs = e.needs.filter((n): n is CustomUiNeed => NEEDS.includes(n as CustomUiNeed))
+  if (caps.objFilter && (e.owner === 'own' || e.owner === 'foreign')) el.owner = e.owner
+  if (caps.needs.length > 0 && Array.isArray(e.needs)) {
+    el.needs = e.needs.filter((n): n is CustomUiNeed => caps.needs.includes(n as CustomUiNeed))
+  }
   if (e.confirm === true) el.confirm = true
   if (typeof e.showIf === 'object' && e.showIf !== null) {
     const s = e.showIf as Record<string, unknown>
     const showIf: CustomUiShowIf = {}
-    if (typeof s.selType === 'string') showIf.selType = s.selType
+    if (caps.selType && typeof s.selType === 'string') showIf.selType = s.selType
     if (s.room !== undefined) {
       const list = (Array.isArray(s.room) ? s.room : [s.room])
         .filter((r): r is CustomUiRoomStanding => ROOM_STANDINGS.includes(r as CustomUiRoomStanding))
@@ -85,26 +131,35 @@ function looksLikeConfig(raw: unknown): boolean {
   return 'handler' in c || 'map' in c || 'room' in c || 'objects' in c
 }
 
+function sectionFromRaw(raw: unknown, section: Section): CustomUiElement[] {
+  if (!Array.isArray(raw)) return []
+  const caps = SECTION_CAPS[section]
+  return raw.map((x) => elementFromRaw(x, caps, section))
+}
+
 function configFromRaw(raw: unknown): EditConfig {
   const c = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>
   return {
     handler: typeof c.handler === 'string' ? c.handler : '',
-    map: Array.isArray(c.map) ? c.map.map((x) => elementFromRaw(x, false)) : [],
-    room: Array.isArray(c.room) ? c.room.map((x) => elementFromRaw(x, false)) : [],
-    objects: Array.isArray(c.objects) ? c.objects.map((x) => elementFromRaw(x, true)) : [],
+    map: sectionFromRaw(c.map, 'map'),
+    room: sectionFromRaw(c.room, 'room'),
+    objects: sectionFromRaw(c.objects, 'objects'),
   }
 }
 
-function elementToRaw(el: CustomUiElement, objects: boolean): Record<string, unknown> {
+function elementToRaw(el: CustomUiElement, caps: SectionCaps, section: Section): Record<string, unknown> {
   const o: Record<string, unknown> = {}
   if (el.type !== 'button') o.type = el.type
   o.label = el.label
   if (el.type === 'button' || el.type === 'select') o.cmd = el.cmd ?? ''
   if (el.type === 'select') o.options = el.options ?? []
   if (el.type === 'status') o.path = el.path ?? ''
-  if (el.type === 'header') o.items = (el.items ?? []).map((c) => elementToRaw(c, false))
-  if (objects && el.obj !== undefined) o.obj = el.obj.length === 1 ? el.obj[0] : el.obj
-  if (objects && el.owner !== undefined) o.owner = el.owner
+  if (el.type === 'header') {
+    const childCaps = capsFor(section, true)
+    o.items = (el.items ?? []).map((c) => elementToRaw(c, childCaps, section))
+  }
+  if (caps.objFilter && el.obj !== undefined) o.obj = el.obj.length === 1 ? el.obj[0] : el.obj
+  if (caps.objFilter && el.owner !== undefined) o.owner = el.owner
   if (el.needs && el.needs.length > 0) o.needs = el.needs
   if (el.confirm) o.confirm = true
   if (el.showIf) {
@@ -116,14 +171,19 @@ function elementToRaw(el: CustomUiElement, objects: boolean): Record<string, unk
   return o
 }
 
+function sectionToRaw(items: CustomUiElement[], section: Section): Record<string, unknown>[] {
+  const caps = SECTION_CAPS[section]
+  return items.map((el) => elementToRaw(el, caps, section))
+}
+
 function configToJson(cfg: EditConfig): string {
   return JSON.stringify(
     {
       v: 1,
       handler: cfg.handler,
-      map: cfg.map.map((el) => elementToRaw(el, false)),
-      room: cfg.room.map((el) => elementToRaw(el, false)),
-      objects: cfg.objects.map((el) => elementToRaw(el, true)),
+      map: sectionToRaw(cfg.map, 'map'),
+      room: sectionToRaw(cfg.room, 'room'),
+      objects: sectionToRaw(cfg.objects, 'objects'),
     },
     null,
     2,
@@ -261,10 +321,8 @@ interface ElementCardProps {
   index: number
   count: number
   section: Section
-  /** map/room allow every type + headers; objects allow only button/select. */
-  objects: boolean
-  /** header children cannot be headers themselves. */
-  allowHeader: boolean
+  /** Header children: same section, minus the option to nest another header. */
+  nested: boolean
   onEdit: (fn: (el: CustomUiElement) => void) => void
   onRemove: () => void
   onMove: (dir: -1 | 1) => void
@@ -272,8 +330,7 @@ interface ElementCardProps {
 
 function ElementCard(props: ElementCardProps) {
   const [open, setOpen] = createSignal(true)
-  const typeOptions = (): CustomUiElementType[] =>
-    props.objects ? ['button', 'select'] : props.allowHeader ? ['button', 'select', 'status', 'header'] : ['button', 'select', 'status']
+  const caps = () => capsFor(props.section, props.nested)
 
   const setType = (type: CustomUiElementType) =>
     props.onEdit((el) => {
@@ -336,7 +393,7 @@ function ElementCard(props: ElementCardProps) {
           <div style={{ display: 'flex', gap: '8px', 'flex-wrap': 'wrap' }}>
             <Field label="Type">
               <select value={props.el.type} onChange={(e) => setType(e.currentTarget.value as CustomUiElementType)} style={inputStyle}>
-                <For each={typeOptions()}>{(t) => <option value={t}>{t}</option>}</For>
+                <For each={caps().types}>{(t) => <option value={t}>{t}</option>}</For>
               </select>
             </Field>
             <Field label="Label">
@@ -371,7 +428,7 @@ function ElementCard(props: ElementCardProps) {
           </Show>
 
           {/* Object types + owner (objects section) */}
-          <Show when={props.objects}>
+          <Show when={caps().objFilter}>
             <div style={{ display: 'flex', gap: '8px', 'flex-wrap': 'wrap' }}>
               <Field label="Object types (obj)">
                 <StringList
@@ -395,12 +452,15 @@ function ElementCard(props: ElementCardProps) {
             </div>
           </Show>
 
-          {/* needs + confirm (button / select) */}
+          {/* needs + confirm (button / select). `needs` is dropped entirely in
+              the objects section, where the renderer never evaluates it. */}
           <Show when={props.el.type === 'button' || props.el.type === 'select'}>
             <div style={{ display: 'flex', 'flex-direction': 'column', gap: '6px' }}>
-              <span style={labelStyle}>Requires (needs)</span>
+              <Show when={caps().needs.length > 0}>
+                <span style={labelStyle}>Requires (needs)</span>
+              </Show>
               <div style={{ display: 'flex', gap: '12px', 'flex-wrap': 'wrap' }}>
-                <For each={NEEDS}>
+                <For each={caps().needs}>
                   {(n) => (
                     <Checkbox
                       label={n}
@@ -410,7 +470,8 @@ function ElementCard(props: ElementCardProps) {
                           const set = new Set(el.needs ?? [])
                           if (on) set.add(n)
                           else set.delete(n)
-                          el.needs = set.size ? NEEDS.filter((x) => set.has(x)) : undefined
+                          // Ordering only; the set can hold nothing the section doesn't offer.
+                          el.needs = set.size ? NEED_ORDER.filter((x) => set.has(x)) : undefined
                         })
                       }
                     />
@@ -425,7 +486,7 @@ function ElementCard(props: ElementCardProps) {
           <div style={{ display: 'flex', 'flex-direction': 'column', gap: '6px' }}>
             <span style={labelStyle}>Visible when (showIf)</span>
             <div style={{ display: 'flex', gap: '8px', 'flex-wrap': 'wrap', 'align-items': 'flex-end' }}>
-              <Show when={!props.objects}>
+              <Show when={caps().selType}>
                 <Field label="Selected type (selType)">
                   <TextInput
                     value={props.el.showIf?.selType ?? ''}
@@ -480,8 +541,7 @@ function ElementCard(props: ElementCardProps) {
               <ElementList
                 items={props.el.items ?? []}
                 section={props.section}
-                objects={false}
-                allowHeader={false}
+                nested
                 mutate={(fn) => props.onEdit((el) => { el.items ??= []; fn(el.items) })}
               />
             </div>
@@ -497,14 +557,12 @@ function ElementCard(props: ElementCardProps) {
 interface ElementListProps {
   items: CustomUiElement[]
   section: Section
-  objects: boolean
-  allowHeader: boolean
+  nested: boolean
   mutate: (fn: (arr: CustomUiElement[]) => void) => void
 }
 
 function ElementList(props: ElementListProps) {
-  const addTypes = (): CustomUiElementType[] =>
-    props.objects ? ['button', 'select'] : props.allowHeader ? ['button', 'select', 'status', 'header'] : ['button', 'select', 'status']
+  const caps = () => capsFor(props.section, props.nested)
 
   return (
     <div style={{ display: 'flex', 'flex-direction': 'column', gap: '8px' }}>
@@ -529,8 +587,7 @@ function ElementList(props: ElementListProps) {
               index={i()}
               count={props.items.length}
               section={props.section}
-              objects={props.objects}
-              allowHeader={props.allowHeader}
+              nested={props.nested}
               onEdit={onEdit}
               onRemove={onRemove}
               onMove={onMove}
@@ -542,7 +599,7 @@ function ElementList(props: ElementListProps) {
         <div style={{ 'font-size': '12px', color: '#484f58', 'font-style': 'italic', padding: '2px 0' }}>No elements yet.</div>
       </Show>
       <div style={{ display: 'flex', gap: '6px', 'flex-wrap': 'wrap' }}>
-        <For each={addTypes()}>
+        <For each={caps().types}>
           {(t) => (
             <button
               onClick={() => props.mutate((arr) => arr.push(newElement(t)))}
@@ -843,16 +900,16 @@ export function CustomUiEditor(props: { onClose: () => void }) {
               <TextInput value={config.handler} placeholder="uiCommand" onInput={(v) => mutate((c) => (c.handler = v))} />
             </Field>
 
-            <SectionBlock title="Map sidebar" hint="Buttons shown on the world map.">
-              <ElementList items={config.map} section="map" objects={false} allowHeader mutate={(fn) => mutate((c) => fn(c.map))} />
+            <SectionBlock title="Map sidebar" hint="Buttons shown on the world map. No selection or tile context here.">
+              <ElementList items={config.map} section="map" nested={false} mutate={(fn) => mutate((c) => fn(c.map))} />
             </SectionBlock>
 
             <SectionBlock title="Room sidebar" hint="Elements shown while viewing a room.">
-              <ElementList items={config.room} section="room" objects={false} allowHeader mutate={(fn) => mutate((c) => fn(c.room))} />
+              <ElementList items={config.room} section="room" nested={false} mutate={(fn) => mutate((c) => fn(c.room))} />
             </SectionBlock>
 
-            <SectionBlock title="Object actions" hint="Buttons inside a selected object’s card.">
-              <ElementList items={config.objects} section="objects" objects allowHeader={false} mutate={(fn) => mutate((c) => fn(c.objects))} />
+            <SectionBlock title="Object actions" hint="Buttons inside a selected object’s card; the object supplies the context.">
+              <ElementList items={config.objects} section="objects" nested={false} mutate={(fn) => mutate((c) => fn(c.objects))} />
             </SectionBlock>
           </div>
         </div>
