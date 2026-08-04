@@ -20,6 +20,7 @@ export type PopoutMethod =
   | 'console.exec'
   | 'memory.get'
   | 'memory.set'
+  | 'memory.segment.get'
   | 'subscribe'
   | 'unsubscribe'
   | 'session.state'
@@ -125,6 +126,13 @@ export interface PopoutSessionState {
   serverVersion: ServerVersion | null
   room: string | null
   shard: string | null
+  /**
+   * Server URL of the host's session. Per-server settings (the custom UI
+   * segment) hang off it, and a popout opened by hand in a new tab starts with
+   * an empty sessionStorage — so the host's value is what makes those keys
+   * resolve to the same entries the main window uses.
+   */
+  url: string | null
 }
 
 export const HOST_HEARTBEAT_MS = 2000

@@ -8,6 +8,10 @@ a toast or navigates to a room.
 Enable it in **Settings → Custom UI**: pick the memory segment that holds your
 UI definition (and optionally the shard to read it from).
 
+The `map` elements also render in a popped-out world map, at the bottom of its
+sidebar. Commands sent from there run against the same session; a response that
+carries a `room` navigates the main window.
+
 ## Config segment format
 
 The segment holds one JSON object. Keep it small — segments are capped at 100 KB

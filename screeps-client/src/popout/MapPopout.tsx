@@ -4,7 +4,9 @@ import { MapViewer } from '~/components/MapViewer.js'
 import type { RoomInfo } from '~/components/MapViewer.js'
 import { MapInfoPanel } from '~/components/MapInfoPanel.js'
 import { RoomInfoBox } from '~/components/Sidebar/RoomInfoBox.js'
+import { CustomUiPanel } from '~/components/Sidebar/CustomUiPanel.js'
 import { applyPopoutSessionState } from '~/stores/clientStore.js'
+import { initCustomUi, disposeCustomUi } from '~/stores/customUiStore.js'
 import { parseMapView, mapViewQuery } from '~/utils/gameRoutes.js'
 import { createLogger } from '~/utils/log.js'
 import { NAVIGATION_TOPIC } from './protocol.js'
@@ -57,6 +59,11 @@ export function MapPopout(props: { rpc: PopoutRpc; initialShard: string | null; 
   // inline map, or an older map popout on this session.
   rpc.postMapClose()
 
+  // Started after the first session sync, which is what puts the host's server
+  // URL in place — the custom UI segment setting is keyed by it. The console
+  // subscription behind it is re-issued by rpc.ts on a rebind, so once is enough.
+  let customUiStarted = false
+
   // Re-sync the session on every host (re)bind: seeds userInfo/serverVersion for
   // the map and adopts the main window's current room, healing after a
   // main-window reload the same way the topic re-subscription in rpc.ts does.
@@ -68,11 +75,16 @@ export function MapPopout(props: { rpc: PopoutRpc; initialShard: string | null; 
         applyPopoutSessionState(state)
         if (state.shard !== null) setShard(state.shard)
         if (state.room !== null) setSelectedRoom(state.room)
+        if (!customUiStarted) {
+          customUiStarted = true
+          initCustomUi()
+        }
       } catch (err) {
         log('session sync failed:', err)
       }
     })()
   })
+  onCleanup(disposeCustomUi)
 
   // Follow the main window's room view.
   const navGate = rpc.subscribe(NAVIGATION_TOPIC)
@@ -176,10 +188,13 @@ export function MapPopout(props: { rpc: PopoutRpc; initialShard: string | null; 
             }}
           >
             <MapInfoPanel zoom={zoom()} subsActive={subsActive()} shard={shard()} onShardChange={setShard} />
+            {/* Same split as the main window's map sidebar: the info boxes take
+                the free space and scroll, the custom UI stays pinned below. */}
             <div style={{ flex: 1, overflow: 'auto', 'min-height': 0, 'padding-bottom': '8px' }}>
               <RoomInfoBox label="Selected" info={selectedInfo()} />
               <RoomInfoBox label="Cursor" info={hoveredInfo()} dim />
             </div>
+            <CustomUiPanel mode="map" shard={shard()} selectedRoomInfo={selectedInfo()} />
           </div>
         </Show>
       </div>

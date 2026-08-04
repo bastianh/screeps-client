@@ -1,5 +1,6 @@
 import { Show, lazy } from 'solid-js'
 import { ConsolePanel } from '~/components/ConsolePanel.js'
+import { ToastContainer } from '~/components/ToastContainer.js'
 import { installPopoutClient } from '~/stores/clientStore.js'
 import { setShowConsole, setShowLog, setShowMemory } from '~/stores/consoleStore.js'
 import { createRemoteClient } from './remoteClient.js'
@@ -45,6 +46,9 @@ export function PopoutApp() {
           message="This popout reconnects automatically as soon as the main window is back."
         />
       </Show>
+      {/* Custom UI answers land as toasts — they must be visible in the window
+          that sent the command, not only in the main one. */}
+      <ToastContainer />
     </div>
   )
 }

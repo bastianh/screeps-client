@@ -180,6 +180,8 @@ export function initPopoutHost(client: ScreepsClient, sid: string, opts?: Popout
         return client.http.user.memory.get(args[0] as string, args[1] as string | null | undefined)
       case 'memory.set':
         return client.http.user.memory.set(args[0] as string, args[1], args[2] as string | null | undefined)
+      case 'memory.segment.get':
+        return client.http.user.memory.segment.get(args[0] as number, args[1] as string | null | undefined)
       case 'subscribe':
         return subscribe(args[0] as string, msg.popoutId)
       case 'unsubscribe':
@@ -190,6 +192,7 @@ export function initPopoutHost(client: ScreepsClient, sid: string, opts?: Popout
           serverVersion: serverVersion(),
           room: opts?.session?.().room ?? null,
           shard: opts?.session?.().shard ?? null,
+          url: getSession(SS.url),
         } satisfies PopoutSessionState
       case 'room.terrainBulk':
         return client.stores.room.terrainBulk(args[0] as string[], args[1] as string | null)
