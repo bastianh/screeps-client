@@ -11,6 +11,7 @@ import { addToast } from '~/stores/toastStore.js'
 import { createLogger } from '~/utils/log.js'
 import { LS, getStr, setStr, getJson, setJson } from '~/utils/storage.js'
 import { parseServerModules, serializeModules, tsModuleNames, type ModuleLang, type LogicalModule } from '~/editor/codeModules.js'
+import { bytesToBase64, base64ToBytes, base64ByteSize, formatByteSize } from '~/utils/base64.js'
 import { getTsWorker, syncModuleToWorker, modulePath } from '~/editor/tsClient.js'
 import { tsExtensions } from '~/editor/tsExtensions.js'
 
@@ -67,6 +68,8 @@ export function CodePanel(props: { onClose: () => void }) {
   const moduleNames = () => Object.keys(modules())
   const langOf = (name: string): ModuleLang => langs()[name] ?? 'js'
   const isActive = () => branches().find((b) => b.branch === selectedBranch())?.activeWorld ?? false
+  // Binary module active: the editor is hidden and a summary panel shown instead.
+  const wasmView = () => !compiledView() && !!activeModule() && langOf(activeModule()) === 'wasm'
 
   // Persisted view state — where the editor was when it was last closed.
   const initialBranch = getStr(LS.codeBranch)
@@ -80,7 +83,7 @@ export function CodePanel(props: { onClose: () => void }) {
 
   const saveCursor = (pos: number) => {
     if (applying) return
-    if (compiledView()) return // read-only generated view has no persisted cursor
+    if (compiledView() || wasmView()) return // read-only views have no persisted cursor
     const b = selectedBranch()
     const m = activeModule()
     if (!b || !m) return
@@ -94,8 +97,9 @@ export function CodePanel(props: { onClose: () => void }) {
       // back into a module's source.
       if (compiledView()) return
       const mod = activeModule()
-      // Skip if value matches stored — avoids false dirty on module switch or initial load
-      if (!mod || modules()[mod] === value) return
+      // Skip if value matches stored — avoids false dirty on module switch or initial load.
+      // Binary modules never take editor text (their editor doc is kept empty).
+      if (!mod || langOf(mod) === 'wasm' || modules()[mod] === value) return
       setModules((prev) => ({ ...prev, [mod]: value }))
       setDirty(true)
     },
@@ -121,7 +125,7 @@ export function CodePanel(props: { onClose: () => void }) {
   })
 
   createEditorControlledValue(editorView, () =>
-    compiledView() ? compiledSrc() : (modules()[activeModule()] ?? ''),
+    compiledView() ? compiledSrc() : wasmView() ? '' : (modules()[activeModule()] ?? ''),
   )
   const langCompartment = new Compartment()
   createExtension([...cmBaseExtensions, langCompartment.of(javascript())])
@@ -146,15 +150,19 @@ export function CodePanel(props: { onClose: () => void }) {
     const name = activeModule()
     const lang = langOf(name)
     if (!name) return
+    if (lang === 'wasm') return // editor hidden; nothing to configure
     if (lang === 'ts') {
       getTsWorker()
         // eslint-disable-next-line solid/reactivity -- intentional: read current module state at resolve time, not tracked (would reconfigure on every keystroke)
         .then(async (worker) => {
-          // Seed every module so cross-module imports resolve in the service.
+          // Seed every text module so cross-module imports resolve in the
+          // service. Binary modules carry base64, not code — skip them.
           await Promise.all(
-            Object.entries(modules()).map(([n, src]) =>
-              worker.updateFile({ path: modulePath(n, langOf(n)), code: src }),
-            ),
+            Object.entries(modules())
+              .filter(([n]) => langOf(n) !== 'wasm')
+              .map(([n, src]) =>
+                worker.updateFile({ path: modulePath(n, langOf(n) as 'js' | 'ts'), code: src }),
+              ),
           )
           if (activeModule() !== name) return // switched away while loading
           view.dispatch({
@@ -230,7 +238,7 @@ export function CodePanel(props: { onClose: () => void }) {
     setCompiledView(null)
     setActiveModule('')
     setDirty(false)
-    ;(c.http.user.code.get(branch) as Promise<{ ok: number; modules: Record<string, string> }>)
+    c.http.user.code.get(branch)
       .then((res) => {
         if (stale) return
         // Fold the server's flat map (compiled JS + hidden `.ts` sources) into
@@ -363,6 +371,51 @@ export function CodePanel(props: { onClose: () => void }) {
     if (compiledView() === name) setCompiledView(null)
     if (activeModule() === name) { setCompiledView(null); setActiveModule(remaining[0] ?? '') }
     setDirty(true)
+  }
+
+  // Hidden file input for WASM uploads. When `wasmReplaceTarget` is set the
+  // picked file replaces that module (keeping its name); otherwise the module
+  // name comes from the file name.
+  let wasmInput: HTMLInputElement | undefined
+  let wasmReplaceTarget: string | null = null
+
+  const pickWasmFile = (replace?: string) => {
+    wasmReplaceTarget = replace ?? null
+    if (wasmInput) {
+      wasmInput.value = '' // re-picking the same file must still fire `change`
+      wasmInput.click()
+    }
+  }
+
+  const handleWasmFile = async (file: File) => {
+    const name = wasmReplaceTarget ?? file.name.replace(/\.wasm$/i, '').trim()
+    wasmReplaceTarget = null
+    if (!name) return
+    if (modules()[name] !== undefined && langOf(name) !== 'wasm') {
+      addToast(`Module "${name}" already exists as .${langOf(name)}`, 'error')
+      return
+    }
+    try {
+      const b64 = bytesToBase64(new Uint8Array(await file.arrayBuffer()))
+      setModules((prev) => ({ ...prev, [name]: b64 }))
+      setLangs((prev) => ({ ...prev, [name]: 'wasm' }))
+      setCompiledView(null)
+      setActiveModule(name)
+      setDirty(true)
+    } catch (err) {
+      error('wasm read failed:', err)
+      addToast('Failed to read WASM file', 'error')
+    }
+  }
+
+  const handleWasmDownload = (name: string) => {
+    const bytes = base64ToBytes(modules()[name] ?? '')
+    const url = URL.createObjectURL(new Blob([bytes], { type: 'application/wasm' }))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${name}.wasm`
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   const handleSetActive = () => {
@@ -616,6 +669,32 @@ export function CodePanel(props: { onClose: () => void }) {
             >
               Modules
             </span>
+            <input
+              ref={(el) => (wasmInput = el)}
+              type="file"
+              accept=".wasm,application/wasm"
+              style={{ display: 'none' }}
+              onChange={(e) => {
+                const file = e.currentTarget.files?.[0]
+                if (file) void handleWasmFile(file)
+              }}
+            />
+            <button
+              onClick={() => pickWasmFile()}
+              disabled={loading() || !selectedBranch()}
+              title="Upload a WebAssembly module (.wasm)"
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: '#8b949e',
+                'font-size': '13px',
+                'line-height': '1',
+                cursor: loading() || !selectedBranch() ? 'default' : 'pointer',
+                padding: '0 4px',
+              }}
+            >
+              ⇪
+            </button>
             <button
               onClick={() => { setShowNewFile((v) => !v); setNewFileName('') }}
               disabled={loading() || !selectedBranch()}
@@ -723,7 +802,7 @@ export function CodePanel(props: { onClose: () => void }) {
                         style={{ flex: 1, overflow: 'hidden', 'text-overflow': 'ellipsis', 'white-space': 'nowrap' }}
                       >
                         {name}
-                        <span style={{ color: langOf(name) === 'ts' ? '#58a6ff' : '#6e7681' }}>
+                        <span style={{ color: langOf(name) === 'ts' ? '#58a6ff' : langOf(name) === 'wasm' ? '#d2a8ff' : '#6e7681' }}>
                           .{langOf(name)}
                         </span>
                       </span>
@@ -801,8 +880,13 @@ export function CodePanel(props: { onClose: () => void }) {
                   generated · read-only
                 </span>
               </Show>
+              <Show when={wasmView()}>
+                <span style={{ 'margin-left': '8px', color: '#6e7681', 'font-style': 'italic' }}>
+                  binary · {formatByteSize(base64ByteSize(modules()[activeModule()] ?? ''))}
+                </span>
+              </Show>
             </span>
-            <Show when={activeModule() && !compiledView()}>
+            <Show when={activeModule() && !compiledView() && langOf(activeModule()) !== 'wasm'}>
               <button
                 onClick={() => convertModuleLang(activeModule(), langOf(activeModule()) === 'ts' ? 'js' : 'ts')}
                 title={langOf(activeModule()) === 'ts'
@@ -828,12 +912,70 @@ export function CodePanel(props: { onClose: () => void }) {
           <div
             ref={editorRef}
             style={{
-              display: activeModule() ? 'flex' : 'none',
+              display: activeModule() && !wasmView() ? 'flex' : 'none',
               flex: 1,
               overflow: 'hidden',
               'flex-direction': 'column',
             }}
           />
+
+          {/* Binary module summary — WASM payloads have no editable text */}
+          <Show when={wasmView()}>
+            <div
+              style={{
+                flex: 1,
+                display: 'flex',
+                'flex-direction': 'column',
+                'align-items': 'center',
+                'justify-content': 'center',
+                gap: '10px',
+                color: '#8b949e',
+                'font-size': '13px',
+              }}
+            >
+              <div style={{ 'font-family': 'monospace', 'font-size': '14px', color: '#d2a8ff' }}>
+                {activeModule()}.wasm
+              </div>
+              <div>
+                WebAssembly module · {formatByteSize(base64ByteSize(modules()[activeModule()] ?? ''))}
+              </div>
+              <div style={{ 'font-size': '12px', color: '#6e7681' }}>
+                Binary modules can't be edited here. In game, load it with{' '}
+                <code style={{ color: '#c9d1d9' }}>require('{activeModule()}')</code>.
+              </div>
+              <div style={{ display: 'flex', gap: '8px', 'margin-top': '6px' }}>
+                <button
+                  onClick={() => handleWasmDownload(activeModule())}
+                  style={{
+                    padding: '4px 12px',
+                    'border-radius': '4px',
+                    border: '1px solid #30363d',
+                    background: '#161b22',
+                    color: '#c9d1d9',
+                    'font-size': '12px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Download
+                </button>
+                <button
+                  onClick={() => pickWasmFile(activeModule())}
+                  title="Replace this module with another .wasm file"
+                  style={{
+                    padding: '4px 12px',
+                    'border-radius': '4px',
+                    border: '1px solid #30363d',
+                    background: '#161b22',
+                    color: '#c9d1d9',
+                    'font-size': '12px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Replace…
+                </button>
+              </div>
+            </div>
+          </Show>
 
           {/* Placeholder shown when no module is active */}
           <Show when={!activeModule()}>

@@ -45,6 +45,26 @@ describe('parseServerModules', () => {
     const mods = parseServerModules({ main: 'm', a: '1', b: '2' })
     expect(mods.map((m) => m.name)).toEqual(['main', 'a', 'b'])
   })
+
+  it('surfaces a { binary } value as a wasm module', () => {
+    const mods = parseServerModules({ main: 'js', algo: { binary: 'AGFzbQ==' } })
+    expect(mods).toEqual([
+      { name: 'main', lang: 'js', source: 'js' },
+      { name: 'algo', lang: 'wasm', source: 'AGFzbQ==' },
+    ])
+  })
+
+  it('keeps a wasm module in key order alongside TS modules', () => {
+    const mods = parseServerModules({
+      main: 'compiled',
+      'main.ts': 'ts-src',
+      algo: { binary: 'AAAA' },
+    })
+    expect(mods).toEqual([
+      { name: 'main', lang: 'ts', source: 'ts-src' },
+      { name: 'algo', lang: 'wasm', source: 'AAAA' },
+    ])
+  })
 })
 
 describe('serializeModules', () => {
@@ -82,6 +102,23 @@ describe('serializeModules', () => {
     const server = { main: 'm', 'main.ts': 'ts', utils: 'u' }
     const mods = parseServerModules(server).filter((m) => m.name !== 'utils')
     expect(serializeModules(mods, { main: 'm' })).toEqual({ main: 'm', 'main.ts': 'ts' })
+  })
+
+  it('writes wasm modules as { binary } values', () => {
+    const mods: LogicalModule[] = [
+      { name: 'main', lang: 'js', source: 'code' },
+      { name: 'algo', lang: 'wasm', source: 'AGFzbQ==' },
+    ]
+    expect(serializeModules(mods, {})).toEqual({
+      main: 'code',
+      algo: { binary: 'AGFzbQ==' },
+    })
+  })
+
+  it('round-trips a branch containing a wasm module', () => {
+    const server = { main: 'm', algo: { binary: 'AAAA' } }
+    const mods = parseServerModules(server)
+    expect(serializeModules(mods, {})).toEqual(server)
   })
 })
 
