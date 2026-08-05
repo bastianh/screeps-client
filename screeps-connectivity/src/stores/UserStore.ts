@@ -1,6 +1,7 @@
 import { TypedStore } from './TypedStore.js'
 import type { Logger } from '../logger.js'
 import type { UserStoreEvents } from '../types/events.js'
+import type { ApiCodeModule } from '../types/api.js'
 import type { UserInfo, CpuStats, ConsoleMessage, WorldStatus } from '../types/game.js'
 import type { HttpClient } from '../http/HttpClient.js'
 import type { SocketClient } from '../socket/SocketClient.js'
@@ -129,7 +130,7 @@ export class UserStore extends TypedStore<UserStoreEvents> {
               }
               this.emit('user:console', { messages: msg })
             } else if (channel === 'code') {
-              this.emit('user:code', data as { branch: string; modules: Record<string, string> })
+              this.emit('user:code', data as { branch: string; modules: Record<string, ApiCodeModule> })
             } else if (channel === 'set-active-branch') {
               this.emit('user:setActiveBranch', data as { activeName: 'activeWorld' | 'activeSim'; branch: string })
             }

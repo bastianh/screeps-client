@@ -1,6 +1,8 @@
 import type { HttpClient } from '../HttpClient.js'
 import type {
+  ApiCodeModule,
   ApiUserBranchesResponse,
+  ApiUserCodeResponse,
   ApiUserFindResponse,
   ApiUserMoneyHistoryResponse,
   ApiUserOverviewResponse,
@@ -16,8 +18,10 @@ import { createUserMessagesEndpoints, type UserMessagesEndpoints } from './user-
 export interface UserEndpoints {
   branches(): Promise<ApiUserBranchesResponse>
   code: {
-    get(branch?: string): Promise<unknown>
-    set(branch: string, modules: Record<string, string>): Promise<unknown>
+    get(branch?: string): Promise<ApiUserCodeResponse>
+    /** Replaces the branch's whole module map. Values are JS source strings or
+     *  `{ binary }` base64 payloads for WebAssembly modules. */
+    set(branch: string, modules: Record<string, ApiCodeModule>): Promise<unknown>
   }
   memory: {
     get(path: string, shard?: string | null): Promise<{ ok: number; data: unknown }>
