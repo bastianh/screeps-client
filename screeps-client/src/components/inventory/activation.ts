@@ -3,6 +3,7 @@ import type {
   ApiRoomDecorationActive,
   ApiRoomDecorationDef,
   ApiUserDecorationItem,
+  BadgeSymbol,
 } from 'screeps-connectivity'
 
 // Pure logic behind placing a decoration: seeding its editable state, grouping the
@@ -58,6 +59,26 @@ export function buildActiveState(
 /** Creep and badge decorations apply account-wide, so they have no target room. */
 export function needsRoom(type: string): boolean {
   return type !== 'creep' && type !== 'badge'
+}
+
+/**
+ * The badge symbols the account may wear: one per badge decoration that is currently
+ * active. The badge editor offers these beside the 24 numbered shapes; the server takes
+ * the paths from the matching grant, so an unworn symbol cannot be saved.
+ */
+export function grantedBadgeSymbols(items: readonly ApiUserDecorationItem[]): BadgeSymbol[] {
+  const out: BadgeSymbol[] = []
+  const seen = new Set<string>()
+  for (const item of items) {
+    if (item.decoration.type !== 'badge' || item.active == null) continue
+    const symbol = item.decoration.badge
+    if (symbol == null || symbol.path1 === '') continue
+    const key = `${symbol.path1}\n${symbol.path2}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push({ path1: symbol.path1, path2: symbol.path2 })
+  }
+  return out
 }
 
 /**

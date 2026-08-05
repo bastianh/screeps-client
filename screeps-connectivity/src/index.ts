@@ -37,6 +37,7 @@ export type {
   ShardInfo,
   WorldInfo,
   Badge,
+  BadgeSymbol,
   VisualStyle,
   RoomVisualEntry,
   MapVisualEntry,

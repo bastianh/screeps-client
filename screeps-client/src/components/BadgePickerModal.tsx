@@ -1,9 +1,11 @@
-import { createSignal, createMemo, createEffect, For, untrack } from 'solid-js'
+import { createSignal, createMemo, createEffect, createResource, For, Show, untrack } from 'solid-js'
 import { X } from 'lucide-solid'
 import { badgeToSvg, BadgeColors } from 'screeps-connectivity'
-import type { Badge } from 'screeps-connectivity'
+import type { Badge, BadgeSymbol } from 'screeps-connectivity'
 import { client } from '~/stores/clientStore.js'
+import { capabilities } from '~/stores/capabilities.js'
 import { addToast } from '~/stores/toastStore.js'
+import { grantedBadgeSymbols } from '~/components/inventory/activation.js'
 
 // Pre-generate neutral thumbnails for all 24 badge types once at module load
 const TYPE_THUMBNAILS: Record<number, string> = {}
@@ -32,12 +34,22 @@ const TYPE_KEYS = Array.from({ length: 24 }, (_, i) => i + 1)
 
 const HEX_RE = /^#[0-9a-f]{6}$/i
 
+const isSymbol = (type: number | BadgeSymbol): type is BadgeSymbol => typeof type !== 'number'
+
+const sameSymbol = (a: BadgeSymbol, b: BadgeSymbol): boolean =>
+  a.path1 === b.path1 && a.path2 === b.path2
+
+function symbolThumbnail(symbol: BadgeSymbol): string {
+  const svg = badgeToSvg({ type: symbol, color1: '#4a5060', color2: '#7a9ec0', color3: '#c0daf0', flip: false })
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`
+}
+
 export function BadgePickerModal(props: {
   badge: Badge
   onClose: () => void
   onSaved?: () => void
 }) {
-  const [type, setType] = createSignal(untrack(() => typeof props.badge.type === 'number' ? props.badge.type : 1))
+  const [type, setType] = createSignal<number | BadgeSymbol>(untrack(() => props.badge.type))
   const [color1, setColor1] = createSignal<string | number>(untrack(() => initColor(props.badge.color1)))
   const [color2, setColor2] = createSignal<string | number>(untrack(() => initColor(props.badge.color2)))
   const [color3, setColor3] = createSignal<string | number>(untrack(() => initColor(props.badge.color3)))
@@ -46,6 +58,31 @@ export function BadgePickerModal(props: {
   const [activeSlot, setActiveSlot] = createSignal<1 | 2 | 3>(1)
   const [saving, setSaving] = createSignal(false)
   const [hexDraft, setHexDraft] = createSignal(untrack(() => toDisplayHex(initColor(props.badge.color1))))
+
+  // Symbols granted by worn badge decorations, offered beside the 24 numbered shapes.
+  // Servers without the inventory feature never get asked.
+  const [grantedSymbols] = createResource(
+    () => (capabilities().hasInventory ? client() : null),
+    async (c) => {
+      try {
+        const res = await c.http.user.decorations.inventory()
+        return grantedBadgeSymbols(res.list ?? [])
+      } catch {
+        return []
+      }
+    },
+  )
+
+  // The current badge's symbol stays selectable even when its grant is gone or still
+  // loading — the server is the authority and rejects a save it no longer covers.
+  const offeredSymbols = createMemo<BadgeSymbol[]>(() => {
+    const symbols = [...(grantedSymbols() ?? [])]
+    const current = props.badge.type
+    if (typeof current !== 'number' && !symbols.some(s => sameSymbol(s, current))) {
+      symbols.unshift(current)
+    }
+    return symbols
+  })
 
   const colorForSlot = (slot: 1 | 2 | 3): string | number => {
     if (slot === 1) return color1()
@@ -71,14 +108,17 @@ export function BadgePickerModal(props: {
     return c.toLowerCase() === (BadgeColors[entryIndex]?.rgb ?? '').toLowerCase()
   }
 
-  const currentBadge = (): Badge => ({
-    type: type(),
-    color1: toDisplayHex(color1()),
-    color2: toDisplayHex(color2()),
-    color3: toDisplayHex(color3()),
-    param: param(),
-    flip: flip(),
-  })
+  const currentBadge = (): Badge => {
+    const t = type()
+    const colors = {
+      color1: toDisplayHex(color1()),
+      color2: toDisplayHex(color2()),
+      color3: toDisplayHex(color3()),
+    }
+    // Symbol badges carry no variation, and flip only rotates the numbered shapes.
+    if (isSymbol(t)) return { type: t, ...colors, flip: false }
+    return { type: t, ...colors, param: param(), flip: flip() }
+  }
 
   const previewSrc = createMemo(() => {
     const svg = badgeToSvg(currentBadge())
@@ -202,6 +242,39 @@ export function BadgePickerModal(props: {
                   )}
                 </For>
               </div>
+
+              <Show when={offeredSymbols().length > 0}>
+                <div style={{ 'font-size': '11px', color: '#8b949e', 'text-transform': 'uppercase', 'letter-spacing': '0.06em', margin: '12px 0 8px', 'font-weight': 700 }}>
+                  Granted Symbols
+                </div>
+                <div style={{ display: 'grid', 'grid-template-columns': 'repeat(6, 1fr)', gap: '4px' }}>
+                  <For each={offeredSymbols()}>
+                    {(symbol) => {
+                      const selected = () => {
+                        const t = type()
+                        return isSymbol(t) && sameSymbol(t, symbol)
+                      }
+                      return (
+                        <button
+                          onClick={() => setType(symbol)}
+                          style={{
+                            background: selected() ? '#1f3a2a' : '#0d1117',
+                            border: `1px solid ${selected() ? '#238636' : '#21262d'}`,
+                            'border-radius': '4px',
+                            padding: '3px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            'align-items': 'center',
+                            'justify-content': 'center',
+                          }}
+                        >
+                          <img src={selected() ? previewSrc() : symbolThumbnail(symbol)} width={48} height={48} style={{ display: 'block' }} />
+                        </button>
+                      )
+                    }}
+                  </For>
+                </div>
+              </Show>
             </div>
           </div>
 
@@ -308,43 +381,44 @@ export function BadgePickerModal(props: {
             </div>
           </div>
 
-          {/* Variation slider */}
-          <div style={{ 'margin-bottom': '16px' }}>
-            <div style={{ display: 'flex', 'align-items': 'baseline', gap: '8px', 'margin-bottom': '6px' }}>
-              <span style={{ 'font-size': '11px', color: '#8b949e', 'text-transform': 'uppercase', 'letter-spacing': '0.06em', 'font-weight': 700 }}>
-                Variation
-              </span>
-              <span style={{ 'font-size': '12px', color: '#c9d1d9' }}>{param()}</span>
+          {/* Variation and flip only shape the numbered designs; a granted symbol is drawn as-is. */}
+          <Show when={!isSymbol(type())}>
+            <div style={{ 'margin-bottom': '16px' }}>
+              <div style={{ display: 'flex', 'align-items': 'baseline', gap: '8px', 'margin-bottom': '6px' }}>
+                <span style={{ 'font-size': '11px', color: '#8b949e', 'text-transform': 'uppercase', 'letter-spacing': '0.06em', 'font-weight': 700 }}>
+                  Variation
+                </span>
+                <span style={{ 'font-size': '12px', color: '#c9d1d9' }}>{param()}</span>
+              </div>
+              <input
+                type="range"
+                min="-100"
+                max="100"
+                value={param()}
+                onInput={(e) => setParam(+e.currentTarget.value)}
+                style={{ width: '100%', 'accent-color': '#58a6ff' }}
+              />
             </div>
-            <input
-              type="range"
-              min="-100"
-              max="100"
-              value={param()}
-              onInput={(e) => setParam(+e.currentTarget.value)}
-              style={{ width: '100%', 'accent-color': '#58a6ff' }}
-            />
-          </div>
 
-          {/* Flip toggle */}
-          <label
-            style={{
-              display: 'flex',
-              'align-items': 'center',
-              gap: '8px',
-              cursor: 'pointer',
-              'font-size': '13px',
-              color: '#c9d1d9',
-            }}
-          >
-            <input
-              type="checkbox"
-              checked={flip()}
-              onChange={(e) => setFlip(e.currentTarget.checked)}
-              style={{ 'accent-color': '#58a6ff', width: '14px', height: '14px' }}
-            />
-            Rotate / Flip
-          </label>
+            <label
+              style={{
+                display: 'flex',
+                'align-items': 'center',
+                gap: '8px',
+                cursor: 'pointer',
+                'font-size': '13px',
+                color: '#c9d1d9',
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={flip()}
+                onChange={(e) => setFlip(e.currentTarget.checked)}
+                style={{ 'accent-color': '#58a6ff', width: '14px', height: '14px' }}
+              />
+              Rotate / Flip
+            </label>
+          </Show>
         </div>
 
         {/* Footer */}
