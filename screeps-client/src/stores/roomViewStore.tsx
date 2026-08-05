@@ -46,6 +46,9 @@ export interface MoveFlagAction {
   id: string
   name: string
   room: string
+  /** Tile the flag currently occupies — used to restore it when a move fails halfway. */
+  x: number
+  y: number
   color: number
   secondaryColor: number
   targetRoom: string

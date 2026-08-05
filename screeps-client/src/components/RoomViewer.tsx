@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createSignal, onCleanup, onMount, untrack, Show } from 'solid-js'
+import { batch, createEffect, createMemo, createSignal, onCleanup, onMount, untrack, Show } from 'solid-js'
 import { RoomRenderer, TILE_SIZE, Z } from '~/renderer/RoomRenderer.js'
 import { createTerrainLayer, setTerrainEffectsVisible } from '~/renderer/TerrainLayer.js'
 import { parseRoomDecorations, mergeDecorationItems, type RoomDecoration } from '~/renderer/roomDecorations.js'
@@ -70,6 +70,10 @@ interface RoomViewerProps {
 
 export function RoomViewer(props: RoomViewerProps) {
   let containerRef: HTMLDivElement | undefined
+  // The renderer signal is still null while PixiJS initialises, so onCleanup cannot
+  // reach an Application whose create() resolves after unmount — this flag lets
+  // onMount destroy it instead of leaking a WebGL context.
+  let disposed = false
   let objLayer: ObjectLayer | null = null
   let animLayer: ActionAnimationLayer | null = null
   let visualLayer: VisualLayer | null = null
@@ -118,10 +122,15 @@ export function RoomViewer(props: RoomViewerProps) {
   onMount(async () => {
     if (!containerRef) return
     const r = await RoomRenderer.create(containerRef)
+    if (disposed) {
+      r.destroy()
+      return
+    }
     setRenderer(r)
   })
 
   onCleanup(() => {
+    disposed = true
     if (seekDebounceTimer !== null) clearTimeout(seekDebounceTimer)
     objLayer?.destroy()
     objLayer = null
@@ -230,17 +239,19 @@ export function RoomViewer(props: RoomViewerProps) {
     const shard = props.shard
 
     log(`navigate → ${room} (shard=${shard ?? 'default'})`)
-    setObjectState(null)
-    setVisualState('')
-    setGameTime(null)
-    clearSelection()
-    setRoomObjectCount(null)
-    setRoomOwner(null)
-    setControllerLevel(null)
-    setControllerProgress(null)
-    setControllerReservation(null)
-    setStructureCounts({})
-    setRoomUsers(null)
+    batch(() => {
+      setObjectState(null)
+      setVisualState('')
+      setGameTime(null)
+      clearSelection()
+      setRoomObjectCount(null)
+      setRoomOwner(null)
+      setControllerLevel(null)
+      setControllerProgress(null)
+      setControllerReservation(null)
+      setStructureCounts({})
+      setRoomUsers(null)
+    })
 
     const group = new SubscriptionGroup()
 
@@ -293,17 +304,21 @@ export function RoomViewer(props: RoomViewerProps) {
       if (!data.diff) {
         log(`objects loaded — ${room}: ${objectCount} objects, tick=${data.gameTime}`)
       }
-      setObjectState({ objects: data.objects, diff: data.diff, users: data.users })
-      setVisualState(data.visual)
-      setGameTime(data.gameTime ?? null)
-      recordGameTime(data.gameTime)
-      setRoomObjectCount(objectCount)
-      setRoomOwner(owner)
-      setControllerLevel(ctrlLevel || null)
-      setControllerProgress(ctrlProgress)
-      setControllerReservation(reservation)
-      setStructureCounts(structCounts)
-      setRoomUsers(data.users ?? null)
+      // One batch per tick: the render effect tracks several of these signals and must
+      // run once per update, not once per setter.
+      batch(() => {
+        setObjectState({ objects: data.objects, diff: data.diff, users: data.users })
+        setVisualState(data.visual)
+        setGameTime(data.gameTime ?? null)
+        recordGameTime(data.gameTime)
+        setRoomObjectCount(objectCount)
+        setRoomOwner(owner)
+        setControllerLevel(ctrlLevel || null)
+        setControllerProgress(ctrlProgress)
+        setControllerReservation(reservation)
+        setStructureCounts(structCounts)
+        setRoomUsers(data.users ?? null)
+      })
     }))
 
     onCleanup(() => {
@@ -343,9 +358,6 @@ export function RoomViewer(props: RoomViewerProps) {
             seekToTick(state.clampedTo)
             return
           }
-          setObjectState({ objects: state.objects, diff: undefined, users: cachedUsers })
-          setGameTime(state.gameTime)
-
           let objectCount = 0
           const structCounts: Record<string, number> = {}
           let ctrlLevel = 0
@@ -383,12 +395,17 @@ export function RoomViewer(props: RoomViewerProps) {
             }
           }
 
-          setRoomObjectCount(objectCount)
-          setRoomOwner(owner)
-          setControllerLevel(ctrlLevel || null)
-          setControllerProgress(ctrlProgress)
-          setControllerReservation(reservation)
-          setStructureCounts(structCounts)
+          // Mirrors the live path: one batch per tick so the render effect runs once.
+          batch(() => {
+            setObjectState({ objects: state.objects, diff: undefined, users: cachedUsers })
+            setGameTime(state.gameTime)
+            setRoomObjectCount(objectCount)
+            setRoomOwner(owner)
+            setControllerLevel(ctrlLevel || null)
+            setControllerProgress(ctrlProgress)
+            setControllerReservation(reservation)
+            setStructureCounts(structCounts)
+          })
         })
         .catch((err: Error) => {
           if (cancelled) return
@@ -418,6 +435,34 @@ export function RoomViewer(props: RoomViewerProps) {
     // Reset the "no data" hint when leaving history mode / changing room.
     onCleanup(() => setHistoryNoData(false))
   })
+
+  // Shared by the clear-effect (room change) and the worldBounds effect below, so the
+  // arrow zones always reflect both the current room and the known world bounds.
+  const wireNavZones = (
+    r: RoomRenderer,
+    room: string,
+    shard: string | null,
+    nav: RoomViewerProps['onNavigate'],
+    bounds: ReturnType<typeof worldBounds>,
+  ): void => {
+    const coord = parseRoomName(room)
+    if (!coord || !nav) return
+
+    const canNavigate = (tx: number, ty: number) =>
+      !bounds || isRoomInWorld(tx, ty, bounds)
+
+    const navTo = (target: string) => {
+      log(`navigate requested: ${room} → ${target}`)
+      nav(target, shard)
+    }
+
+    r.setupNavigationZones({
+      west:  canNavigate(coord.x - 1, coord.y) ? () => navTo(formatRoomName(coord.x - 1, coord.y)) : undefined,
+      east:  canNavigate(coord.x + 1, coord.y) ? () => navTo(formatRoomName(coord.x + 1, coord.y)) : undefined,
+      north: canNavigate(coord.x, coord.y - 1) ? () => navTo(formatRoomName(coord.x, coord.y - 1)) : undefined,
+      south: canNavigate(coord.x, coord.y + 1) ? () => navTo(formatRoomName(coord.x, coord.y + 1)) : undefined,
+    })
+  }
 
   // Clear and reset when renderer or room changes (worldBounds intentionally NOT tracked here
   // — it arriving after login must not re-clear the scene and lose the terrain layer)
@@ -458,34 +503,12 @@ export function RoomViewer(props: RoomViewerProps) {
       terrainLayerRef = createTerrainLayer(t.data, r.app.renderer, dec?.room === props.room ? dec.decoration.terrain : undefined)
       setTerrainEffectsVisible(terrainLayerRef, untrack(terrainEffects))
       terrainLayerRef.zIndex = Z.terrain
-      r.world.addChild(terrainLayerRef)
-      r.bringNavOverlayToTop()
-    }
+      r.world.addChild(terrainLayerRef)    }
 
     // Re-create navigation zones immediately after clear so arrows are never missing
-    // after a room change. We untrack worldBounds/onNavigate so this effect only runs
+    // after a room change. worldBounds/onNavigate are untracked so this effect only runs
     // when room/shard/renderer changes (matching the clear trigger).
-    const room = props.room
-    const shard = props.shard
-    const coord = parseRoomName(room)
-    const nav = untrack(() => props.onNavigate)
-    const bounds = untrack(worldBounds)
-    if (coord && nav) {
-      const canNavigate = (tx: number, ty: number) =>
-        !bounds || isRoomInWorld(tx, ty, bounds)
-
-      const navTo = (target: string) => {
-        log(`navigate requested: ${room} → ${target}`)
-        nav(target, shard)
-      }
-
-      r.setupNavigationZones({
-        west:  canNavigate(coord.x - 1, coord.y) ? () => navTo(formatRoomName(coord.x - 1, coord.y)) : undefined,
-        east:  canNavigate(coord.x + 1, coord.y) ? () => navTo(formatRoomName(coord.x + 1, coord.y)) : undefined,
-        north: canNavigate(coord.x, coord.y - 1) ? () => navTo(formatRoomName(coord.x, coord.y - 1)) : undefined,
-        south: canNavigate(coord.x, coord.y + 1) ? () => navTo(formatRoomName(coord.x, coord.y + 1)) : undefined,
-      })
-    }
+    wireNavZones(r, props.room, props.shard, untrack(() => props.onNavigate), untrack(worldBounds))
   })
 
   // Setup navigation zones — separate effect so worldBounds / onNavigate updates
@@ -498,32 +521,19 @@ export function RoomViewer(props: RoomViewerProps) {
 
     const room = untrack(() => props.room)
     const shard = untrack(() => props.shard)
-    const coord = parseRoomName(room)
+    const nav = props.onNavigate
+    if (!nav || !parseRoomName(room)) return
 
-    if (coord && props.onNavigate) {
-      const nav = props.onNavigate
-      const bounds = worldBounds()
-      const canNavigate = (tx: number, ty: number) =>
-        !bounds || isRoomInWorld(tx, ty, bounds)
+    useRoomNavigationKeys({
+      currentRoom: () => props.room,
+      worldBounds,
+      onMove: (rx, ry) => {
+        log(`navigate requested: ${props.room} → ${formatRoomName(rx, ry)}`)
+        nav(formatRoomName(rx, ry), shard)
+      },
+    })
 
-      const navTo = (target: string) => {
-        log(`navigate requested: ${room} → ${target}`)
-        nav(target, shard)
-      }
-
-      useRoomNavigationKeys({
-        currentRoom: () => props.room,
-        worldBounds,
-        onMove: (rx, ry) => navTo(formatRoomName(rx, ry)),
-      })
-
-      r.setupNavigationZones({
-        west:  canNavigate(coord.x - 1, coord.y) ? () => navTo(formatRoomName(coord.x - 1, coord.y)) : undefined,
-        east:  canNavigate(coord.x + 1, coord.y) ? () => navTo(formatRoomName(coord.x + 1, coord.y)) : undefined,
-        north: canNavigate(coord.x, coord.y - 1) ? () => navTo(formatRoomName(coord.x, coord.y - 1)) : undefined,
-        south: canNavigate(coord.x, coord.y + 1) ? () => navTo(formatRoomName(coord.x, coord.y + 1)) : undefined,
-      })
-    }
+    wireNavZones(r, room, shard, nav, worldBounds())
   })
 
   // Clear pending marker when switching back to view mode
@@ -563,7 +573,6 @@ export function RoomViewer(props: RoomViewerProps) {
     terrainLayerRef = createTerrainLayer(t.data, r.app.renderer, dec?.room === props.room ? dec.decoration.terrain : undefined)
     setTerrainEffectsVisible(terrainLayerRef, untrack(terrainEffects))
     r.world.addChildAt(terrainLayerRef, 0)
-    r.bringNavOverlayToTop()
   })
 
   // Clear decorations when the setting is turned off
@@ -578,7 +587,6 @@ export function RoomViewer(props: RoomViewerProps) {
     terrainLayerRef = createTerrainLayer(t.data, r.app.renderer)
     setTerrainEffectsVisible(terrainLayerRef, untrack(terrainEffects))
     r.world.addChildAt(terrainLayerRef, 0)
-    r.bringNavOverlayToTop()
     objLayer?.setRoadColor(OBJ_ROAD)
     objLayer?.setWallColor(ST_DARK)
     objLayer?.setDecorations([], [])
@@ -598,8 +606,6 @@ export function RoomViewer(props: RoomViewerProps) {
     terrainLayerRef = createTerrainLayer(t.data, r.app.renderer, dec.decoration.terrain)
     setTerrainEffectsVisible(terrainLayerRef, untrack(terrainEffects))
     r.world.addChildAt(terrainLayerRef, 0)
-    r.bringNavOverlayToTop()
-
     if (objLayer && dec.decoration.roadColor != null) {
       objLayer.setRoadColor(dec.decoration.roadColor)
     }
@@ -744,7 +750,7 @@ export function RoomViewer(props: RoomViewerProps) {
               const c = client()
               if (!c) return
 
-              const { name, room: flagRoom, color, secondaryColor, targetRoom } = overlay
+              const { name, room: flagRoom, x: fromX, y: fromY, color, secondaryColor, targetRoom } = overlay
               c.http.game.removeFlag(flagRoom, name, currentShard ?? undefined)
                 .then(() => {
                   return c.http.game.createFlag(
@@ -757,8 +763,14 @@ export function RoomViewer(props: RoomViewerProps) {
                 })
                 .catch((err) => {
                   error('move flag failed:', err)
-                  addToast(`Failed to move flag "${name}"`, 'error')
                   clearOverlayAction()
+                  // The remove may already have gone through — recreate the flag on its
+                  // old tile so a half-failed move never silently deletes it. Creating a
+                  // flag under its existing name just re-places it, so this is also safe
+                  // when the remove itself was what failed.
+                  c.http.game.createFlag(flagRoom, fromX, fromY, name, color, secondaryColor, currentShard ?? undefined)
+                    .then(() => addToast(`Failed to move flag "${name}" — restored at its previous position`, 'error'))
+                    .catch(() => addToast(`Failed to move flag "${name}" and could not restore it`, 'error'))
                 })
               return
             }
@@ -837,10 +849,7 @@ export function RoomViewer(props: RoomViewerProps) {
             const hits = objLayer.getObjectsAtTile(tx, ty)
 
             if (hits.length === 0) {
-              if (!ctrlKey) {
-                setSelection([])
-                r.hoverLayer.clearSelection()
-              }
+              if (!ctrlKey) setSelection([])
               return
             }
 
@@ -867,17 +876,8 @@ export function RoomViewer(props: RoomViewerProps) {
               nextSelection = hits.map(({ id, obj }) => createSelectedObject(id, obj))
             }
 
+            // The selection-sync effect below rebuilds the canvas overlays from this.
             setSelection(nextSelection)
-
-            // Rebuild visual overlays from the full new selection
-            const visuals = nextSelection
-                .map(({ id, type }) => ({
-                  id,
-                  type,
-                  visual: objLayer!.getVisualById(id)!,
-                }))
-                .filter(v => v.visual != null)
-            r.hoverLayer.setSelectedObjects(visuals)
           },
           () => {
             const mode = roomViewMode()
@@ -992,6 +992,25 @@ export function RoomViewer(props: RoomViewerProps) {
     if (untrack(roomDarkOverlay)) r.updateLighting(objs)
   })
 
+  // Keep the canvas selection overlays in sync with the selection store. Objects can
+  // leave the selection outside the canvas click handler — a selected creep dying in a
+  // diff, a deselect from the sidebar — and the ring/box has to go with them.
+  createEffect(() => {
+    const r = renderer()
+    const sel = selection()
+    if (!r) return
+    const layer = objLayer
+    if (!layer) {
+      r.hoverLayer.clearSelection()
+      return
+    }
+    const visuals = sel.flatMap(({ id, type }) => {
+      const visual = layer.getVisualById(id)
+      return visual ? [{ id, type, visual }] : []
+    })
+    r.hoverLayer.setSelectedObjects(visuals)
+  })
+
   // Update RoomVisuals overlay each tick (layer is created in the objects effect).
   // Read visualState() before the optional chain so SolidJS always tracks it,
   // even when visualLayer hasn't been created yet.
@@ -1020,7 +1039,14 @@ export function RoomViewer(props: RoomViewerProps) {
     const enabled = roomDarkOverlay()
     r.darkOverlay.visible = enabled
     r.lightLayer.visible = enabled
-    if (!enabled) r.clearLighting()
+    if (!enabled) {
+      r.clearLighting()
+    } else {
+      // Rebuild the lightmap from the current objects right away — waiting for the
+      // next room:update would leave the room uniformly dark for up to a full tick.
+      const state = untrack(objectState)
+      if (state) r.updateLighting(state.objects)
+    }
   })
 
   return (
