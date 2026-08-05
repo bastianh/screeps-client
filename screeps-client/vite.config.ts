@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { defineConfig, loadEnv } from 'vite'
 import solid from 'vite-plugin-solid'
 import { readFileSync } from 'node:fs'
@@ -95,6 +96,9 @@ export default defineConfig(({ mode }) => {
       alias: {
         '~/': '/src/',
       },
+    },
+    test: {
+      setupFiles: ['tests/setup.ts'],
     },
   }
 })

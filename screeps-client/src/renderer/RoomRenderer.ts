@@ -7,6 +7,7 @@ export const TILE_SIZE = 12
 export const ROOM_SIZE = 50 * TILE_SIZE
 const PADDING = 48
 const OVERSCROLL = 128
+const MAX_SCALE = 5
 
 // Z-index constants for world children — controls draw order independent of insertion order.
 export const Z = {
@@ -96,18 +97,6 @@ export class RoomRenderer {
   /** Called whenever {@link viewTransform} changed — pan, zoom, resize, reset. */
   setViewChangeHandler(handler: (() => void) | null): void {
     this.onViewChange = handler
-  }
-
-  bringNavOverlayToTop(): void {
-    // Keep hover layer just below nav overlay
-    if (this.hoverLayer.container.parent === this.world) {
-      this.world.removeChild(this.hoverLayer.container)
-      this.world.addChild(this.hoverLayer.container)
-    }
-    if (this.navOverlay.parent === this.world) {
-      this.world.removeChild(this.navOverlay)
-      this.world.addChild(this.navOverlay)
-    }
   }
 
   static async create(container: HTMLElement): Promise<RoomRenderer> {
@@ -268,9 +257,8 @@ export class RoomRenderer {
 
   private getTargetScale(): number | null {
     const minScale = this.getMinScale()
-    const maxScale = 5
     if (this.world.scale.x < minScale) return minScale
-    if (this.world.scale.x > maxScale) return maxScale
+    if (this.world.scale.x > MAX_SCALE) return MAX_SCALE
     return null
   }
 
@@ -293,6 +281,9 @@ export class RoomRenderer {
 
 
     canvas.addEventListener('pointerdown', (e) => {
+      // Primary button (or touch/pen) only: right/middle clicks must not pan, pinch,
+      // or register as tile clicks — right-click is handled via contextmenu below.
+      if (e.button !== 0) return
       this.cancelBounce()
       this.cancelWheelTimeout()
       activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
@@ -340,11 +331,10 @@ export class RoomRenderer {
         const newMidY = (pts[0].y + pts[1].y) / 2 - rect.top
         const newDist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y)
         const minScale = this.getMinScale()
-        const maxScale = 5
         const ZOOM_RESISTANCE = 0.6
         let newScale = pinchStartScale * (newDist / pinchStartDist)
         if (newScale < minScale) newScale = minScale + (newScale - minScale) * ZOOM_RESISTANCE
-        if (newScale > maxScale) newScale = maxScale + (newScale - maxScale) * ZOOM_RESISTANCE
+        if (newScale > MAX_SCALE) newScale = MAX_SCALE + (newScale - MAX_SCALE) * ZOOM_RESISTANCE
         this.cancelBounce()
         this.world.scale.set(newScale)
         this.world.x = newMidX - pinchPivotWorldX * newScale
@@ -370,6 +360,9 @@ export class RoomRenderer {
     })
 
     const onUp = (e: PointerEvent) => {
+      // Mirror of the pointerdown filter. button is 0 for a primary-button pointerup
+      // and -1 for pointercancel; anything greater was never tracked or captured.
+      if (e.button > 0) return
       canvas.releasePointerCapture(e.pointerId)
       activePointers.delete(e.pointerId)
 
@@ -428,7 +421,6 @@ export class RoomRenderer {
       if (this.cameraLocked) return
       const scaleFactor = e.deltaY > 0 ? 0.9 : 1.1
       const minScale = this.getMinScale()
-      const maxScale = 5
       let newScale = this.world.scale.x * scaleFactor
 
       // Rubber-band resistance: the further past the limit, the less effect
@@ -436,8 +428,8 @@ export class RoomRenderer {
       if (newScale < minScale) {
         newScale = minScale + (newScale - minScale) * ZOOM_RESISTANCE
       }
-      if (newScale > maxScale) {
-        newScale = maxScale + (newScale - maxScale) * ZOOM_RESISTANCE
+      if (newScale > MAX_SCALE) {
+        newScale = MAX_SCALE + (newScale - MAX_SCALE) * ZOOM_RESISTANCE
       }
 
       const rect = canvas.getBoundingClientRect()
@@ -582,7 +574,9 @@ export class RoomRenderer {
         zone.fill()
       })
 
-      zone.on('pointerdown', handler)
+      // Tap, not pointerdown: a touch drag that merely starts inside the zone
+      // must pan the room, not navigate away immediately.
+      zone.on('pointertap', handler)
 
       this.navOverlay.addChild(zone)
     }

@@ -55,6 +55,8 @@ export function FlagDetails(props: { item: SelectedObject }) {
       id: props.item.id,
       name: name(),
       room: room(),
+      x: props.item.raw.x,
+      y: props.item.raw.y,
       color: draftColor(),
       secondaryColor: draftSecondaryColor(),
       targetRoom: currentRoom() ?? room(),

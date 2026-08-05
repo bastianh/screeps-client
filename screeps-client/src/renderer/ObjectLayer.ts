@@ -362,6 +362,13 @@ export class ObjectLayer {
       // Portal: cyan ring wells up and is swallowed by the trailing dark disc, on the same
       // free-running wall clock as the keeper pulse (see animatePortal for the wave shapes).
       if (visual.__portalCyanWave) animatePortal(visual, now)
+      // Source pulse: repaint every frame so the golden core (or the dark ring, when
+      // exhausted) breathes. The size tween below writes __sourceSize and repaints again
+      // while it runs, so drawing before it never shows a stale size.
+      if (visual.__sourceGraphics) drawSourceVisual(visual.__sourceGraphics, visual.__sourceSize ?? SRC_MAX_SIZE, now)
+      // Power bank: fill colour and scale pulse run on the wall clock every frame.
+      if (visual.__powerBankEllipseG) drawPowerBankEllipse(visual.__powerBankEllipseG, visual.__powerBankRadius ?? 0, now)
+      if (visual.__ctrlLevel && visual.__ctrlSegSprites) this.applyControllerDowngradeTint(visual, now)
     }
 
     // Fill tweens (extension/creep/tower/storage/container/terminal/factory/lab/nuker/link/source)
@@ -370,21 +377,6 @@ export class ObjectLayer {
       const ease = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2
       anim.apply(anim.visual, anim.fromA + (anim.toA - anim.fromA) * ease, anim.fromB + (anim.toB - anim.fromB) * ease)
       if (t >= 1) this.fillAnimations.delete(id)
-    }
-
-    // Source pulse: every tick repaint each source so the golden core (or the dark
-    // ring, when exhausted) breathes. Size animation wrote __sourceSize when active.
-    for (const visual of this.objects.values()) {
-      const g = visual.__sourceGraphics
-      if (!g) continue
-      drawSourceVisual(g, visual.__sourceSize ?? SRC_MAX_SIZE, now)
-    }
-
-    // Power bank: animate fill color and scale pulse every frame
-    for (const visual of this.objects.values()) {
-      const g = visual.__powerBankEllipseG
-      if (!g) continue
-      drawPowerBankEllipse(g, visual.__powerBankRadius ?? 0, now)
     }
 
     // Construction-site build glow: fade in during beam build phase, hold, fade out
@@ -432,45 +424,6 @@ export class ObjectLayer {
       }
     }
 
-    // Controller downgrade warning: earned segments (0..level-1) tint pink→red as downgrade approaches
-    for (const visual of this.objects.values()) {
-      const level = visual.__ctrlLevel
-      const segs = visual.__ctrlSegSprites
-      if (!level || !segs) continue
-
-      const dt = visual.__ctrlDowngradeTime
-      if (!dt) {
-        for (let i = 0; i < level; i++) {
-          const seg = segs[i]
-          if (seg && !seg.destroyed) seg.tint = 0xffffff
-        }
-        continue
-      }
-
-      const maxTicks = CONTROLLER_DOWNGRADE[level] ?? 20000
-      const remaining = Math.max(0, dt - this.currentGameTime)
-      const urgency = 1 - remaining / maxTicks
-
-      if (urgency <= 0.2) {
-        for (let i = 0; i < level; i++) {
-          const seg = segs[i]
-          if (seg && !seg.destroyed) seg.tint = 0xffffff
-        }
-        continue
-      }
-
-      const danger = (urgency - 0.2) / 0.8
-      const pulseHz = 0.3 + danger * 1.5
-      const pulse = 0.5 + 0.5 * Math.sin(2 * Math.PI * pulseHz * now / 1000)
-      const peakColor = lerpColor(0xffdddd, 0xff2222, danger)
-      const tintColor = lerpColor(0xffffff, peakColor, danger * pulse)
-
-      for (let i = 0; i < level; i++) {
-        const seg = segs[i]
-        if (seg && !seg.destroyed) seg.tint = tintColor
-      }
-    }
-
     // Disabled-structure wash: one shared pulse for every off tile. Frozen at peak in
     // instant/history mode so the state still reads without animating.
     if (this.disabledSig !== '') {
@@ -481,6 +434,47 @@ export class ObjectLayer {
     // frame). Runs after interpolation so the texture is up to date before the
     // main frame is presented.
     this.lighting?.render()
+  }
+
+  // Controller downgrade warning: earned segments (0..level-1) tint pink→red, pulsing
+  // faster as the downgrade deadline approaches; plain white with no deadline or while
+  // the remaining time is still comfortable.
+  private applyControllerDowngradeTint(visual: ContainerWithTarget, now: number): void {
+    const level = visual.__ctrlLevel
+    const segs = visual.__ctrlSegSprites
+    if (!level || !segs) return
+
+    const dt = visual.__ctrlDowngradeTime
+    if (!dt) {
+      for (let i = 0; i < level; i++) {
+        const seg = segs[i]
+        if (seg && !seg.destroyed) seg.tint = 0xffffff
+      }
+      return
+    }
+
+    const maxTicks = CONTROLLER_DOWNGRADE[level] ?? 20000
+    const remaining = Math.max(0, dt - this.currentGameTime)
+    const urgency = 1 - remaining / maxTicks
+
+    if (urgency <= 0.2) {
+      for (let i = 0; i < level; i++) {
+        const seg = segs[i]
+        if (seg && !seg.destroyed) seg.tint = 0xffffff
+      }
+      return
+    }
+
+    const danger = (urgency - 0.2) / 0.8
+    const pulseHz = 0.3 + danger * 1.5
+    const pulse = 0.5 + 0.5 * Math.sin(2 * Math.PI * pulseHz * now / 1000)
+    const peakColor = lerpColor(0xffdddd, 0xff2222, danger)
+    const tintColor = lerpColor(0xffffff, peakColor, danger * pulse)
+
+    for (let i = 0; i < level; i++) {
+      const seg = segs[i]
+      if (seg && !seg.destroyed) seg.tint = tintColor
+    }
   }
 
   // Centralised fill-tween launcher. Instant-mode snaps straight to the target; an
@@ -605,6 +599,285 @@ export class ObjectLayer {
       calcSpawnFillRadius(fromEnergy, fromCapacity), calcSpawnFillRadius(toEnergy, toCapacity))
   }
 
+  /**
+   * Apply an updated object's state to its existing visual — position/movement, per-type
+   * fills and cooldowns, and the recreate-on-identity-change cases (flag colours,
+   * controller owner). Shared by the diff path and the full-map reconcile path
+   * (history playback, resubscribe) so every type stays live in both.
+   */
+  private updateExistingVisual(id: string, obj: RoomObject, existing: ContainerWithTarget, fullReconcile: boolean): void {
+    const tx = obj.x * TILE_SIZE
+    const ty = obj.y * TILE_SIZE
+    if (obj.type === 'creep') {
+      const dx = obj.x - (existing.__tileX ?? obj.x)
+      const dy = obj.y - (existing.__tileY ?? obj.y)
+      if (dx !== 0 || dy !== 0) {
+        existing.__angle = Math.atan2(dy, dx)
+        setCreepFacing(existing, existing.__angle)
+      }
+      existing.__tileX = obj.x
+      existing.__tileY = obj.y
+      if (this.instantMode) {
+        existing.position.set(tx, ty)
+        existing.__targetX = undefined
+        existing.__targetY = undefined
+        existing.__moveStartX = undefined
+        existing.__moveStartY = undefined
+        existing.__moveStartT = undefined
+        existing.__moveDur = undefined
+      } else if (existing.x !== tx || existing.y !== ty) {
+        existing.__targetX = tx
+        existing.__targetY = ty
+        existing.__moveStartX = existing.x
+        existing.__moveStartY = existing.y
+        existing.__moveStartT = performance.now()
+        existing.__moveDur = this.moveDuration
+      }
+      const { used, capacity } = getCreepStore(obj)
+      if (existing.__creepUsed !== used || existing.__creepCapacity !== capacity) {
+        this.startCreepFillAnimation(id, existing, existing.__creepUsed ?? 0, existing.__creepCapacity ?? capacity, used, capacity)
+        existing.__creepUsed = used
+        existing.__creepCapacity = capacity
+      }
+      // Re-tier on the spawning → born transition (and vice-versa).
+      const cz = computeZIndex(obj)
+      if (existing.zIndex !== cz) existing.zIndex = cz
+      // Creep decorations skip spawning creeps, so that transition changes what applies.
+      if (existing.__decoSpawning !== (obj.spawning === true)) this.decorate(existing, obj)
+    } else if (obj.type === 'flag') {
+      const newColorIdx = typeof obj.color === 'number' ? obj.color : 0
+      const newSecColorIdx = typeof obj.secondaryColor === 'number' ? obj.secondaryColor : 0
+      const colorChanged =
+        existing.__flagColor !== newColorIdx ||
+        existing.__flagSecondaryColor !== newSecColorIdx
+      if (colorChanged) {
+        this.container.removeChild(existing)
+        destroyVisual(existing)
+        this.objects.delete(id)
+        this.createVisual(id, obj)
+      } else {
+        existing.position.set(tx, ty)
+      }
+    } else {
+      existing.position.set(tx, ty)
+    }
+
+    if (obj.type === 'extension') {
+      const { energy, capacity } = getExtensionEnergy(obj)
+      const ext = existing as ContainerWithTarget & { __extEnergy?: number; __extCapacity?: number }
+      if (ext.__extEnergy !== energy || ext.__extCapacity !== capacity) {
+        this.startExtAnimation(
+          id,
+          existing,
+          ext.__extEnergy ?? 0,
+          ext.__extCapacity ?? capacity,
+          energy,
+          capacity,
+        )
+        ext.__extEnergy = energy
+        ext.__extCapacity = capacity
+      }
+    }
+    if (obj.type === 'link') {
+      const { energy, capacity } = getExtensionEnergy(obj)
+      if (existing.__linkEnergy !== energy || existing.__linkCapacity !== capacity) {
+        this.startLinkAnimation(id, existing, existing.__linkEnergy ?? 0, existing.__linkCapacity ?? capacity, energy, capacity)
+        existing.__linkEnergy = energy
+        existing.__linkCapacity = capacity
+      }
+    }
+    if (obj.type === 'tower') {
+      const { energy, capacity } = getExtensionEnergy(obj)
+      if (existing.__towerEnergy !== energy || existing.__towerCapacity !== capacity) {
+        this.startTowerFillAnimation(id, existing, existing.__towerEnergy ?? 0, existing.__towerCapacity ?? capacity, energy, capacity)
+        existing.__towerEnergy = energy
+        existing.__towerCapacity = capacity
+      }
+    }
+    if (obj.type === 'storage') {
+      const { bands, used, capacity } = getStoreBands(obj)
+      if (existing.__storageUsed !== used || existing.__storageCapacity !== capacity) {
+        const fromUsed = existing.__storageUsed ?? 0
+        const fromCap = existing.__storageCapacity ?? capacity
+        existing.__storageBands = bands
+        existing.__storageUsed = used
+        existing.__storageCapacity = capacity
+        this.startStorageFillAnimation(id, existing, fromUsed, fromCap, used, capacity)
+      } else if (!bandsEqual(existing.__storageBands, bands)) {
+        existing.__storageBands = bands
+        updateStorageFill(existing, calcStorageFillHeight(used, capacity))
+      }
+    }
+    if (obj.type === 'container') {
+      const { bands, used, capacity } = getStoreBands(obj)
+      if (existing.__containerUsed !== used || existing.__containerCapacity !== capacity) {
+        const fromUsed = existing.__containerUsed ?? 0
+        const fromCap = existing.__containerCapacity ?? capacity
+        existing.__containerBands = bands
+        existing.__containerUsed = used
+        existing.__containerCapacity = capacity
+        this.startContainerFillAnimation(id, existing, fromUsed, fromCap, used, capacity)
+      } else if (!bandsEqual(existing.__containerBands, bands)) {
+        existing.__containerBands = bands
+        updateContainerFill(existing, calcContainerFillHeight(used, capacity))
+      }
+    }
+    if (obj.type === 'terminal') {
+      const { used, capacity, dominant: dom } = getStoreBands(obj)
+      const dominant = dom ?? undefined
+      if (existing.__terminalDominant !== dominant) {
+        existing.__terminalDominant = dominant
+        existing.__terminalFillColor = dominant ? resourceColor(dominant) : ST_ENERGY
+        updateTerminalFill(existing, calcCenterFillFraction(used, capacity))
+      }
+      if (existing.__terminalUsed !== used || existing.__terminalCapacity !== capacity) {
+        const fromUsed = existing.__terminalUsed ?? 0
+        const fromCap = existing.__terminalCapacity ?? capacity
+        existing.__terminalUsed = used
+        existing.__terminalCapacity = capacity
+        this.startTerminalFillAnimation(id, existing, fromUsed, fromCap, used, capacity)
+      }
+      existing.__terminalCooldownTime = cooldownEnd(obj)
+    }
+    if (obj.type === 'lab') {
+      const { energy, energyCap, mineralType, mineral, mineralCap } = getLabContents(obj)
+      const newType = mineralType ?? undefined
+      if (existing.__labMineralType !== newType) {
+        existing.__labMineralType = newType
+        existing.__labMineralColor = mineralType ? resourceColor(mineralType) : undefined
+        updateLabFill(existing, calcCenterFillFraction(energy, energyCap), calcCenterFillFraction(mineral, mineralCap))
+      }
+      if (existing.__labEnergy !== energy || existing.__labEnergyCap !== energyCap ||
+          existing.__labMineral !== mineral || existing.__labMineralCap !== mineralCap) {
+        const fromE = existing.__labEnergy ?? 0
+        const fromECap = existing.__labEnergyCap ?? energyCap
+        const fromM = existing.__labMineral ?? 0
+        const fromMCap = existing.__labMineralCap ?? mineralCap
+        existing.__labEnergy = energy
+        existing.__labEnergyCap = energyCap
+        existing.__labMineral = mineral
+        existing.__labMineralCap = mineralCap
+        this.startLabFillAnimation(id, existing, fromE, fromECap, fromM, fromMCap, energy, energyCap, mineral, mineralCap)
+      }
+      existing.__labCooldownTime = cooldownEnd(obj)
+    }
+    if (obj.type === 'nuker') {
+      const { energy, energyCap, ghodium, ghodiumCap } = getNukerContents(obj)
+      if (existing.__nukerEnergy !== energy || existing.__nukerEnergyCap !== energyCap ||
+          existing.__nukerGhodium !== ghodium || existing.__nukerGhodiumCap !== ghodiumCap) {
+        const fromE = existing.__nukerEnergy ?? 0
+        const fromECap = existing.__nukerEnergyCap ?? energyCap
+        const fromG = existing.__nukerGhodium ?? 0
+        const fromGCap = existing.__nukerGhodiumCap ?? ghodiumCap
+        existing.__nukerEnergy = energy
+        existing.__nukerEnergyCap = energyCap
+        existing.__nukerGhodium = ghodium
+        existing.__nukerGhodiumCap = ghodiumCap
+        this.startNukerFillAnimation(id, existing, fromE, fromECap, fromG, fromGCap, energy, energyCap, ghodium, ghodiumCap)
+      }
+    }
+    if (obj.type === 'powerSpawn') {
+      const { power, powerCap } = getPowerSpawnPower(obj)
+      if (existing.__powerSpawnPower !== power || existing.__powerSpawnPowerCap !== powerCap) {
+        const fromPower = existing.__powerSpawnPower ?? 0
+        const fromCap = existing.__powerSpawnPowerCap ?? powerCap
+        existing.__powerSpawnPower = power
+        existing.__powerSpawnPowerCap = powerCap
+        this.startPowerSpawnPowerAnimation(id, existing, fromPower, fromCap, power, powerCap)
+      }
+    }
+    if (obj.type === 'extractor') {
+      existing.__extractorActive = onCooldown(obj)
+    }
+    if (obj.type === 'factory') {
+      const { bands, used, capacity } = getStoreBands(obj)
+      const level = typeof obj.level === 'number' ? obj.level : 0
+      if (existing.__factoryLevel !== level && existing.__factoryRingG) {
+        existing.__factoryLevel = level
+        drawFactoryRing(existing.__factoryRingG, level)
+      }
+      // Absolute cooldownTime; the ticker evaluates it live and resets on expiry.
+      existing.__factoryCooldownEnd = cooldownEnd(obj)
+      if (existing.__factoryUsed !== used || existing.__factoryCapacity !== capacity) {
+        const fromUsed = existing.__factoryUsed ?? 0
+        const fromCap = existing.__factoryCapacity ?? capacity
+        existing.__factoryBands = bands
+        existing.__factoryUsed = used
+        existing.__factoryCapacity = capacity
+        this.startFactoryFillAnimation(id, existing, fromUsed, fromCap, used, capacity)
+      } else if (!bandsEqual(existing.__factoryBands, bands)) {
+        existing.__factoryBands = bands
+        updateFactoryFill(existing, calcFactoryFillHeight(used, capacity))
+      }
+    }
+    if (obj.type === 'controller') {
+      const level         = typeof obj.level         === 'number' ? obj.level         : 0
+      const progress      = typeof obj.progress      === 'number' ? obj.progress      : 0
+      const progressTotal = typeof obj.progressTotal === 'number' ? obj.progressTotal : 0
+      const newResObj     = obj.reservation as { user?: string } | undefined
+      const newUserId     = typeof obj.user === 'string' ? obj.user
+        : typeof newResObj?.user === 'string' ? newResObj.user
+        : undefined
+      if (existing.__ctrlUserId !== newUserId) {
+        this.container.removeChild(existing)
+        destroyVisual(existing)
+        this.objects.delete(id)
+        this.createVisual(id, obj)
+        return
+      }
+      if (existing.__ctrlLevel !== level || existing.__ctrlProgress !== progress || existing.__ctrlProgressTotal !== progressTotal) {
+        if (existing.__ctrlSegSprites) {
+          if (!this.instantMode) {
+            if (fullReconcile) {
+              // A full snapshot re-sends progress on nearly every tick (history playback,
+              // resubscribe), so only a level-up flashes there; a diff flashes the next
+              // segment whenever progress grows.
+              if (level > (existing.__ctrlLevel ?? 0) && level > 0) {
+                this.ctrlFlashAnimations.set(id, { segIndex: level - 1, startTime: performance.now(), duration: 500 })
+              }
+            } else if (level < 8 && progress > (existing.__ctrlProgress ?? 0)) {
+              this.ctrlFlashAnimations.set(id, { segIndex: level, startTime: performance.now(), duration: 400 })
+            }
+          }
+          updateControllerSegSprites(existing, level, progress, progressTotal)
+        } else if (existing.__ctrlSegGraphics) {
+          drawControllerSegments(existing.__ctrlSegGraphics, TILE_SIZE / 2, TILE_SIZE / 2, CTRL_SEG_OUT, CTRL_SEG_IN, level, progress, progressTotal)
+        }
+        existing.__ctrlLevel         = level
+        existing.__ctrlProgress      = progress
+        existing.__ctrlProgressTotal = progressTotal
+      }
+      const newDt = typeof obj.downgradeTime === 'number' ? obj.downgradeTime : undefined
+      if (existing.__ctrlDowngradeTime !== newDt) existing.__ctrlDowngradeTime = newDt
+    }
+    if (obj.type === 'source') {
+      const { energy, capacity } = getSourceEnergy(obj)
+      if (existing.__sourceEnergy !== energy || existing.__sourceCapacity !== capacity) {
+        this.startSourceAnimation(id, existing, existing.__sourceEnergy ?? 0, existing.__sourceCapacity ?? capacity, energy, capacity)
+        existing.__sourceEnergy = energy
+        existing.__sourceCapacity = capacity
+      }
+    }
+    if (obj.type === 'constructionSite') {
+      const progress      = typeof obj.progress      === 'number' ? obj.progress      : 0
+      const progressTotal = typeof obj.progressTotal === 'number' ? obj.progressTotal : 1
+      if (existing.__csProgress !== progress || existing.__csProgressTotal !== progressTotal) {
+        if (existing.__csFillGraphics) {
+          drawCSProgress(existing.__csFillGraphics, TILE_SIZE / 2, TILE_SIZE / 2, CS_FILL_R, progress, progressTotal, existing.__csColor ?? CS_OWN)
+        }
+        existing.__csProgress      = progress
+        existing.__csProgressTotal = progressTotal
+      }
+    }
+    if (obj.type === 'powerBank') {
+      const power = getPowerBankPower(obj)
+      if (existing.__powerBankPower !== power) {
+        existing.__powerBankPower = power
+        existing.__powerBankRadius = calcPowerBankRadius(power)
+      }
+    }
+  }
+
   update(objects: RoomObjectMap, diff?: RoomObjectDiff, users?: Record<string, { _id: string; username: string; badge?: Badge }>, gameTime?: number): void {
     if (users) {
       this.users = users
@@ -665,267 +938,7 @@ export class ObjectLayer {
           if (!existing) {
             this.createVisual(id, obj)
           } else {
-            const tx = obj.x * TILE_SIZE
-            const ty = obj.y * TILE_SIZE
-            if (obj.type === 'creep') {
-              const dx = obj.x - (existing.__tileX ?? obj.x)
-              const dy = obj.y - (existing.__tileY ?? obj.y)
-              if (dx !== 0 || dy !== 0) {
-                existing.__angle = Math.atan2(dy, dx)
-                setCreepFacing(existing, existing.__angle)
-              }
-              existing.__tileX = obj.x
-              existing.__tileY = obj.y
-              if (this.instantMode) {
-                existing.position.set(tx, ty)
-                existing.__targetX = undefined
-                existing.__targetY = undefined
-                existing.__moveStartX = undefined
-                existing.__moveStartY = undefined
-                existing.__moveStartT = undefined
-                existing.__moveDur = undefined
-              } else if (existing.x !== tx || existing.y !== ty) {
-                existing.__targetX = tx
-                existing.__targetY = ty
-                existing.__moveStartX = existing.x
-                existing.__moveStartY = existing.y
-                existing.__moveStartT = performance.now()
-                existing.__moveDur = this.moveDuration
-              }
-              const { used, capacity } = getCreepStore(obj)
-              if (existing.__creepUsed !== used || existing.__creepCapacity !== capacity) {
-                this.startCreepFillAnimation(id, existing, existing.__creepUsed ?? 0, existing.__creepCapacity ?? capacity, used, capacity)
-                existing.__creepUsed = used
-                existing.__creepCapacity = capacity
-              }
-              // Re-tier on the spawning → born transition (and vice-versa).
-              const cz = computeZIndex(obj)
-              if (existing.zIndex !== cz) existing.zIndex = cz
-              // Creep decorations skip spawning creeps, so that transition changes what applies.
-              if (existing.__decoSpawning !== (obj.spawning === true)) this.decorate(existing, obj)
-            } else if (obj.type === 'flag') {
-              const newColorIdx = typeof obj.color === 'number' ? obj.color : 0
-              const newSecColorIdx = typeof obj.secondaryColor === 'number' ? obj.secondaryColor : 0
-              const colorChanged =
-                existing.__flagColor !== newColorIdx ||
-                existing.__flagSecondaryColor !== newSecColorIdx
-              if (colorChanged) {
-                this.container.removeChild(existing)
-                destroyVisual(existing)
-                this.objects.delete(id)
-                this.createVisual(id, obj)
-              } else {
-                existing.position.set(tx, ty)
-              }
-            } else {
-              existing.position.set(tx, ty)
-            }
-
-            if (obj.type === 'extension') {
-              const { energy, capacity } = getExtensionEnergy(obj)
-              const ext = existing as ContainerWithTarget & { __extEnergy?: number; __extCapacity?: number }
-              if (ext.__extEnergy !== energy || ext.__extCapacity !== capacity) {
-                this.startExtAnimation(
-                  id,
-                  existing,
-                  ext.__extEnergy ?? 0,
-                  ext.__extCapacity ?? capacity,
-                  energy,
-                  capacity,
-                )
-                ext.__extEnergy = energy
-                ext.__extCapacity = capacity
-              }
-            }
-            if (obj.type === 'link') {
-              const { energy, capacity } = getExtensionEnergy(obj)
-              if (existing.__linkEnergy !== energy || existing.__linkCapacity !== capacity) {
-                this.startLinkAnimation(id, existing, existing.__linkEnergy ?? 0, existing.__linkCapacity ?? capacity, energy, capacity)
-                existing.__linkEnergy = energy
-                existing.__linkCapacity = capacity
-              }
-            }
-            if (obj.type === 'tower') {
-              const { energy, capacity } = getExtensionEnergy(obj)
-              if (existing.__towerEnergy !== energy || existing.__towerCapacity !== capacity) {
-                this.startTowerFillAnimation(id, existing, existing.__towerEnergy ?? 0, existing.__towerCapacity ?? capacity, energy, capacity)
-                existing.__towerEnergy = energy
-                existing.__towerCapacity = capacity
-              }
-            }
-            if (obj.type === 'storage') {
-              const { bands, used, capacity } = getStoreBands(obj)
-              if (existing.__storageUsed !== used || existing.__storageCapacity !== capacity) {
-                const fromUsed = existing.__storageUsed ?? 0
-                const fromCap = existing.__storageCapacity ?? capacity
-                existing.__storageBands = bands
-                existing.__storageUsed = used
-                existing.__storageCapacity = capacity
-                this.startStorageFillAnimation(id, existing, fromUsed, fromCap, used, capacity)
-              } else if (!bandsEqual(existing.__storageBands, bands)) {
-                existing.__storageBands = bands
-                updateStorageFill(existing, calcStorageFillHeight(used, capacity))
-              }
-            }
-            if (obj.type === 'container') {
-              const { bands, used, capacity } = getStoreBands(obj)
-              if (existing.__containerUsed !== used || existing.__containerCapacity !== capacity) {
-                const fromUsed = existing.__containerUsed ?? 0
-                const fromCap = existing.__containerCapacity ?? capacity
-                existing.__containerBands = bands
-                existing.__containerUsed = used
-                existing.__containerCapacity = capacity
-                this.startContainerFillAnimation(id, existing, fromUsed, fromCap, used, capacity)
-              } else if (!bandsEqual(existing.__containerBands, bands)) {
-                existing.__containerBands = bands
-                updateContainerFill(existing, calcContainerFillHeight(used, capacity))
-              }
-            }
-            if (obj.type === 'terminal') {
-              const { used, capacity, dominant: dom } = getStoreBands(obj)
-              const dominant = dom ?? undefined
-              if (existing.__terminalDominant !== dominant) {
-                existing.__terminalDominant = dominant
-                existing.__terminalFillColor = dominant ? resourceColor(dominant) : ST_ENERGY
-                updateTerminalFill(existing, calcCenterFillFraction(used, capacity))
-              }
-              if (existing.__terminalUsed !== used || existing.__terminalCapacity !== capacity) {
-                const fromUsed = existing.__terminalUsed ?? 0
-                const fromCap = existing.__terminalCapacity ?? capacity
-                existing.__terminalUsed = used
-                existing.__terminalCapacity = capacity
-                this.startTerminalFillAnimation(id, existing, fromUsed, fromCap, used, capacity)
-              }
-              existing.__terminalCooldownTime = cooldownEnd(obj)
-            }
-            if (obj.type === 'lab') {
-              const { energy, energyCap, mineralType, mineral, mineralCap } = getLabContents(obj)
-              const newType = mineralType ?? undefined
-              if (existing.__labMineralType !== newType) {
-                existing.__labMineralType = newType
-                existing.__labMineralColor = mineralType ? resourceColor(mineralType) : undefined
-                updateLabFill(existing, calcCenterFillFraction(energy, energyCap), calcCenterFillFraction(mineral, mineralCap))
-              }
-              if (existing.__labEnergy !== energy || existing.__labEnergyCap !== energyCap ||
-                  existing.__labMineral !== mineral || existing.__labMineralCap !== mineralCap) {
-                const fromE = existing.__labEnergy ?? 0
-                const fromECap = existing.__labEnergyCap ?? energyCap
-                const fromM = existing.__labMineral ?? 0
-                const fromMCap = existing.__labMineralCap ?? mineralCap
-                existing.__labEnergy = energy
-                existing.__labEnergyCap = energyCap
-                existing.__labMineral = mineral
-                existing.__labMineralCap = mineralCap
-                this.startLabFillAnimation(id, existing, fromE, fromECap, fromM, fromMCap, energy, energyCap, mineral, mineralCap)
-              }
-              existing.__labCooldownTime = cooldownEnd(obj)
-            }
-            if (obj.type === 'nuker') {
-              const { energy, energyCap, ghodium, ghodiumCap } = getNukerContents(obj)
-              if (existing.__nukerEnergy !== energy || existing.__nukerEnergyCap !== energyCap ||
-                  existing.__nukerGhodium !== ghodium || existing.__nukerGhodiumCap !== ghodiumCap) {
-                const fromE = existing.__nukerEnergy ?? 0
-                const fromECap = existing.__nukerEnergyCap ?? energyCap
-                const fromG = existing.__nukerGhodium ?? 0
-                const fromGCap = existing.__nukerGhodiumCap ?? ghodiumCap
-                existing.__nukerEnergy = energy
-                existing.__nukerEnergyCap = energyCap
-                existing.__nukerGhodium = ghodium
-                existing.__nukerGhodiumCap = ghodiumCap
-                this.startNukerFillAnimation(id, existing, fromE, fromECap, fromG, fromGCap, energy, energyCap, ghodium, ghodiumCap)
-              }
-            }
-            if (obj.type === 'powerSpawn') {
-              const { power, powerCap } = getPowerSpawnPower(obj)
-              if (existing.__powerSpawnPower !== power || existing.__powerSpawnPowerCap !== powerCap) {
-                const fromPower = existing.__powerSpawnPower ?? 0
-                const fromCap = existing.__powerSpawnPowerCap ?? powerCap
-                existing.__powerSpawnPower = power
-                existing.__powerSpawnPowerCap = powerCap
-                this.startPowerSpawnPowerAnimation(id, existing, fromPower, fromCap, power, powerCap)
-              }
-            }
-            if (obj.type === 'extractor') {
-              existing.__extractorActive = onCooldown(obj)
-            }
-            if (obj.type === 'factory') {
-              const { bands, used, capacity } = getStoreBands(obj)
-              const level = typeof obj.level === 'number' ? obj.level : 0
-              if (existing.__factoryLevel !== level && existing.__factoryRingG) {
-                existing.__factoryLevel = level
-                drawFactoryRing(existing.__factoryRingG, level)
-              }
-              // Absolute cooldownTime; the ticker evaluates it live and resets on expiry.
-              existing.__factoryCooldownEnd = cooldownEnd(obj)
-              if (existing.__factoryUsed !== used || existing.__factoryCapacity !== capacity) {
-                const fromUsed = existing.__factoryUsed ?? 0
-                const fromCap = existing.__factoryCapacity ?? capacity
-                existing.__factoryBands = bands
-                existing.__factoryUsed = used
-                existing.__factoryCapacity = capacity
-                this.startFactoryFillAnimation(id, existing, fromUsed, fromCap, used, capacity)
-              } else if (!bandsEqual(existing.__factoryBands, bands)) {
-                existing.__factoryBands = bands
-                updateFactoryFill(existing, calcFactoryFillHeight(used, capacity))
-              }
-            }
-            if (obj.type === 'controller') {
-              const level         = typeof obj.level         === 'number' ? obj.level         : 0
-              const progress      = typeof obj.progress      === 'number' ? obj.progress      : 0
-              const progressTotal = typeof obj.progressTotal === 'number' ? obj.progressTotal : 0
-              const newResObj     = obj.reservation as { user?: string } | undefined
-              const newUserId     = typeof obj.user === 'string' ? obj.user
-                : typeof newResObj?.user === 'string' ? newResObj.user
-                : undefined
-              if (existing.__ctrlUserId !== newUserId) {
-                this.container.removeChild(existing)
-                destroyVisual(existing)
-                this.objects.delete(id)
-                this.createVisual(id, obj)
-                continue
-              }
-              if (existing.__ctrlLevel !== level || existing.__ctrlProgress !== progress || existing.__ctrlProgressTotal !== progressTotal) {
-                if (existing.__ctrlSegSprites) {
-                  if (!this.instantMode && level < 8 && progress > (existing.__ctrlProgress ?? 0)) {
-                    this.ctrlFlashAnimations.set(id, { segIndex: level, startTime: performance.now(), duration: 400 })
-                  }
-                  updateControllerSegSprites(existing, level, progress, progressTotal)
-                } else if (existing.__ctrlSegGraphics) {
-                  drawControllerSegments(existing.__ctrlSegGraphics, TILE_SIZE / 2, TILE_SIZE / 2, CTRL_SEG_OUT, CTRL_SEG_IN, level, progress, progressTotal)
-                }
-                existing.__ctrlLevel         = level
-                existing.__ctrlProgress      = progress
-                existing.__ctrlProgressTotal = progressTotal
-              }
-              const newDt = typeof obj.downgradeTime === 'number' ? obj.downgradeTime : undefined
-              if (existing.__ctrlDowngradeTime !== newDt) existing.__ctrlDowngradeTime = newDt
-            }
-            if (obj.type === 'source') {
-              const { energy, capacity } = getSourceEnergy(obj)
-              if (existing.__sourceEnergy !== energy || existing.__sourceCapacity !== capacity) {
-                this.startSourceAnimation(id, existing, existing.__sourceEnergy ?? 0, existing.__sourceCapacity ?? capacity, energy, capacity)
-                existing.__sourceEnergy = energy
-                existing.__sourceCapacity = capacity
-              }
-            }
-            if (obj.type === 'constructionSite') {
-              const progress      = typeof obj.progress      === 'number' ? obj.progress      : 0
-              const progressTotal = typeof obj.progressTotal === 'number' ? obj.progressTotal : 1
-              if (existing.__csProgress !== progress || existing.__csProgressTotal !== progressTotal) {
-                if (existing.__csFillGraphics) {
-                  drawCSProgress(existing.__csFillGraphics, TILE_SIZE / 2, TILE_SIZE / 2, CS_FILL_R, progress, progressTotal, existing.__csColor ?? CS_OWN)
-                }
-                existing.__csProgress      = progress
-                existing.__csProgressTotal = progressTotal
-              }
-            }
-            if (obj.type === 'powerBank') {
-              const power = getPowerBankPower(obj)
-              if (existing.__powerBankPower !== power) {
-                existing.__powerBankPower = power
-                existing.__powerBankRadius = calcPowerBankRadius(power)
-              }
-            }
+            this.updateExistingVisual(id, obj, existing, false)
           }
         }
       }
@@ -943,149 +956,7 @@ export class ObjectLayer {
         if (!existing) {
           this.createVisual(id, obj)
         } else {
-          const tx = obj.x * TILE_SIZE
-          const ty = obj.y * TILE_SIZE
-          if (obj.type === 'creep') {
-            const dx = obj.x - (existing.__tileX ?? obj.x)
-            const dy = obj.y - (existing.__tileY ?? obj.y)
-            if (dx !== 0 || dy !== 0) {
-              existing.__angle = Math.atan2(dy, dx)
-              setCreepFacing(existing, existing.__angle)
-            }
-            existing.__tileX = obj.x
-            existing.__tileY = obj.y
-            if (this.instantMode) {
-              existing.position.set(tx, ty)
-              existing.__targetX = undefined
-              existing.__targetY = undefined
-              existing.__moveStartX = undefined
-              existing.__moveStartY = undefined
-              existing.__moveStartT = undefined
-              existing.__moveDur = undefined
-            } else if (existing.x !== tx || existing.y !== ty) {
-              existing.__targetX = tx
-              existing.__targetY = ty
-              existing.__moveStartX = existing.x
-              existing.__moveStartY = existing.y
-              existing.__moveStartT = performance.now()
-              existing.__moveDur = this.moveDuration
-            }
-            const { used, capacity } = getCreepStore(obj)
-            if (existing.__creepUsed !== used || existing.__creepCapacity !== capacity) {
-              this.startCreepFillAnimation(id, existing, existing.__creepUsed ?? 0, existing.__creepCapacity ?? capacity, used, capacity)
-              existing.__creepUsed = used
-              existing.__creepCapacity = capacity
-            }
-            // Re-tier on the spawning → born transition (and vice-versa).
-            const cz = computeZIndex(obj)
-            if (existing.zIndex !== cz) existing.zIndex = cz
-          } else if (obj.type === 'flag') {
-            const newColorIdx = typeof obj.color === 'number' ? obj.color : 0
-            const newSecColorIdx = typeof obj.secondaryColor === 'number' ? obj.secondaryColor : 0
-            const colorChanged =
-              existing.__flagColor !== newColorIdx ||
-              existing.__flagSecondaryColor !== newSecColorIdx
-            if (colorChanged) {
-              this.container.removeChild(existing)
-              destroyVisual(existing)
-              this.objects.delete(id)
-              this.createVisual(id, obj)
-            } else {
-              existing.position.set(tx, ty)
-            }
-          } else {
-            existing.position.set(tx, ty)
-          }
-
-          if (obj.type === 'extension') {
-            const { energy, capacity } = getExtensionEnergy(obj)
-            const ext = existing as ContainerWithTarget & { __extEnergy?: number; __extCapacity?: number }
-            if (ext.__extEnergy !== energy || ext.__extCapacity !== capacity) {
-              this.startExtAnimation(
-                id,
-                existing,
-                ext.__extEnergy ?? 0,
-                ext.__extCapacity ?? capacity,
-                energy,
-                capacity,
-              )
-              ext.__extEnergy = energy
-              ext.__extCapacity = capacity
-            }
-          }
-          if (obj.type === 'link') {
-            const { energy, capacity } = getExtensionEnergy(obj)
-            if (existing.__linkEnergy !== energy || existing.__linkCapacity !== capacity) {
-              this.startLinkAnimation(id, existing, existing.__linkEnergy ?? 0, existing.__linkCapacity ?? capacity, energy, capacity)
-              existing.__linkEnergy = energy
-              existing.__linkCapacity = capacity
-            }
-          }
-          if (obj.type === 'tower') {
-            const { energy, capacity } = getExtensionEnergy(obj)
-            if (existing.__towerEnergy !== energy || existing.__towerCapacity !== capacity) {
-              this.startTowerFillAnimation(id, existing, existing.__towerEnergy ?? 0, existing.__towerCapacity ?? capacity, energy, capacity)
-              existing.__towerEnergy = energy
-              existing.__towerCapacity = capacity
-            }
-          }
-          if (obj.type === 'controller') {
-            const level         = typeof obj.level         === 'number' ? obj.level         : 0
-            const progress      = typeof obj.progress      === 'number' ? obj.progress      : 0
-            const progressTotal = typeof obj.progressTotal === 'number' ? obj.progressTotal : 0
-            const newResObj     = obj.reservation as { user?: string } | undefined
-            const newUserId     = typeof obj.user === 'string' ? obj.user
-              : typeof newResObj?.user === 'string' ? newResObj.user
-              : undefined
-            if (existing.__ctrlUserId !== newUserId) {
-              this.container.removeChild(existing)
-              destroyVisual(existing)
-              this.objects.delete(id)
-              this.createVisual(id, obj)
-              continue
-            }
-            if (existing.__ctrlLevel !== level || existing.__ctrlProgress !== progress || existing.__ctrlProgressTotal !== progressTotal) {
-              if (existing.__ctrlSegSprites) {
-                if (!this.instantMode && level > (existing.__ctrlLevel ?? 0) && level > 0) {
-                  this.ctrlFlashAnimations.set(id, { segIndex: level - 1, startTime: performance.now(), duration: 500 })
-                }
-                updateControllerSegSprites(existing, level, progress, progressTotal)
-              } else if (existing.__ctrlSegGraphics) {
-                drawControllerSegments(existing.__ctrlSegGraphics, TILE_SIZE / 2, TILE_SIZE / 2, CTRL_SEG_OUT, CTRL_SEG_IN, level, progress, progressTotal)
-              }
-              existing.__ctrlLevel         = level
-              existing.__ctrlProgress      = progress
-              existing.__ctrlProgressTotal = progressTotal
-            }
-            const newDt = typeof obj.downgradeTime === 'number' ? obj.downgradeTime : undefined
-            if (existing.__ctrlDowngradeTime !== newDt) existing.__ctrlDowngradeTime = newDt
-          }
-          if (obj.type === 'source') {
-            const { energy, capacity } = getSourceEnergy(obj)
-            if (existing.__sourceEnergy !== energy || existing.__sourceCapacity !== capacity) {
-              this.startSourceAnimation(id, existing, existing.__sourceEnergy ?? 0, existing.__sourceCapacity ?? capacity, energy, capacity)
-              existing.__sourceEnergy = energy
-              existing.__sourceCapacity = capacity
-            }
-          }
-          if (obj.type === 'constructionSite') {
-            const progress      = typeof obj.progress      === 'number' ? obj.progress      : 0
-            const progressTotal = typeof obj.progressTotal === 'number' ? obj.progressTotal : 1
-            if (existing.__csProgress !== progress || existing.__csProgressTotal !== progressTotal) {
-              if (existing.__csFillGraphics) {
-                drawCSProgress(existing.__csFillGraphics, TILE_SIZE / 2, TILE_SIZE / 2, CS_FILL_R, progress, progressTotal, existing.__csColor ?? CS_OWN)
-              }
-              existing.__csProgress      = progress
-              existing.__csProgressTotal = progressTotal
-            }
-          }
-          if (obj.type === 'powerBank') {
-            const power = typeof obj.power === 'number' ? obj.power : 0
-            if (existing.__powerBankPower !== power) {
-              existing.__powerBankPower = power
-              existing.__powerBankRadius = calcPowerBankRadius(power)
-            }
-          }
+          this.updateExistingVisual(id, obj, existing, true)
         }
       }
 
