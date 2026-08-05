@@ -64,11 +64,12 @@ export function OAuthUsernameForm(props: {
   providerLabel: string
   submitting: boolean
   error: string | null
-  onSubmit: (username: string, email?: string) => void
+  onSubmit: (username: string, email?: string, disableNotifications?: boolean) => void
   onCancel: () => void
 }) {
   const [username, setUsername] = createSignal('')
   const [email, setEmail] = createSignal('')
+  const [disableNotifications, setDisableNotifications] = createSignal(false)
 
   const usernameState = useUsernameCheck(() => props.url, username)
 
@@ -80,7 +81,7 @@ export function OAuthUsernameForm(props: {
   const handleSubmit = (e: Event) => {
     e.preventDefault()
     if (!canSubmit()) return
-    props.onSubmit(username(), email() || undefined)
+    props.onSubmit(username(), email() || undefined, disableNotifications())
   }
 
   return (
@@ -118,6 +119,16 @@ export function OAuthUsernameForm(props: {
           style={inputStyle}
           disabled={props.submitting}
         />
+      </label>
+
+      <label style={{ display: 'flex', 'align-items': 'center', gap: '8px', cursor: 'pointer' }}>
+        <input
+          type="checkbox"
+          checked={disableNotifications()}
+          onChange={(e) => setDisableNotifications(e.currentTarget.checked)}
+          disabled={props.submitting}
+        />
+        <span style={{ 'font-size': '12px', color: '#8b949e' }}>Disable email notifications</span>
       </label>
 
       {props.error && (
