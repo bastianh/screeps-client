@@ -1,5 +1,26 @@
 # screeps-client
 
+## 0.24.0
+
+### Minor Changes
+
+- 01a3551: Offer badge symbols granted by decorations in the badge editor. A worn `badge`-type decoration (xxscreeps decorations mod) grants an svg symbol; the badge editor now lists those beside the 24 numbered shapes and saves them through the existing `/api/user/badge` route. `ApiRoomDecorationDef` gained the `badge` field and the `BadgeSymbol` type is exported.
+- 7d2e2f4: Add a "Disable email notifications" checkbox to the OAuth registration form (Steam, Discord, ...). Mirrors the official client's registration option, but instead of dropping the email entirely it posts `{ disabled: true }` to `/api/user/notify-prefs` right after `set-username`, so the address stays on the account for login/recovery while notification emails are off from day one. `setNotifyPrefsWithToken` is exported from screeps-connectivity for bare-token use before a client session exists; the call is best-effort and never blocks the login.
+- e74c83c: Upload and manage binary WebAssembly modules in the code editor. The module list gains an upload button for `.wasm` files; a binary module shows up as `<name>.wasm` and opens a summary panel (size, download, replace) instead of the text editor. On save it is sent through `/api/user/code` as a `{ binary: <base64> }` value, the format the official server stores WASM modules in. screeps-connectivity now types the code endpoints: `code.get` returns the new `ApiUserCodeResponse`, and `code.set` plus the `user:code` socket event carry `ApiCodeModule` (`string | { binary: string }`) — both types are exported.
+
+### Patch Changes
+
+- 40f5076: Room renderer fixes and cleanups:
+
+  - Storage, container, terminal, lab, nuker, powerSpawn, extractor and factory visuals now update during history playback and full reconciles — the diff and full update paths share one per-object update function.
+  - Right/middle clicks no longer count as tile clicks or start a pan; navigation arrows trigger on tap instead of pointer-down, so a touch drag starting on one pans instead of navigating.
+  - The PixiJS application is destroyed instead of leaking a WebGL context when the room view unmounts while the renderer is still initialising.
+  - Canvas selection rings/boxes now follow the selection store, so a selected creep dying or a sidebar deselect clears its overlay.
+  - Room updates apply their signals in one batch, so the render effect runs once per tick instead of several times.
+  - Enabling the dark overlay builds the lightmap immediately instead of waiting up to a tick.
+  - A failed flag move restores the flag at its previous position instead of silently deleting it.
+  - The per-frame ticker consolidates its object loops, and the zoom limit is a single constant.
+
 ## 0.23.0
 
 ### Minor Changes
