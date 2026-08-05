@@ -1,18 +1,22 @@
-// Node 22+ defines a globalThis.localStorage getter that yields undefined unless
-// --localstorage-file is passed, and it also shadows the jsdom environment's storage.
-// Install a Map-backed stub whenever no usable localStorage exists — settingsStore
-// reads it at module top level, so imports crash without one.
-if (typeof globalThis.localStorage?.getItem !== 'function') {
-  const store = new Map<string, string>()
-  Object.defineProperty(globalThis, 'localStorage', {
-    configurable: true,
-    value: {
-      getItem: (key: string) => store.get(key) ?? null,
-      setItem: (key: string, value: string) => { store.set(key, String(value)) },
-      removeItem: (key: string) => { store.delete(key) },
-      clear: () => { store.clear() },
-      key: (index: number) => [...store.keys()][index] ?? null,
-      get length() { return store.size },
-    },
-  })
+// Vitest runs in a plain Node environment where localStorage/sessionStorage are
+// undefined (Node only provides localStorage behind --localstorage-file). Store
+// modules read localStorage at import time (e.g. settingsStore's boolSetting),
+// so back both with an in-memory Storage before any test module loads.
+
+function memoryStorage(): Storage {
+  const data = new Map<string, string>()
+  return {
+    get length() { return data.size },
+    clear: () => { data.clear() },
+    getItem: (key: string) => data.get(key) ?? null,
+    key: (index: number) => [...data.keys()][index] ?? null,
+    removeItem: (key: string) => { data.delete(key) },
+    setItem: (key: string, value: string) => { data.set(key, String(value)) },
+  }
+}
+
+for (const name of ['localStorage', 'sessionStorage'] as const) {
+  if (globalThis[name] === undefined) {
+    Object.defineProperty(globalThis, name, { value: memoryStorage(), configurable: true })
+  }
 }

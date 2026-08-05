@@ -1,5 +1,5 @@
 import { createSignal, onCleanup } from 'solid-js'
-import { fetchAuthMeWithToken, completeProviderRegistration } from 'screeps-connectivity'
+import { fetchAuthMeWithToken, completeProviderRegistration, setNotifyPrefsWithToken } from 'screeps-connectivity'
 import { isProxy, toProxyUrl } from './proxy.js'
 
 export interface OAuthPendingRegistration {
@@ -56,13 +56,18 @@ export function useOAuthLogin(provider: string, onAuthenticated: (result: { url:
     onCleanup(cleanup)
   }
 
-  const completeRegistration = async (username: string, email?: string) => {
+  const completeRegistration = async (username: string, email?: string, disableNotifications?: boolean) => {
     const p = pending()
     if (!p) return
     setSubmitting(true)
     setRegError(null)
     try {
       const { token } = await completeProviderRegistration(p.url, p.token, username, email)
+      if (disableNotifications) {
+        // Best-effort: the account already exists at this point, so a failure here
+        // (e.g. server without /api/user/notify-prefs) must not block the login.
+        try { await setNotifyPrefsWithToken(p.url, token, { disabled: true }) } catch { /* ignore */ }
+      }
       setPending(null)
       onAuthenticated({ url: p.url, token })
     } catch (err) {

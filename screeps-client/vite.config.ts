@@ -98,7 +98,7 @@ export default defineConfig(({ mode }) => {
       },
     },
     test: {
-      setupFiles: ['tests/setup.ts'],
+      setupFiles: ['./tests/setup.ts'],
     },
   }
 })

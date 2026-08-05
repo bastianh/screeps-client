@@ -12,7 +12,7 @@ import type {
     WorldStatus
 } from './game.js'
 import type {MapStatsRoomData} from '../stores/MapStatsStore.js'
-import type {ApiRoomDecorationItem} from './api.js'
+import type {ApiCodeModule, ApiRoomDecorationItem} from './api.js'
 
 export interface RoomStoreEvents {
     'room:update': {
@@ -46,7 +46,7 @@ export interface UserStoreEvents {
     'user:worldStatus': { status: WorldStatus }
     'user:cpu': CpuStats
     'user:console': { messages: ConsoleMessage }
-    'user:code': { branch: string; modules: Record<string, string> }
+    'user:code': { branch: string; modules: Record<string, ApiCodeModule> }
     'user:setActiveBranch': { activeName: 'activeWorld' | 'activeSim'; branch: string }
     'user:stream': Record<string, unknown>
     'user:memory': { path: string; shard: string | null; value: unknown }

@@ -958,7 +958,7 @@ The terrain string is always digit-encoded (`encoded=true` is sent automatically
 
 ```ts
 http.user.branches(): Promise<ApiUserBranchesResponse>
-http.user.code.get(branch): Promise<unknown>
+http.user.code.get(branch): Promise<ApiUserCodeResponse>
 http.user.code.set(branch, modules): Promise<unknown>
 http.user.memory.get(path, shard?): Promise<{ ok, data }>
 http.user.memory.set(path, value, shard?): Promise<unknown>
@@ -971,6 +971,8 @@ http.user.overview(interval, statName): Promise<unknown>
 http.user.worldStatus(): Promise<{ ok, status: 'normal' | 'lost' | 'empty' }>
 http.user.worldStartRoom(shard?): Promise<unknown>
 ```
+
+Module map values (`ApiCodeModule`) are either JS source strings or `{ binary: <base64> }` payloads for binary (WebAssembly) modules. `code.set` replaces the branch's whole module map.
 
 ### `client.http.leaderboard`
 

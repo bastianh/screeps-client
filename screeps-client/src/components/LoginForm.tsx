@@ -370,7 +370,7 @@ export function LoginForm() {
             providerLabel="Steam"
             submitting={steamLogin.submitting()}
             error={steamLogin.regError()}
-            onSubmit={(username, regEmail) => void steamLogin.completeRegistration(username, regEmail)}
+            onSubmit={(username, regEmail, disableNotifications) => void steamLogin.completeRegistration(username, regEmail, disableNotifications)}
             onCancel={() => { steamLogin.cancelRegistration(); setMode('login') }}
           />
         </Show>
@@ -381,7 +381,7 @@ export function LoginForm() {
             providerLabel="Discord"
             submitting={discordLogin.submitting()}
             error={discordLogin.regError()}
-            onSubmit={(username, regEmail) => void discordLogin.completeRegistration(username, regEmail)}
+            onSubmit={(username, regEmail, disableNotifications) => void discordLogin.completeRegistration(username, regEmail, disableNotifications)}
             onCancel={() => { discordLogin.cancelRegistration(); setMode('login') }}
           />
         </Show>

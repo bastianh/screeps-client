@@ -14,14 +14,22 @@
 //
 // Caveat: a hand-written JS module literally named `foo.ts` would be mistaken for
 // TS source. That collision is accepted — `.ts` is a deliberate convention here.
+//
+// Besides source strings the server also stores binary (WebAssembly) modules as
+// `{ binary: <base64> }` values. Those surface as `wasm` logical modules whose
+// `source` holds the base64 payload — never editable text.
 
-export type ModuleLang = 'js' | 'ts'
+export type ModuleLang = 'js' | 'ts' | 'wasm'
+
+/** Server-side module value: source text, or a base64-carried binary module. */
+export type ServerModule = string | { binary: string }
 
 export interface LogicalModule {
   /** Logical name as shown in the UI and required at runtime, e.g. `main`. */
   name: string
   lang: ModuleLang
-  /** What the editor edits: JS source for `js`, TS source for `ts`. */
+  /** What the editor edits: JS source for `js`, TS source for `ts`. For `wasm`
+   *  the base64 payload of the binary — displayed, never edited. */
   source: string
 }
 
@@ -40,16 +48,22 @@ export const displayName = (mod: LogicalModule) => `${mod.name}.${mod.lang}`
  * stays first if it is first on the server), with any TS-source-only modules
  * that lack a compiled sibling appended after.
  */
-export function parseServerModules(server: Record<string, string>): LogicalModule[] {
+export function parseServerModules(server: Record<string, ServerModule>): LogicalModule[] {
   const tsSources = new Map<string, string>()
   for (const [key, value] of Object.entries(server)) {
-    if (isTsKey(key)) tsSources.set(tsBase(key), value)
+    if (typeof value === 'string' && isTsKey(key)) tsSources.set(tsBase(key), value)
   }
 
   const modules: LogicalModule[] = []
   const seen = new Set<string>()
   // Runnable keys first, in their existing order.
   for (const [key, value] of Object.entries(server)) {
+    if (typeof value !== 'string') {
+      // Binary (WebAssembly) module — the value shape decides, not the key.
+      seen.add(key)
+      modules.push({ name: key, lang: 'wasm', source: value.binary })
+      continue
+    }
     if (isTsKey(key)) continue
     seen.add(key)
     if (tsSources.has(key)) {
@@ -76,8 +90,8 @@ export function parseServerModules(server: Record<string, string>): LogicalModul
 export function serializeModules(
   modules: LogicalModule[],
   compiled: Record<string, string>,
-): Record<string, string> {
-  const out: Record<string, string> = {}
+): Record<string, ServerModule> {
+  const out: Record<string, ServerModule> = {}
   for (const mod of modules) {
     if (mod.lang === 'ts') {
       if (!(mod.name in compiled)) {
@@ -85,6 +99,8 @@ export function serializeModules(
       }
       out[mod.name] = compiled[mod.name]
       out[mod.name + TS_SUFFIX] = mod.source
+    } else if (mod.lang === 'wasm') {
+      out[mod.name] = { binary: mod.source }
     } else {
       out[mod.name] = mod.source
     }

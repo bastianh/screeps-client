@@ -1,4 +1,4 @@
-import type { ServerVersion } from '../types/game.js'
+import type { NotifyPrefs, ServerVersion } from '../types/game.js'
 import type { DiscordFeature, ScreepsmodAuthFeature, ServerFeature, XxscreepsModClientFeature } from '../types/game.js'
 import type { ApiAuthMeResponse, ApiAuthModInfoResponse, ApiRegisterCheckResponse } from '../types/api.js'
 import { getFetch } from './fetchFn.js'
@@ -158,6 +158,27 @@ export async function completeProviderRegistration(
   const data = await res.json() as { ok?: number; error?: string }
   if (!res.ok || data.error) throw new Error(data.error ?? `HTTP ${res.status}`)
   return { token: res.headers.get('x-token') ?? token }
+}
+
+/**
+ * Set notification preferences using a bare token, without going through a full `ScreepsClient`.
+ * Used right after `completeProviderRegistration` to honor a "disable email notifications"
+ * choice made during signup, before any client session exists. Throws if the server
+ * returns an error response.
+ */
+export async function setNotifyPrefsWithToken(
+  url: string,
+  token: string,
+  prefs: Partial<NotifyPrefs>,
+): Promise<{ ok: number }> {
+  const res = await getFetch()(`${baseUrl(url)}api/user/notify-prefs`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Token': token, 'X-Username': token },
+    body: JSON.stringify(prefs),
+  })
+  const data = await res.json() as { ok?: number; error?: string }
+  if (!res.ok || data.error) throw new Error(data.error ?? `HTTP ${res.status}`)
+  return { ok: data.ok ?? 1 }
 }
 
 /**
