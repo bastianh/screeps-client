@@ -38,8 +38,18 @@ export class RoomTerrain {
     }
 }
 
+/**
+ * A badge symbol drawn from svg paths of its own instead of one of the 24 numbered
+ * shapes. Granted by `badge`-type decorations; `path2` may be empty for one-colour
+ * symbols. Both paths live in the 100×100 badge box.
+ */
+export interface BadgeSymbol {
+    path1: string
+    path2: string
+}
+
 export interface Badge {
-    type: number | { path1: string; path2: string }
+    type: number | BadgeSymbol
     color1: string | number
     color2: string | number
     color3: string | number

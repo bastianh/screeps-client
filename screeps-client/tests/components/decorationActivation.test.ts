@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import type { ApiRoomDecorationDef, ApiUserDecorationItem } from 'screeps-connectivity'
 import {
   buildActiveState, propEntries, needsRoom, collidingTypes, blockedRooms, roomKey,
-  findRoomOption, editorGroups, splitList, joinList,
+  findRoomOption, editorGroups, grantedBadgeSymbols, splitList, joinList,
 } from '../../src/components/inventory/activation'
 
 function decoration(partial: Partial<ApiRoomDecorationDef> = {}): ApiRoomDecorationDef {
@@ -220,5 +220,43 @@ describe('list properties', () => {
   it('drops empty entries rather than emitting a stray separator', () => {
     expect(joinList(['a', '', 'b'])).toBe('a!SEP!b')
     expect(splitList('a!SEP!!SEP!b')).toEqual(['a', 'b'])
+  })
+})
+
+describe('grantedBadgeSymbols()', () => {
+  const badgeItem = (
+    id: string,
+    symbol: { path1: string; path2: string } | undefined,
+    active: boolean,
+  ): ApiUserDecorationItem => ({
+    _id: id,
+    createdAt: '2024-01-01',
+    active: active ? {} : null,
+    decoration: { _id: `def-${id}`, type: 'badge', badge: symbol },
+  })
+
+  it('collects the symbols of active badge decorations only', () => {
+    const items = [
+      badgeItem('worn', { path1: 'M 0 0', path2: 'M 1 1' }, true),
+      badgeItem('owned', { path1: 'M 2 2', path2: '' }, false),
+      owned('placed', 'wallGraffiti', 'W1N1'),
+    ]
+    expect(grantedBadgeSymbols(items)).toEqual([{ path1: 'M 0 0', path2: 'M 1 1' }])
+  })
+
+  it('deduplicates identical symbols from separate grants', () => {
+    const items = [
+      badgeItem('a', { path1: 'M 0 0', path2: '' }, true),
+      badgeItem('b', { path1: 'M 0 0', path2: '' }, true),
+    ]
+    expect(grantedBadgeSymbols(items)).toHaveLength(1)
+  })
+
+  it('skips badge decorations granting no symbol', () => {
+    const items = [
+      badgeItem('empty', undefined, true),
+      badgeItem('blank', { path1: '', path2: '' }, true),
+    ]
+    expect(grantedBadgeSymbols(items)).toEqual([])
   })
 })

@@ -178,6 +178,13 @@ export function DecorationDialog(props: DialogProps) {
             </div>
           </Show>
 
+          <Show when={decoration().type === 'badge'}>
+            <div style={{ 'font-size': '11px', color: MUTED, 'margin-bottom': '12px' }}>
+              Activating this decoration unlocks its symbol in the badge editor.
+              Deactivating it removes the symbol from the editor, but a badge already saved with it stays as it is.
+            </div>
+          </Show>
+
           <Show when={requiresRoom()}>
             <Section title="Room">
               <Row label="Target">

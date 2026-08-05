@@ -519,6 +519,8 @@ export interface ApiRoomDecorationDef {
   tileScale?: number | string
   /** Target object type, `type === 'object'` only. */
   objectType?: string
+  /** The badge symbol this decoration grants while worn, `type === 'badge'` only. */
+  badge?: import('./game.js').BadgeSymbol
   [key: string]: unknown
 }
 
