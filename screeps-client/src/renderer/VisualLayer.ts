@@ -168,7 +168,8 @@ export class VisualLayer {
     ctx.beginPath()
     ctx.arc(tp(e.x), tp(e.y), (s.radius ?? 0.5) * TILE_SIZE, 0, 2 * Math.PI)
     if (s.fill && s.fill !== 'transparent') { ctx.fillStyle = s.fill; ctx.fill() }
-    if (s.stroke && s.strokeWidth) { ctx.strokeStyle = s.stroke; ctx.lineWidth = s.strokeWidth * TILE_SIZE; ctx.stroke() }
+    // Reference circle defaults: stroke undefined (no outline), strokeWidth 0.1 — a colour alone enables the stroke
+    if (s.stroke) { ctx.strokeStyle = s.stroke; ctx.lineWidth = (s.strokeWidth ?? 0.1) * TILE_SIZE; ctx.stroke() }
     ctx.restore()
   }
 
@@ -180,7 +181,8 @@ export class VisualLayer {
     ctx.beginPath()
     ctx.rect(tp(e.x), tp(e.y), e.w * TILE_SIZE, e.h * TILE_SIZE)
     if (s.fill && s.fill !== 'transparent') { ctx.fillStyle = s.fill; ctx.fill() }
-    if (s.stroke && s.strokeWidth) { ctx.strokeStyle = s.stroke; ctx.lineWidth = s.strokeWidth * TILE_SIZE; ctx.stroke() }
+    // Reference rect defaults: stroke undefined (no outline), strokeWidth 0.1 — same as circle
+    if (s.stroke) { ctx.strokeStyle = s.stroke; ctx.lineWidth = (s.strokeWidth ?? 0.1) * TILE_SIZE; ctx.stroke() }
     ctx.restore()
   }
 
@@ -194,7 +196,9 @@ export class VisualLayer {
     ctx.moveTo(tp(e.points[0][0]), tp(e.points[0][1]))
     for (let i = 1; i < e.points.length; i++) ctx.lineTo(tp(e.points[i][0]), tp(e.points[i][1]))
     if (s.fill && s.fill !== 'transparent') { ctx.fillStyle = s.fill; ctx.fill() }
-    if (s.stroke && s.strokeWidth) { ctx.closePath(); ctx.strokeStyle = s.stroke; ctx.lineWidth = s.strokeWidth * TILE_SIZE; ctx.stroke() }
+    // Reference poly defaults differ from circle/rect: stroke '#ffffff', strokeWidth 0.1 — an unstyled poly is outlined
+    const stroke = s.stroke ?? '#ffffff'
+    if (stroke) { ctx.closePath(); ctx.strokeStyle = stroke; ctx.lineWidth = (s.strokeWidth ?? 0.1) * TILE_SIZE; ctx.stroke() }
     ctx.restore()
   }
 
@@ -202,7 +206,7 @@ export class VisualLayer {
     const { ctx } = this
     const fontSize = parseFontSize(s.font) * TILE_SIZE
     const fontFamily = parseFontFamily(s.font)
-    const align = (s.align ?? 'left') as CanvasTextAlign
+    const align = (s.align ?? 'center') as CanvasTextAlign
     const x = tp(e.x), y = tp(e.y)
 
     ctx.save()
@@ -220,9 +224,10 @@ export class VisualLayer {
     }
 
     ctx.fillStyle = s.color ?? '#ffffff'
-    if (s.stroke && s.strokeWidth) {
+    // Reference text defaults: stroke undefined (no outline), strokeWidth 0.15 — wider than the 0.1 shapes use
+    if (s.stroke) {
       ctx.strokeStyle = s.stroke
-      ctx.lineWidth = s.strokeWidth * TILE_SIZE
+      ctx.lineWidth = (s.strokeWidth ?? 0.15) * TILE_SIZE
       ctx.lineJoin = 'round'
       ctx.strokeText(e.text, x, y)
     }
