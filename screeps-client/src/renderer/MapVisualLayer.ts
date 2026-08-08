@@ -230,11 +230,18 @@ export class MapVisualLayer {
     if (!pos) return
     const [tx, ty] = pos
 
-    // Map visuals use separate fontSize/fontFamily (not combined `font` field)
+    // Map visuals use separate fontSize/fontFamily (not the combined `font` field
+    // RoomVisual uses). fontSize is in game coordinates: 10 (the default) is a fifth
+    // of a room, same as the reference client's scaleValue(fontSize) = fontSize / SCALE_ALPHA.
     const fontSizeTiles = s.fontSize ?? 10
     const fontFamily = s.fontFamily ?? 'sans-serif'
     const fontSize = fontSizeTiles * MAP_TILE_SIZE
     const align = s.align ?? 'center'
+    // The reference passes `opacity` into the PixiJS text style, where it is not a
+    // recognised property — so map visual text always renders opaque there, and the
+    // documented 0.5 default only ever reaches the shapes. Match that (and VisualLayer,
+    // which defaults room visual text to 1) while still honouring an explicit opacity.
+    const textAlpha = s.opacity ?? 1
 
     // Render canvas at TEXT_RENDER_SCALE × world size, then scale the sprite back down.
     // This keeps glyph textures crisp when the camera is zoomed in.
@@ -245,33 +252,32 @@ export class MapVisualLayer {
       align,
       ...(s.fontStyle ? { fontStyle: s.fontStyle as 'normal' | 'italic' | 'oblique' } : {}),
       ...(s.fontVariant ? { fontVariant: s.fontVariant as 'normal' | 'small-caps' } : {}),
-      ...(s.stroke && s.strokeWidth
-        ? { stroke: { color: s.stroke, width: s.strokeWidth * MAP_TILE_SIZE * TEXT_RENDER_SCALE } }
+      // A stroke colour alone is enough — strokeWidth falls back to the reference default.
+      ...(s.stroke
+        ? { stroke: { color: s.stroke, width: (s.strokeWidth ?? 0.15) * MAP_TILE_SIZE * TEXT_RENDER_SCALE } }
         : {}),
     })
-
-    if (s.backgroundColor && s.backgroundColor !== 'transparent') {
-      const pad = (s.backgroundPadding ?? 2) * MAP_TILE_SIZE
-      const t = new Text({ text: e.text, style })
-      t.scale.set(1 / TEXT_RENDER_SCALE)
-      const mw = t.width
-      const mh = t.height
-      t.destroy()
-      const ax = align === 'center' ? 0.5 : align === 'right' ? 1 : 0
-      const bx = tx - ax * mw - pad
-      const by = ty - mh / 2 - pad
-      const bg = new Graphics()
-      bg.rect(bx, by, mw + pad * 2, mh + pad * 2)
-      bg.fill({ color: s.backgroundColor, alpha })
-      this.container.addChild(bg)
-    }
 
     const t = new Text({ text: e.text, style })
     t.scale.set(1 / TEXT_RENDER_SCALE)
     t.anchor.x = align === 'center' ? 0.5 : align === 'right' ? 1 : 0
     t.anchor.y = 0.5
     t.position.set(tx, ty)
-    t.alpha = alpha
+    t.alpha = textAlpha
+
+    if (s.backgroundColor && s.backgroundColor !== 'transparent') {
+      // Box height comes from the font size, not the measured text height, so the
+      // padding reads the same for every string — the formula the official client uses.
+      const pad = (s.backgroundPadding ?? 2) * MAP_TILE_SIZE
+      const mw = t.width
+      const bx = tx - t.anchor.x * mw - pad
+      const by = ty - fontSize / 2 - pad
+      const bg = new Graphics()
+      bg.rect(bx, by, mw + pad * 2, fontSize + pad * 2)
+      bg.fill({ color: s.backgroundColor, alpha })
+      this.container.addChild(bg)
+    }
+
     this.container.addChild(t)
   }
 
