@@ -55,11 +55,52 @@ export function activePaths(tw: TempWatch | null, ws: string[]): string[] {
   return paths
 }
 
+/**
+ * Some private servers string-coerce objects on the HTTP endpoint too. Keep the
+ * sentinel the tree understands so the node stays expandable and can pull its
+ * children in with a follow-up request for the deeper path.
+ */
+function normalize(value: unknown): unknown {
+  return value === '[object Object]' ? { __screeps_object__: true } : value
+}
+
 function setTypedValue(path: string, value: unknown): void {
+  const next = normalize(value)
   // Object values must replace, not merge — a plain store set would keep keys
   // that were deleted from Memory visible forever
-  if (value !== null && typeof value === 'object') setMemoryValues(path, reconcile(value))
-  else setMemoryValues(path, value)
+  if (next !== null && typeof next === 'object') setMemoryValues(path, reconcile(next))
+  else setMemoryValues(path, next)
+}
+
+/** Rebuild `node` with the value at `segments` replaced. Untouched branches keep
+ *  their identity so the reconcile below skips them. */
+function replaceAt(node: unknown, segments: (string | number)[], value: unknown): unknown {
+  if (segments.length === 0) return normalize(value)
+  if (node === null || typeof node !== 'object') return node
+  const [head, ...rest] = segments
+  if (Array.isArray(node)) {
+    const copy = [...node]
+    const idx = Number(head)
+    copy[idx] = replaceAt(copy[idx], rest, value)
+    return copy
+  }
+  const obj = node as Record<string, unknown>
+  return { ...obj, [head]: replaceAt(obj[head], rest, value) }
+}
+
+/**
+ * Write a value fetched for a nested path back into its watch tree, addressed by
+ * the keys leading from the watch root down to the node. Used by the per-node
+ * reload buttons in the memory tree, which fetch a single subtree over HTTP.
+ */
+export function setMemoryValueAt(rootPath: string, segments: (string | number)[], value: unknown): void {
+  if (segments.length === 0) {
+    setTypedValue(rootPath, value)
+    return
+  }
+  const root = memoryValues[rootPath]
+  if (root === null || typeof root !== 'object') return
+  setTypedValue(rootPath, replaceAt(root, segments, value))
 }
 
 // In-flight typed fetches; overlapping change signals for a path coalesce into
