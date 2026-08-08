@@ -2,6 +2,7 @@ import { createSignal, For, Show, onMount } from 'solid-js'
 import { ChevronRight, ChevronDown, Terminal, Loader, Check, X, RefreshCw } from 'lucide-solid'
 import { insertConsole } from '~/stores/consoleStore.js'
 import { client } from '~/stores/clientStore.js'
+import { setMemoryValueAt } from '~/stores/memoryStore.js'
 import { createLogger } from '~/utils/log.js'
 
 const { error } = createLogger('MemoryTree')
@@ -17,6 +18,10 @@ interface MemoryTreeProps {
   path: string
   label: string
   shard: string | null
+  /** Watch path this tree is rooted at — the key the value lives under in memoryValues */
+  rootPath: string
+  /** Keys leading from the watch root down to this node */
+  segments?: (string | number)[]
   depth?: number
   onRefresh?: () => void
 }
@@ -57,29 +62,29 @@ function MemoryNode(props: MemoryTreeProps) {
   const [editing, setEditing] = createSignal(false)
   const [editValue, setEditValue] = createSignal('')
   const [loading, setLoading] = createSignal(false)
-  // Holds HTTP-fetched value for object placeholders; reset when props.value changes back to pending
-  const [fetchedValue, setFetchedValue] = createSignal<unknown>(undefined)
 
-  // The value we actually render: prefer the locally-fetched value over the WS placeholder
-  const effectiveValue = () => (isPending(props.value) && fetchedValue() !== undefined) ? fetchedValue() : props.value
+  const segments = () => props.segments ?? []
 
   const isObject = () => {
-    const v = effectiveValue()
+    const v = props.value
     return !isPending(v) && v !== null && typeof v === 'object'
   }
-  const entries = () => isObject() ? Object.entries(effectiveValue() as Record<string, unknown>) : []
+  const entries = () => isObject() ? Object.entries(props.value as Record<string, unknown>) : []
   const childCount = () => entries().length
 
-  const fetchPending = async () => {
+  /**
+   * Pull this node's subtree from the HTTP API and write it back into the watch
+   * store, so it stays the single source of truth and later change signals keep
+   * updating this node.
+   */
+  const reload = async () => {
     setLoading(true)
     try {
       const c = client()
       if (!c) return
       const apiPath = toApiPath(props.path)
       const res = await c.http.user.memory.get(apiPath, props.shard) as { data: unknown }
-      // Private servers may return '[object Object]' even via HTTP — re-use the WS sentinel
-      const value = res.data === '[object Object]' ? { __screeps_object__: true } : res.data
-      setFetchedValue(value)
+      setMemoryValueAt(props.rootPath, segments(), res.data)
     } catch (err) {
       error('fetch memory failed', err)
     } finally {
@@ -87,24 +92,16 @@ function MemoryNode(props: MemoryTreeProps) {
     }
   }
 
-  const refetch = () => {
-    setFetchedValue(undefined)
-    void fetchPending()
-  }
-
   onMount(() => {
-    if (expanded() && isPending(props.value) && fetchedValue() === undefined) {
-      void fetchPending()
-    }
+    if (expanded() && isPending(props.value)) void reload()
   })
 
   const handleExpand = async () => {
-    if (isPending(props.value) && fetchedValue() === undefined) {
-      await fetchPending()
+    if (isPending(props.value)) {
+      await reload()
       setExpanded(true)
       return
     }
-    if (expanded()) setFetchedValue(undefined)
     setExpanded((v) => !v)
   }
 
@@ -137,7 +134,7 @@ function MemoryNode(props: MemoryTreeProps) {
   }
 
   const labelColor = () => {
-    const v = effectiveValue()
+    const v = props.value
     if (isObject()) return '#c9d1d9'
     if (typeof v === 'string') return '#3fb950'
     if (typeof v === 'number') return '#79c0ff'
@@ -146,7 +143,7 @@ function MemoryNode(props: MemoryTreeProps) {
   }
 
   const displayValue = () => {
-    const v = effectiveValue()
+    const v = props.value
     if (v === null) return 'null'
     if (v === undefined) return 'undefined'
     if (typeof v === 'string') return JSON.stringify(v)
@@ -157,7 +154,7 @@ function MemoryNode(props: MemoryTreeProps) {
     <div style={{ 'padding-left': nodeDepth() > 0 ? '14px' : '0', ...monoStyle }}>
       <div style={{ display: 'flex', 'align-items': 'center', gap: '2px', 'min-height': '20px' }}>
         {/* Expand toggle for objects/arrays and pending placeholders */}
-        <Show when={isObject() || isPending(effectiveValue())}>
+        <Show when={isObject() || isPending(props.value)}>
           <button
             style={{ ...iconBtnStyle, color: '#8b949e' }}
             onClick={() => void handleExpand()}
@@ -174,7 +171,7 @@ function MemoryNode(props: MemoryTreeProps) {
             </Show>
           </button>
         </Show>
-        <Show when={!isObject() && !isPending(effectiveValue())}>
+        <Show when={!isObject() && !isPending(props.value)}>
           <span style={{ width: '18px', 'flex-shrink': 0 }} />
         </Show>
 
@@ -183,23 +180,24 @@ function MemoryNode(props: MemoryTreeProps) {
         <span style={{ color: '#484f58', 'margin': '0 2px', 'flex-shrink': 0 }}>:</span>
 
         {/* Value / type summary */}
-        <Show when={isPending(effectiveValue())}>
+        <Show when={isPending(props.value)}>
           <span style={{ color: '#484f58', 'font-style': 'italic' }}>{'{…}'}</span>
         </Show>
         <Show when={isObject()}>
           <span style={{ color: '#484f58', 'font-style': 'italic' }}>
-            {Array.isArray(effectiveValue()) ? `[${childCount()}]` : `{${childCount()}}`}
+            {Array.isArray(props.value) ? `[${childCount()}]` : `{${childCount()}}`}
           </span>
         </Show>
 
-        {/* Reload button for HTTP-fetched nodes */}
-        <Show when={isPending(props.value) && !loading()}>
-          <button style={iconBtnStyle} title="Reload" onClick={() => refetch()}>
+        {/* Pull this subtree from the API again — the watch channel only signals
+            changes, so this is the manual way to re-read a stale branch. */}
+        <Show when={(isObject() || isPending(props.value)) && !loading()}>
+          <button style={iconBtnStyle} title={`Reload ${props.path} from the API`} onClick={() => void reload()}>
             <RefreshCw size={11} />
           </button>
         </Show>
 
-        <Show when={!isObject() && !isPending(effectiveValue())}>
+        <Show when={!isObject() && !isPending(props.value)}>
           <Show when={!editing()}>
             <span
               style={{ color: labelColor(), cursor: 'text', 'flex': 1 }}
@@ -251,7 +249,8 @@ function MemoryNode(props: MemoryTreeProps) {
       <Show when={isObject() && expanded()}>
         <For each={entries()}>
           {([key, val]) => {
-            const childPath = Array.isArray(effectiveValue())
+            const isArrayChild = Array.isArray(props.value)
+            const childPath = isArrayChild
               ? `${props.path}[${key}]`
               : `${props.path}.${key}`
             return (
@@ -260,8 +259,10 @@ function MemoryNode(props: MemoryTreeProps) {
                 path={childPath}
                 label={key}
                 shard={props.shard}
+                rootPath={props.rootPath}
+                segments={[...segments(), isArrayChild ? Number(key) : key]}
                 depth={nodeDepth() + 1}
-                onRefresh={isPending(props.value) ? refetch : props.onRefresh}
+                onRefresh={() => void reload()}
               />
             )
           }}
@@ -271,6 +272,16 @@ function MemoryNode(props: MemoryTreeProps) {
   )
 }
 
-export function MemoryTree(props: { value: unknown; path: string; label: string; shard: string | null }) {
-  return <MemoryNode value={props.value} path={props.path} label={props.label} shard={props.shard} depth={0} />
+export function MemoryTree(props: { value: unknown; path: string; label: string; shard: string | null; rootPath: string }) {
+  return (
+    <MemoryNode
+      value={props.value}
+      path={props.path}
+      label={props.label}
+      shard={props.shard}
+      rootPath={props.rootPath}
+      segments={[]}
+      depth={0}
+    />
+  )
 }

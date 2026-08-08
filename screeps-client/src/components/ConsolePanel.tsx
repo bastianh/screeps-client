@@ -1,5 +1,5 @@
-import { createEffect, createMemo, createSignal, onCleanup, onMount, For, Show } from 'solid-js'
-import { Trash2, Pause, Play, X, Plus, Filter, ExternalLink } from 'lucide-solid'
+import { createEffect, createMemo, createSignal, onCleanup, onMount, untrack, For, Show } from 'solid-js'
+import { Trash2, Pause, Play, X, Plus, Filter, ExternalLink, ChevronDown, ChevronUp } from 'lucide-solid'
 import { client } from '~/stores/clientStore.js'
 import { SubscriptionGroup } from 'screeps-connectivity'
 import type { ConsoleMessage } from 'screeps-connectivity'
@@ -74,6 +74,7 @@ function MemoryPane(props: { shard: string | null; width: number }) {
                   path={`Memory.${creepPath}`}
                   label={creepPath}
                   shard={effectiveShard()}
+                  rootPath={creepPath}
                 />
               </div>
             )
@@ -95,6 +96,7 @@ function MemoryPane(props: { shard: string | null; width: number }) {
                 path={`Memory.${path}`}
                 label={path}
                 shard={effectiveShard()}
+                rootPath={path}
               />
             </div>
           )}
@@ -205,15 +207,30 @@ export function ConsolePanel(props: { shard?: string | null; isCollapsed?: boole
     })
   })
 
-  const syncCollapse = (nextShowLog: boolean, nextShowConsole: boolean, nextShowMemory: boolean) => {
-    const allOff = !nextShowLog && !nextShowConsole && !nextShowMemory
-    if (allOff && !props.isCollapsed) props.onToggle?.()
-    if (!allOff && props.isCollapsed) props.onToggle?.()
-  }
-
+  // Turning every pane off collapses the bar, turning one back on re-expands it.
+  // isCollapsed is read untracked so this never fires on a height change — the
+  // user collapsing the bar by hand (drag handle or the button below) must stick.
+  // The first run only collapses, so a bar left collapsed stays collapsed.
+  let initialCollapseSync = true
   createEffect(() => {
-    syncCollapse(showLog(), showConsole(), showMemory())
+    const allOff = !showLog() && !showConsole() && !showMemory()
+    const isInitial = initialCollapseSync
+    initialCollapseSync = false
+    untrack(() => {
+      if (allOff && !props.isCollapsed) props.onToggle?.()
+      else if (!allOff && props.isCollapsed && !isInitial) props.onToggle?.()
+    })
   })
+
+  const toggleBar = () => {
+    // Expanding with every pane off would just reveal an empty area — bring the
+    // console back instead, which re-expands the bar through the effect above.
+    if (props.isCollapsed && !showLog() && !showConsole() && !showMemory()) {
+      toggleShowConsole()
+      return
+    }
+    props.onToggle?.()
+  }
 
   // Weight-based split: returns visible pane widths as fractions
   const paneWidths = () => {
@@ -562,14 +579,25 @@ export function ConsolePanel(props: { shard?: string | null; isCollapsed?: boole
           {/* Not a pane toggle — opens the full-canvas segment editor overlay. */}
           <button onClick={toggleShowSegments} title="View and edit raw memory segments" style={toggleBtnStyle(showSegments())}>Segments</button>
         </Show>
+        <div style={{ flex: 1 }} />
         {/* Tauri webviews can't window.open; popouts are browser/embedded only */}
         <Show when={!isPopoutWindow && !isTauri() && popoutSid()}>
           <button
             onClick={openPopout}
             title="Open these panes in a separate window"
-            style={{ ...iconBtnStyle, 'margin-left': 'auto' }}
+            style={iconBtnStyle}
           >
             <ExternalLink size={14} />
+          </button>
+        </Show>
+        {/* Collapse to the bar itself; the panes keep their on/off state */}
+        <Show when={props.onToggle}>
+          <button
+            onClick={toggleBar}
+            title={props.isCollapsed ? 'Show the panels' : 'Hide the panels'}
+            style={iconBtnStyle}
+          >
+            {props.isCollapsed ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
           </button>
         </Show>
       </div>
