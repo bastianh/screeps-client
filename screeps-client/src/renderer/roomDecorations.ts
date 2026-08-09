@@ -16,7 +16,7 @@ const ANIMATIONS: readonly string[] = ['slow', 'fast', 'blink', 'neon', 'flash']
  * cells, but `creep` and `object` sizes arrive in these pixels (a 256 means 2.56 cells),
  * so those are divided by this to give every decoration type a size in cells.
  */
-const REFERENCE_CELL_SIZE = 100
+export const REFERENCE_CELL_SIZE = 100
 
 /** One sprite of a decoration, with the `graphics[]` prop references already resolved. */
 export interface DecorationSprite {
@@ -114,6 +114,31 @@ function tinted(color: unknown, brightness: number): number | undefined {
 }
 
 /**
+ * Convert a landscape `strokeWidth` / `swampStrokeWidth` into a fraction of a tile.
+ *
+ * The reference feeds these straight into an SVG whose viewBox is `VIEW_BOX` units for the
+ * whole room, so one unit is 1/100 of a tile. It also sets `paint-order: stroke`, which
+ * paints the stroke *under* the fill — and an SVG stroke is centred on the path, so only
+ * its outer half survives. Our strokes are drawn with Pixi's `alignment: 0` (outside), so
+ * the whole width shows and the reference's visible halo is `strokeWidth / 2` units.
+ */
+function borderWidth(strokeWidth: number): number {
+  return strokeWidth / (2 * REFERENCE_CELL_SIZE)
+}
+
+/**
+ * Tile scale of a landscape overlay, or `undefined` to stretch one copy over the room.
+ *
+ * The reference branches on — and reads — `decoration.tileScale`, the *definition* value,
+ * ignoring any `tileScale` the placement exposes as an editable prop. Keying off the
+ * placement instead would let a pack silently flip between tiled and stretched.
+ */
+function landscapeTileScale(d: ApiRoomDecorationDef): number | undefined {
+  const scale = num(d.tileScale, 0)
+  return scale > 0 ? scale : undefined
+}
+
+/**
  * Build the sprite list of a decoration. The `color` / `alpha` / `visible` fields of a
  * `graphics[]` entry hold *names* of props on `active`, not values.
  */
@@ -188,9 +213,7 @@ function parseFloorLandscape(a: ApiRoomDecorationActive, d: ApiRoomDecorationDef
   if (a.swampColor)       t.swampFillColor   = hex(a.swampColor)
   if (a.swampStrokeColor) t.swampBorderColor = hex(a.swampStrokeColor)
   if (a.swampStrokeWidth != null) {
-    // Reference renderer uses SVG units where CELL_SIZE=50; 50 units ≈ 0.20 * TILE_SIZE visually.
-    // Empirical ratio: divide by 250 to convert to our fraction-of-TILE_SIZE scale.
-    t.swampBorderWidth = num(a.swampStrokeWidth, 50) / 250
+    t.swampBorderWidth = borderWidth(num(a.swampStrokeWidth, 50))
   }
   if (a.roadsColor) {
     out.roadColor = colorBrightness(hex(a.roadsColor), num(a.roadsBrightness, 1))
@@ -201,7 +224,7 @@ function parseFloorLandscape(a: ApiRoomDecorationActive, d: ApiRoomDecorationDef
       t.floorTextureTint = colorBrightness(hex(a.floorForegroundColor), num(a.floorForegroundBrightness, 1))
     }
     t.floorTextureAlpha = num(a.floorForegroundAlpha, 1)
-    t.floorTextureTileScale = num(a.tileScale ?? d.tileScale, 1)
+    t.floorTextureTileScale = landscapeTileScale(d)
   }
   out.terrain = t
 }
@@ -215,7 +238,7 @@ function parseWallLandscape(a: ApiRoomDecorationActive, d: ApiRoomDecorationDef,
     t.wallBorderColor = colorBrightness(hex(a.strokeColor), num(a.strokeBrightness, 1))
   }
   if (a.strokeWidth != null) {
-    t.wallBorderWidth = num(a.strokeWidth, 10) / 250
+    t.wallBorderWidth = borderWidth(num(a.strokeWidth, 10))
   }
   if (d.foregroundUrl) {
     t.wallTextureUrl = d.foregroundUrl
@@ -223,7 +246,6 @@ function parseWallLandscape(a: ApiRoomDecorationActive, d: ApiRoomDecorationDef,
       t.wallTextureTint = colorBrightness(hex(a.foregroundColor), num(a.foregroundBrightness, 1))
     }
     t.wallTextureAlpha = num(a.foregroundAlpha, 1)
-    t.wallTextureTileScale = num(a.tileScale ?? d.tileScale, 1)
   }
   out.terrain = t
 }

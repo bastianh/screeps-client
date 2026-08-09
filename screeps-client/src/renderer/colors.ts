@@ -17,7 +17,7 @@ export const TERRAIN_WALL_BORDER  = 0x000000
 export const TERRAIN_WALL_NOISE   = 0x282828  // lighter grey for noise overlay on walls
 export const TERRAIN_SWAMP_FILL   = 0x282D1A
 export const TERRAIN_SWAMP_BORDER = 0x26271F
-export const TERRAIN_SWAMP_GLOW   = 0x2A4A20  // saturated green for atmospheric blur
+export const TERRAIN_SWAMP_TEXTURE = 0x66FF00 // reference's additive swamp-noise tint
 
 // ── Body parts ─────────────────────────────────────────────────────────────
 export const BP_TOUGH         = 0x4c4c4c

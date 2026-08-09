@@ -4,7 +4,7 @@ import { TILE_SIZE, Z } from './RoomRenderer.js'
 import { createWallMask } from './TerrainLayer.js'
 import { loadDecorationTexture } from './decorationTextures.js'
 import { DecorationAnimator } from './decorationAnimation.js'
-import type { DecorationSprite, GraffitiDecoration } from './roomDecorations.js'
+import { REFERENCE_CELL_SIZE, type DecorationSprite, type GraffitiDecoration } from './roomDecorations.js'
 
 /**
  * Renders `wallGraffiti` decorations: free-floating images masked to the room's walls.
@@ -122,7 +122,10 @@ export class DecorationLayer {
       let sprite: Sprite | TilingSprite
       if (spec.tiling) {
         const tiled = new TilingSprite({ texture, width: item.width * TILE_SIZE, height: item.height * TILE_SIZE })
-        tiled.tileScale.set(spec.tileScale)
+        // The reference sizes the same sprite in CELL_SIZE units, so its tileScale counts
+        // reference pixels per texture pixel. Ours must be rebased onto TILE_SIZE or the
+        // artwork repeats ~8× too often for the same authored number.
+        tiled.tileScale.set(spec.tileScale * TILE_SIZE / REFERENCE_CELL_SIZE)
         sprite = tiled
       } else {
         sprite = new Sprite(texture)
