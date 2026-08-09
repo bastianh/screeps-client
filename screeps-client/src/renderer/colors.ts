@@ -8,7 +8,7 @@ export const BG_SURFACE = 0x34343B  // panel surface; was the terrain plain befo
 export const TERRAIN_PLAIN  = 0x555555           // reference's undecorated floor at normal lighting
 export const TERRAIN_WALL   = BG_DEEP            // void background (outside-room areas)
 export const TERRAIN_SWAMP  = 0x334933           // legacy export, no longer used for in-room rendering
-export const TERRAIN_ROAD   = 0x6B6969           // also used for room exits
+export const TERRAIN_ROAD   = 0x8C8A8A           // also used for room exits
 export const TERRAIN_BORDER = 0x30363d
 
 // In-room terrain fill + outer border (border drawn with stroke alignment=0 / outside).
