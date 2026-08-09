@@ -152,18 +152,21 @@ export class ObjectLayer {
     this.rampartLayer = new Container()
     this.rampartLayer.sortableChildren = true
     this.rampartGraphics = new Graphics()
-    // Ramparts overlay everything in the tile as a translucent green wash (vanilla):
-    // above structures (zIndex 0) AND creeps (100) — a creep standing on a rampart
-    // shows under the green — but below flags (200). Relative order within
+    // Additive, like the reference's rampart sprite (`BLEND_MODES.ADD` in its topmost
+    // "effects" layer): it *adds* a green cast rather than covering what's underneath, so
+    // a creep standing on a rampart still reads clearly instead of being tinted away — the
+    // fill only ever brightens, never darkens or obscures. Relative order within
     // `rampartLayer`; the layer itself sits above every other room layer (see its doc).
     this.rampartGraphics.zIndex = 150
+    this.rampartGraphics.blendMode = 'add'
     this.rampartLayer.addChild(this.rampartGraphics)
     // Soft rim glow, blurred via the same BlurFilter pattern the swamp glow uses
     // (TerrainLayer.createSwampGlow). Sits just below the fill layer so its halo
     // reads past the blob edge and tints up through the translucent fill, while the
-    // crisp rim draws on top.
+    // crisp rim draws on top. Additive for the same reason as the fill above.
     this.rampartGlowGraphics = new Graphics()
     this.rampartGlowGraphics.zIndex = 149
+    this.rampartGlowGraphics.blendMode = 'add'
     this.rampartGlowGraphics.filters = [new BlurFilter({ strength: 3, quality: 3 })]
     this.rampartLayer.addChild(this.rampartGlowGraphics)
     this.roadGraphics = new Graphics()
