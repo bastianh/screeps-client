@@ -4,7 +4,7 @@ import type {
   ApiRoomDecorationItem,
 } from 'screeps-connectivity'
 import type { TerrainDecoration } from './TerrainLayer.js'
-import { colorBrightness } from './hsl.js'
+import { colorBrightness, multiply } from './hsl.js'
 
 /** Alpha animation presets of the reference renderer (`src/lib/decorations.js`). */
 export type DecorationAnimation = 'slow' | 'fast' | 'blink' | 'neon' | 'flash'
@@ -17,6 +17,22 @@ const ANIMATIONS: readonly string[] = ['slow', 'fast', 'blink', 'neon', 'flash']
  * so those are divided by this to give every decoration type a size in cells.
  */
 export const REFERENCE_CELL_SIZE = 100
+
+/**
+ * Empirical brightness compensation for decoration-sourced landscape texture tints.
+ *
+ * Our ambient/lighting multiply renders noticeably darker than the reference — the same gap
+ * that needed `TERRAIN_ROAD` hand-brightened by this same ratio (0x6B6969 → 0x8C8A8A) to read
+ * correctly against the terrain. Landscape texture tints come straight from the API with no
+ * such compensation, so a subtle, low-contrast pattern (e.g. a mostly-transparent overlay with
+ * flat-grey opaque pixels) washes out under the same lighting.
+ *
+ * Applied as a straight `multiply()` on the RGB channels — like the `TERRAIN_ROAD` fix it
+ * mirrors — not as an HSL-lightness scale: `colorBrightness` pushes lightness toward 1, and
+ * these decoration tints (e.g. `#5CDCFF`) already sit at high lightness, so scaling lightness
+ * further washes the hue out to near-white instead of just brightening it.
+ */
+const DECORATION_TEXTURE_BRIGHTNESS_BOOST = 0x8c / 0x6b
 
 /** One sprite of a decoration, with the `graphics[]` prop references already resolved. */
 export interface DecorationSprite {
@@ -221,7 +237,10 @@ function parseFloorLandscape(a: ApiRoomDecorationActive, d: ApiRoomDecorationDef
   if (d.floorForegroundUrl) {
     t.floorTextureUrl = d.floorForegroundUrl
     if (a.floorForegroundColor) {
-      t.floorTextureTint = colorBrightness(hex(a.floorForegroundColor), num(a.floorForegroundBrightness, 1))
+      t.floorTextureTint = multiply(
+        colorBrightness(hex(a.floorForegroundColor), num(a.floorForegroundBrightness, 1)),
+        DECORATION_TEXTURE_BRIGHTNESS_BOOST,
+      )
     }
     t.floorTextureAlpha = num(a.floorForegroundAlpha, 1)
     t.floorTextureTileScale = landscapeTileScale(d)
@@ -246,7 +265,10 @@ function parseWallLandscape(a: ApiRoomDecorationActive, d: ApiRoomDecorationDef,
   if (d.foregroundUrl) {
     t.wallTextureUrl = d.foregroundUrl
     if (a.foregroundColor) {
-      t.wallTextureTint = colorBrightness(hex(a.foregroundColor), num(a.foregroundBrightness, 1))
+      t.wallTextureTint = multiply(
+        colorBrightness(hex(a.foregroundColor), num(a.foregroundBrightness, 1)),
+        DECORATION_TEXTURE_BRIGHTNESS_BOOST,
+      )
     }
     t.wallTextureAlpha = num(a.foregroundAlpha, 1)
   }

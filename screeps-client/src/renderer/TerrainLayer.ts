@@ -564,6 +564,15 @@ export function createTerrainLayer(
     }).catch(() => { /* texture load failed — silently skip */ })
   }
 
+  // Hard clip to the room's exact bounds. The stretched landscape sprites above are masked
+  // to the wall shape, but GPU alpha-mask edges anti-alias — at the room's outer boundary
+  // (wall tiles bordering the room, the common case) that soft edge has nothing outside it
+  // to blend against but bleeds a sliver of the sprite past the tile grid regardless. A plain
+  // rectangle mask has no fine detail to anti-alias awkwardly, so it clips that sliver clean.
+  const roomBounds = new Graphics().rect(0, 0, ROOM_EXTENT, ROOM_EXTENT).fill(0xffffff)
+  container.addChild(roomBounds)
+  container.mask = roomBounds
+
   return container
 }
 
