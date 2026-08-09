@@ -1,11 +1,12 @@
-import { AlphaFilter, Container, Graphics, BlurFilter, NoiseFilter, Rectangle, Sprite, TilingSprite, type DestroyOptions, type Renderer, type StrokeStyle } from 'pixi.js'
+import { AlphaFilter, Container, Graphics, BlurFilter, Rectangle, Sprite, Texture, TilingSprite, type DestroyOptions, type StrokeStyle } from 'pixi.js'
 import { TerrainType, RoomTerrain } from 'screeps-connectivity'
 import { TILE_SIZE } from './RoomRenderer.js'
+import type { LightingLayer } from './LightingLayer.js'
 import { loadDecorationTexture } from './decorationTextures.js'
 import { REFERENCE_CELL_SIZE } from './roomDecorations.js'
 import {
   TERRAIN_PLAIN, TERRAIN_ROAD, TERRAIN_BORDER,
-  TERRAIN_WALL_FILL, TERRAIN_WALL_BORDER, TERRAIN_WALL_NOISE,
+  TERRAIN_WALL_FILL, TERRAIN_WALL_BORDER,
   TERRAIN_SWAMP_FILL, TERRAIN_SWAMP_BORDER, TERRAIN_SWAMP_TEXTURE,
 } from './colors.js'
 
@@ -15,6 +16,56 @@ import {
  * decoration authored against the official client tiles at the same density here.
  */
 const REFERENCE_SCALE = TILE_SIZE / REFERENCE_CELL_SIZE
+
+const ROOM_EXTENT = 50 * TILE_SIZE
+
+/** Blur radius of the wall shadow — the reference's `WALLS_BLUR * size.width`. */
+const WALLS_BLUR = 0.006
+
+/** Grey the reference paints wall faces at in the light map, so walls read lit. */
+const WALL_LIGHTING = 0x808080
+
+/**
+ * Soft grey cloud standing in for the reference's `noise1` / `noise2` assets.
+ *
+ * Both are large blurry greyscale textures, tiled so roughly a dozen blobs span a room.
+ * We ship neither, so the cloud is generated at that resolution — one texel per blob — and
+ * stretched over the room, letting bilinear filtering do the smoothing for free.
+ */
+function cloudTexture(): Texture {
+  const cells = 12
+  const canvas = document.createElement('canvas')
+  canvas.width = canvas.height = cells
+  const ctx = canvas.getContext('2d')!
+  const image = ctx.createImageData(cells, cells)
+  for (let i = 0; i < cells * cells; i++) {
+    const v = 90 + Math.round(Math.random() * 110)
+    image.data.set([v, v, v, 255], i * 4)
+  }
+  ctx.putImageData(image, 0, 0)
+  const texture = Texture.from(canvas)
+  texture.source.scaleMode = 'linear'
+  return texture
+}
+
+// Two independent clouds, built once and shared by every room: regenerating them per room
+// would burn a canvas upload for a texture nobody can tell apart from the last one.
+let wallCloud: Texture | null = null
+let swampCloud: Texture | null = null
+
+/** A cloud masked to one terrain type, added over the terrain rather than replacing it. */
+function cloudLayer(mask: Graphics, texture: Texture, alpha: number, tint?: number): Container {
+  const sprite = new Sprite(texture)
+  sprite.setSize(ROOM_EXTENT, ROOM_EXTENT)
+  sprite.alpha = alpha
+  sprite.blendMode = 'add'
+  if (tint != null) sprite.tint = tint
+  sprite.mask = mask
+
+  const container = new Container()
+  container.addChild(mask, sprite)
+  return container
+}
 
 export interface TerrainDecoration {
   /** Floor background color (replaces plain ground color) */
@@ -31,8 +82,8 @@ export interface TerrainDecoration {
   wallBorderColor?: number
   /** Wall border width as a fraction of TILE_SIZE (default 0.05) */
   wallBorderWidth?: number
-  /** Wall noise overlay color */
-  wallNoiseColor?: number
+  /** `strokeLighting`, 0–1: how brightly the wall rim reads in the light map */
+  wallBorderLighting?: number
   /** URL for the floor texture overlay (floorLandscape foreground) */
   floorTextureUrl?: string
   /** Tint color for the floor texture */
@@ -63,7 +114,6 @@ interface ResolvedColors {
   wallFillColor: number
   wallBorderColor: number
   wallBorderWidth: number
-  wallNoiseColor: number
 }
 
 // The two border defaults are the reference's own undecorated widths run through the same
@@ -78,7 +128,6 @@ function resolveColors(d?: TerrainDecoration): ResolvedColors {
     wallFillColor:    d?.wallFillColor    ?? TERRAIN_WALL_FILL,
     wallBorderColor:  d?.wallBorderColor  ?? TERRAIN_WALL_BORDER,
     wallBorderWidth:  d?.wallBorderWidth  ?? 0.05,
-    wallNoiseColor:   d?.wallNoiseColor   ?? TERRAIN_WALL_NOISE,
   }
 }
 
@@ -292,51 +341,64 @@ function createWallShapes(terrain: RoomTerrain, colors: ResolvedColors): Graphic
  * Crucially the tint is fixed, exactly as in the reference — this layer is not
  * decoration-driven, so a pack's `swampColor` still reads as its own colour underneath.
  */
-function createSwampTexture(terrain: RoomTerrain, renderer: Renderer): Container {
-  const W = 50 * TILE_SIZE
-  const cloud = new Graphics()
-  cloud.rect(0, 0, W, W)
-  cloud.fill(0x808080)
-  cloud.filters = [new NoiseFilter({ noise: 0.9, seed: 2 }), new BlurFilter({ strength: 6, quality: 3 })]
-  cloud.filterArea = new Rectangle(0, 0, W, W)
-
-  const texture = renderer.generateTexture({ target: cloud, frame: cloud.filterArea })
-  cloud.filters = null
-  cloud.destroy()
-
-  const sprite = new Sprite(texture)
-  sprite.tint = TERRAIN_SWAMP_TEXTURE
-  sprite.blendMode = 'add'
-  sprite.alpha = 0.15
-
+function createSwampTexture(terrain: RoomTerrain): Container {
+  swampCloud ??= cloudTexture()
   const mask = new Graphics()
   drawTerrainQuadrants(mask, terrain, TerrainType.Swamp, (g) => g.fill(0xffffff))
-  sprite.mask = mask
 
-  const container = new Container()
+  const container = cloudLayer(mask, swampCloud, 0.15, TERRAIN_SWAMP_TEXTURE)
   container.label = 'swampTexture'
-  container.addChild(mask, sprite)
   return container
 }
 
-function createWallNoise(terrain: RoomTerrain, renderer: Renderer, colors: ResolvedColors): Sprite {
-  const g = new Graphics()
-  drawTerrainQuadrants(g, terrain, TerrainType.Wall, (gg) => gg.fill(colors.wallNoiseColor))
-  g.alpha = 0.5
-  g.filters = [new NoiseFilter({ noise: 0.12, seed: 1 })]
-  g.filterArea = new Rectangle(0, 0, 50 * TILE_SIZE, 50 * TILE_SIZE)
+/**
+ * The reference's wall bump: `noise1` masked to the walls, alpha 0.2, `BLEND_MODES.ADD`,
+ * baked into the wall texture whenever lighting is not disabled.
+ *
+ * It *adds* to whatever colour the wall already has. The flat grey wash this replaced
+ * overwrote it instead, which pulled a decorated wall towards neutral and cost the
+ * landscape its colour.
+ */
+function createWallNoise(terrain: RoomTerrain): Container {
+  wallCloud ??= cloudTexture()
+  const container = cloudLayer(createWallMask(terrain), wallCloud, 0.2)
+  container.label = 'wallNoise'
+  return container
+}
 
-  const texture = renderer.generateTexture({
-    target: g,
-    frame: g.filterArea,
-  })
+/**
+ * The terrain's contribution to the light map, for `LightingLayer.setWallLighting`.
+ *
+ * Mirrors the reference's two lighting-layer wall objects: a blurred black silhouette
+ * multiplied in, which is the soft shadow walls cast onto the floor, and the wall shape
+ * itself screened back to `WALL_LIGHTING` so wall faces read as lit rather than shadowed.
+ * The shape's border is screened at the decoration's `strokeLighting` — 0 leaves the rim
+ * sitting in shadow, 1 makes it glow.
+ */
+export function createWallLighting(terrain: RoomTerrain, decoration?: TerrainDecoration): Container {
+  const colors = resolveColors(decoration)
 
-  g.filters = null
-  g.destroy()
+  const shadow = new Graphics()
+  drawTerrainQuadrants(shadow, terrain, TerrainType.Wall, (g) => g.fill(0x000000))
+  shadow.blendMode = 'multiply'
+  shadow.filters = [new BlurFilter({ strength: ROOM_EXTENT * WALLS_BLUR, quality: 3 })]
+  shadow.filterArea = new Rectangle(0, 0, ROOM_EXTENT, ROOM_EXTENT)
 
-  const sprite = new Sprite(texture)
-  sprite.label = 'wallNoise'
-  return sprite
+  const lit = new Graphics()
+  const glow = Math.round(255 * (decoration?.wallBorderLighting ?? 0))
+  const rim: StrokeStyle = {
+    color: (glow << 16) | (glow << 8) | glow,
+    width: TILE_SIZE * colors.wallBorderWidth,
+    alignment: 0, cap: 'round', join: 'round',
+  }
+  drawTerrainQuadrants(lit, terrain, TerrainType.Wall, (g) => g.stroke(rim))
+  drawTerrainQuadrants(lit, terrain, TerrainType.Wall, (g) => g.fill(WALL_LIGHTING))
+  lit.blendMode = 'screen'
+
+  const container = new Container()
+  container.label = 'wallLighting'
+  container.addChild(shadow, lit)
+  return container
 }
 
 /**
@@ -350,29 +412,40 @@ export function createWallMask(terrain: RoomTerrain): Graphics {
   return mask
 }
 
-export function createTerrainLayer(terrain: RoomTerrain, renderer: Renderer, decoration?: TerrainDecoration): Container {
+/**
+ * Build the room's terrain.
+ *
+ * `lighting` is optional only so tests and the map path can skip it; when given, the layer
+ * registers its wall shadow with the light map and withdraws it again on destroy, so the
+ * two never disagree about which room's walls are casting.
+ */
+export function createTerrainLayer(
+  terrain: RoomTerrain,
+  decoration?: TerrainDecoration,
+  lighting?: LightingLayer,
+): Container {
   const colors = resolveColors(decoration)
   const container = new Container()
-  const wallNoise = createWallNoise(terrain, renderer, colors)
-  const swampTexture = createSwampTexture(terrain, renderer)
+  const wallLighting = lighting ? createWallLighting(terrain, decoration) : null
   const baseDestroy = container.destroy.bind(container)
 
+  if (lighting && wallLighting) lighting.setWallLighting(wallLighting)
+
   container.destroy = (options?: DestroyOptions) => {
-    for (const generated of [wallNoise, swampTexture.getChildAt<Sprite>(1)]) {
-      if (generated.destroyed) continue
-      generated.removeFromParent()
-      generated.destroy({ texture: true, textureSource: true })
+    if (wallLighting && !wallLighting.destroyed) {
+      lighting?.clearWallLighting(wallLighting)
+      wallLighting.destroy({ children: true })
     }
     baseDestroy(options)
   }
 
-  container.addChild(createFloorBase(colors))           // index 0: plain floor colour
+  container.addChild(createFloorBase(colors))            // index 0: plain floor colour
   container.addChild(createSwampShapes(terrain, colors)) // index 1: swamp border + fill at alpha 0.4
   container.addChild(createWallShapes(terrain, colors))  // index 2: wall fills + borders + exits + room border
-  container.addChild(swampTexture)                       // index 3
-  container.addChild(wallNoise)                          // index 4
+  container.addChild(createSwampTexture(terrain))        // index 3
+  container.addChild(createWallNoise(terrain))           // index 4
 
-  const W = 50 * TILE_SIZE
+  const W = ROOM_EXTENT
 
   // Both halves mirror the reference: the floor tiles only when the *definition* declared a
   // tileScale, the wall never does — it is always one plain sprite stretched over the room.

@@ -500,7 +500,7 @@ export function RoomViewer(props: RoomViewerProps) {
     if (t && t.room === props.room) {
       log(`terrain applied immediately (pre-loaded) — ${props.room}`)
       const dec = untrack(roomDecoration)
-      terrainLayerRef = createTerrainLayer(t.data, r.app.renderer, dec?.room === props.room ? dec.decoration.terrain : undefined)
+      terrainLayerRef = createTerrainLayer(t.data, dec?.room === props.room ? dec.decoration.terrain : undefined, r.lighting)
       setTerrainEffectsVisible(terrainLayerRef, untrack(terrainEffects))
       terrainLayerRef.zIndex = Z.terrain
       r.world.addChild(terrainLayerRef)    }
@@ -570,7 +570,7 @@ export function RoomViewer(props: RoomViewerProps) {
     }
     log(`terrain applied (async) — ${props.room}`)
     const dec = untrack(roomDecoration)
-    terrainLayerRef = createTerrainLayer(t.data, r.app.renderer, dec?.room === props.room ? dec.decoration.terrain : undefined)
+    terrainLayerRef = createTerrainLayer(t.data, dec?.room === props.room ? dec.decoration.terrain : undefined, r.lighting)
     setTerrainEffectsVisible(terrainLayerRef, untrack(terrainEffects))
     r.world.addChildAt(terrainLayerRef, 0)
   })
@@ -584,7 +584,7 @@ export function RoomViewer(props: RoomViewerProps) {
     if (!r || !t || t.room !== props.room) return
     if (!terrainLayerRef?.parent) return
     terrainLayerRef.destroy()
-    terrainLayerRef = createTerrainLayer(t.data, r.app.renderer)
+    terrainLayerRef = createTerrainLayer(t.data, undefined, r.lighting)
     setTerrainEffectsVisible(terrainLayerRef, untrack(terrainEffects))
     r.world.addChildAt(terrainLayerRef, 0)
     objLayer?.setRoadColor(OBJ_ROAD)
@@ -603,7 +603,7 @@ export function RoomViewer(props: RoomViewerProps) {
 
     log(`decoration arrived, rebuilding terrain layer — ${props.room}`)
     terrainLayerRef.destroy()
-    terrainLayerRef = createTerrainLayer(t.data, r.app.renderer, dec.decoration.terrain)
+    terrainLayerRef = createTerrainLayer(t.data, dec.decoration.terrain, r.lighting)
     setTerrainEffectsVisible(terrainLayerRef, untrack(terrainEffects))
     r.world.addChildAt(terrainLayerRef, 0)
     if (objLayer && dec.decoration.roadColor != null) {

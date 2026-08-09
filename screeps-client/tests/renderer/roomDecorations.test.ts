@@ -44,6 +44,15 @@ describe('parseRoomDecorations()', () => {
       expect(res.terrain?.swampBorderWidth).toBeCloseTo(0.25)
     })
 
+    it('carries strokeLighting through as the wall rim brightness', () => {
+      const res = parseRoomDecorations(response(item({
+        active: { strokeLighting: 0.4 },
+        decoration: { _id: 'd1', type: 'wallLandscape' },
+      })))
+
+      expect(res.terrain?.wallBorderLighting).toBeCloseTo(0.4)
+    })
+
     it('tiles a landscape only when the definition declares a tileScale', () => {
       const tiled = parseRoomDecorations(response(item({
         decoration: { _id: 'd1', type: 'landscape', floorForegroundUrl: 'f.png', tileScale: 4 },

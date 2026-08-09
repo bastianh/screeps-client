@@ -240,6 +240,9 @@ function parseWallLandscape(a: ApiRoomDecorationActive, d: ApiRoomDecorationDef,
   if (a.strokeWidth != null) {
     t.wallBorderWidth = borderWidth(num(a.strokeWidth, 10))
   }
+  if (a.strokeLighting != null) {
+    t.wallBorderLighting = num(a.strokeLighting, 0)
+  }
   if (d.foregroundUrl) {
     t.wallTextureUrl = d.foregroundUrl
     if (a.foregroundColor) {
