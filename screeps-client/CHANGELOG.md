@@ -1,5 +1,68 @@
 # screeps-client
 
+## 0.24.1
+
+### Patch Changes
+
+- 3d0aa73: Match the official client's room-decoration geometry
+
+  Landscape overlays diverged from the official renderer, so a decoration pack authored
+  against one looked wrong on the other:
+
+  - Floor and wall overlays always tiled. The official tiles the floor only when the
+    _definition_ declares `tileScale`, otherwise stretching one copy over the room, and never
+    tiles the wall half at all. A placement's `tileScale` prop no longer flips the branch —
+    the official ignores it on landscapes.
+  - Tile scales are now rebased from the official's 100-units-per-tile space onto ours
+    instead of a magic `0.8`, so the same authored number gives the same density. The same
+    fix applies to tiled `wallGraffiti`, which repeated roughly 8× too often.
+  - `strokeWidth` and `swampStrokeWidth` were 1.25× too thin. They are SVG units at 100 per
+    tile, and `paint-order: stroke` hides the inner half of the centred stroke, so the
+    visible border is half the authored width.
+  - The hardcoded green swamp glow is replaced by the official's additive, green-tinted
+    swamp noise, leaving a pack's own `swampColor` readable underneath.
+  - The procedural wall noise no longer disappears when a wall texture is present; the
+    official draws both.
+
+  Room lighting now follows the same reference, which changes how every room reads, not
+  just decorated ones:
+
+  - The dark overlay was a flat 20% black veil. It is now a light map — mid-grey ambient,
+    multiplied over the world — so unlit ground sits at half brightness as it does
+    officially, and lights screen it back towards white instead of erasing holes in it.
+  - Walls cast a soft blurred shadow onto the floor, and their own faces are lit back up,
+    so a room reads with depth rather than flat.
+  - Wall noise was a flat grey wash at 50% that pulled decorated walls towards neutral and
+    cost a landscape its colour. It is now additive at 20%, as officially.
+  - `strokeLighting` is honoured: it sets how brightly a wall's rim reads in the light map.
+  - Undecorated rooms use the reference's own terrain colours rather than a darker local
+    palette, and gain the ground mottling the reference draws when no floor landscape
+    applies — without which a plain room under the new light map read almost black.
+
+- 677c063: Lighten the default road color in the room view so roads read as a lighter grey against the terrain instead of appearing too dark.
+- f29d41a: Guest sessions and world-start-room lookup failures now center the map on the world's middle instead of leaving the camera at its raw uncentered default.
+- 526e00c: Bring back the memory tree's per-node reload buttons and give the bottom bar a collapse toggle again.
+
+  Since watch values moved to typed HTTP fetches, the reload button was gated on a WebSocket placeholder that no longer reaches the tree, so it never rendered. Every object and array node now has one, and it writes the refetched subtree back into the watch store instead of a node-local copy, so live change signals keep updating the node afterwards.
+
+  The bottom bar gained a collapse/expand button next to the popout action, and collapsing it by hand sticks: the effect that mirrors the pane toggles no longer reacts to the bar's own height, which previously snapped a bar dragged shut back open and discarded a collapsed bar on reload.
+
+- 4016760: Map visual text now matches the reference client: text renders opaque unless an explicit `opacity` is given (the documented 0.5 default only applies to shapes), a `stroke` colour without `strokeWidth` falls back to the reference default of 0.15, and the background box is sized from the font size instead of the measured glyph height so padding reads consistently across strings.
+- d63cb89: Match the official client's RoomVisual style defaults: text is centered instead of left-aligned, and a `stroke` colour on its own now outlines text and shapes (`strokeWidth` defaults to 0.15 for text and 0.1 for circles, rects and polys). An unstyled `poly()` gets the reference's white outline.
+- 7ec6fc4: Match the official client's light pools and wall shadows
+
+  Every object punched the same three-tile pool at full alpha into the light map, which is
+  the size and strength the official client reserves for a spawn — a base full of extensions
+  therefore washed out into one bright cloud. Each type now contributes the pools its own
+  metadata gives it: an extension's halo grows with its tier and only lights while it holds
+  energy, a lab lights only for a non-energy payload, a storage's core only when it holds
+  something, sources, minerals, deposits, portals and keeper lairs light in their own colour,
+  and roads, walls, ramparts, construction sites and flags stay dark as they do officially.
+
+  Wall shadows were twice as wide as the reference's. Both blur by the same fraction of the
+  room, but PixiJS v7 spreads that figure across its passes and lands at half of it, where v8
+  normalises its passes to hit it exactly.
+
 ## 0.24.0
 
 ### Minor Changes
