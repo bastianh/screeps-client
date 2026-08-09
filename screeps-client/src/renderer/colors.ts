@@ -2,22 +2,25 @@
 export const BG_DEEP    = 0x0d1117  // wall tiles, creep body center
 export const BG_DARK    = 0x161b22  // creep inner ring, extension bg
 export const BG_MEDIUM  = 0x1c2128  // creep ring: empty body-part slots
-export const BG_SURFACE = 0x34343B  // terrain plain
+export const BG_SURFACE = 0x34343B  // panel surface; was the terrain plain before it moved to the reference's value
 
 // ── Terrain ────────────────────────────────────────────────────────────────
-export const TERRAIN_PLAIN  = BG_SURFACE
+export const TERRAIN_PLAIN  = 0x555555           // reference's undecorated floor at normal lighting
 export const TERRAIN_WALL   = BG_DEEP            // void background (outside-room areas)
 export const TERRAIN_SWAMP  = 0x334933           // legacy export, no longer used for in-room rendering
 export const TERRAIN_ROAD   = 0x6B6969           // also used for room exits
 export const TERRAIN_BORDER = 0x30363d
 
-// In-room terrain fill + outer border (border drawn with stroke alignment=0 / outside)
-export const TERRAIN_WALL_FILL    = 0x181818
+// In-room terrain fill + outer border (border drawn with stroke alignment=0 / outside).
+// These are the reference's own undecorated colours at `lighting: 'normal'`, read out of
+// the terrain processor — they are what a room renders as before any decoration applies,
+// and they assume the light map halves them. Swamp fill and border are deliberately the
+// same value: with the swamp texture enabled the reference draws no visible swamp border.
+export const TERRAIN_WALL_FILL    = 0x111111
 export const TERRAIN_WALL_BORDER  = 0x000000
-export const TERRAIN_WALL_NOISE   = 0x282828  // lighter grey for noise overlay on walls
-export const TERRAIN_SWAMP_FILL   = 0x282D1A
-export const TERRAIN_SWAMP_BORDER = 0x26271F
-export const TERRAIN_SWAMP_GLOW   = 0x2A4A20  // saturated green for atmospheric blur
+export const TERRAIN_SWAMP_FILL   = 0x4A501E
+export const TERRAIN_SWAMP_BORDER = 0x4A501E
+export const TERRAIN_SWAMP_TEXTURE = 0x66FF00 // reference's additive swamp-noise tint
 
 // ── Body parts ─────────────────────────────────────────────────────────────
 export const BP_TOUGH         = 0x4c4c4c

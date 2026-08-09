@@ -1,6 +1,6 @@
 import { batch, createEffect, createMemo, createSignal, onCleanup, onMount, untrack, Show } from 'solid-js'
 import { RoomRenderer, TILE_SIZE, Z } from '~/renderer/RoomRenderer.js'
-import { createTerrainLayer, setTerrainEffectsVisible } from '~/renderer/TerrainLayer.js'
+import { createTerrainLayer, setTerrainEffectsVisible, type TerrainDecoration } from '~/renderer/TerrainLayer.js'
 import { parseRoomDecorations, mergeDecorationItems, type RoomDecoration } from '~/renderer/roomDecorations.js'
 import { DecorationLayer } from '~/renderer/DecorationLayer.js'
 import { OBJ_ROAD, ST_DARK } from '~/renderer/colors.js'
@@ -79,6 +79,12 @@ export function RoomViewer(props: RoomViewerProps) {
   let visualLayer: VisualLayer | null = null
   let terrainLayerRef: ReturnType<typeof createTerrainLayer> | null = null
   let decorationLayerRef: DecorationLayer | null = null
+  // Fingerprint of the TerrainDecoration the live terrain layer was built from. Terrain
+  // and decorations arrive over separate requests, so a room is normally drawn once plain
+  // and then again decorated — and for the many rooms with no landscape the second build
+  // is byte-identical, a visible flash for nothing. Comparing lets that case skip it.
+  let terrainDecorationKey: string | null = null
+  const terrainKey = (d?: TerrainDecoration) => JSON.stringify(d ?? null)
   const [renderer, setRenderer] = createSignal<RoomRenderer | null>(null)
   const [terrain, setTerrain] = createSignal<{ room: string, data: RoomTerrain } | null>(null)
   // Raw items are kept so socket updates can be merged into them by `_id`; the parsed
@@ -486,6 +492,7 @@ export function RoomViewer(props: RoomViewerProps) {
 
     terrainLayerRef?.destroy()
     terrainLayerRef = null
+    terrainDecorationKey = null
     r.clear()
     r.resetView()
     objLayer?.destroy()
@@ -500,7 +507,9 @@ export function RoomViewer(props: RoomViewerProps) {
     if (t && t.room === props.room) {
       log(`terrain applied immediately (pre-loaded) — ${props.room}`)
       const dec = untrack(roomDecoration)
-      terrainLayerRef = createTerrainLayer(t.data, r.app.renderer, dec?.room === props.room ? dec.decoration.terrain : undefined)
+      const terrainDec = dec?.room === props.room ? dec.decoration.terrain : undefined
+      terrainLayerRef = createTerrainLayer(t.data, terrainDec, r.lighting)
+      terrainDecorationKey = terrainKey(terrainDec)
       setTerrainEffectsVisible(terrainLayerRef, untrack(terrainEffects))
       terrainLayerRef.zIndex = Z.terrain
       r.world.addChild(terrainLayerRef)    }
@@ -570,7 +579,9 @@ export function RoomViewer(props: RoomViewerProps) {
     }
     log(`terrain applied (async) — ${props.room}`)
     const dec = untrack(roomDecoration)
-    terrainLayerRef = createTerrainLayer(t.data, r.app.renderer, dec?.room === props.room ? dec.decoration.terrain : undefined)
+    const terrainDec = dec?.room === props.room ? dec.decoration.terrain : undefined
+    terrainLayerRef = createTerrainLayer(t.data, terrainDec, r.lighting)
+    terrainDecorationKey = terrainKey(terrainDec)
     setTerrainEffectsVisible(terrainLayerRef, untrack(terrainEffects))
     r.world.addChildAt(terrainLayerRef, 0)
   })
@@ -584,7 +595,8 @@ export function RoomViewer(props: RoomViewerProps) {
     if (!r || !t || t.room !== props.room) return
     if (!terrainLayerRef?.parent) return
     terrainLayerRef.destroy()
-    terrainLayerRef = createTerrainLayer(t.data, r.app.renderer)
+    terrainLayerRef = createTerrainLayer(t.data, undefined, r.lighting)
+    terrainDecorationKey = terrainKey(undefined)
     setTerrainEffectsVisible(terrainLayerRef, untrack(terrainEffects))
     r.world.addChildAt(terrainLayerRef, 0)
     objLayer?.setRoadColor(OBJ_ROAD)
@@ -601,11 +613,16 @@ export function RoomViewer(props: RoomViewerProps) {
     if (!t || t.room !== props.room) return
     if (!terrainLayerRef?.parent) return
 
-    log(`decoration arrived, rebuilding terrain layer — ${props.room}`)
-    terrainLayerRef.destroy()
-    terrainLayerRef = createTerrainLayer(t.data, r.app.renderer, dec.decoration.terrain)
-    setTerrainEffectsVisible(terrainLayerRef, untrack(terrainEffects))
-    r.world.addChildAt(terrainLayerRef, 0)
+    // Only the terrain half of the decoration is baked into the layer; road and object
+    // colours below are applied live, so an unchanged landscape needs no rebuild at all.
+    if (terrainDecorationKey !== terrainKey(dec.decoration.terrain)) {
+      log(`decoration arrived, rebuilding terrain layer — ${props.room}`)
+      terrainLayerRef.destroy()
+      terrainLayerRef = createTerrainLayer(t.data, dec.decoration.terrain, r.lighting)
+      terrainDecorationKey = terrainKey(dec.decoration.terrain)
+      setTerrainEffectsVisible(terrainLayerRef, untrack(terrainEffects))
+      r.world.addChildAt(terrainLayerRef, 0)
+    }
     if (objLayer && dec.decoration.roadColor != null) {
       objLayer.setRoadColor(dec.decoration.roadColor)
     }

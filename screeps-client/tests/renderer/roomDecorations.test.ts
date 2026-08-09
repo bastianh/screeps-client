@@ -29,7 +29,49 @@ describe('parseRoomDecorations()', () => {
       expect(res.roadColor).toBe(0x831b8b)
       expect(res.terrain?.wallFillColor).toBe(0x5261a0)
       expect(res.terrain?.wallBorderColor).toBe(0x465ec4)
-      expect(res.terrain?.wallBorderWidth).toBeCloseTo(30 / 250)
+      // `paint-order: stroke` hides the inner half of the reference's centred stroke, and
+      // its SVG viewBox is 100 units per tile — so 30 shows as 0.15 of a tile.
+      expect(res.terrain?.wallBorderWidth).toBeCloseTo(0.15)
+    })
+
+    it('converts the reference default stroke widths to our undecorated defaults', () => {
+      const res = parseRoomDecorations(response(item({
+        active: { strokeWidth: 10, swampStrokeWidth: 50 },
+        decoration: { _id: 'd1', type: 'landscape' },
+      })))
+
+      expect(res.terrain?.wallBorderWidth).toBeCloseTo(0.05)
+      expect(res.terrain?.swampBorderWidth).toBeCloseTo(0.25)
+    })
+
+    it('carries strokeLighting through as the wall rim brightness', () => {
+      const res = parseRoomDecorations(response(item({
+        active: { strokeLighting: 0.4 },
+        decoration: { _id: 'd1', type: 'wallLandscape' },
+      })))
+
+      expect(res.terrain?.wallBorderLighting).toBeCloseTo(0.4)
+    })
+
+    it('tiles a landscape only when the definition declares a tileScale', () => {
+      const tiled = parseRoomDecorations(response(item({
+        decoration: { _id: 'd1', type: 'landscape', floorForegroundUrl: 'f.png', tileScale: 4 },
+      })))
+      const stretched = parseRoomDecorations(response(item({
+        decoration: { _id: 'd2', type: 'landscape', floorForegroundUrl: 'f.png' },
+      })))
+
+      expect(tiled.terrain?.floorTextureTileScale).toBe(4)
+      expect(stretched.terrain?.floorTextureTileScale).toBeUndefined()
+    })
+
+    it('ignores a placement tileScale on landscapes, as the reference does', () => {
+      const res = parseRoomDecorations(response(item({
+        active: { tileScale: 9 },
+        decoration: { _id: 'd1', type: 'floorLandscape', floorForegroundUrl: 'f.png' },
+      })))
+
+      expect(res.terrain?.floorTextureTileScale).toBeUndefined()
     })
 
     it('keeps the first floor landscape and ignores later ones', () => {
