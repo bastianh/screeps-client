@@ -1,4 +1,4 @@
-import { Container, Graphics, RenderTexture, Sprite, Texture } from 'pixi.js'
+import { Container, Graphics, Rectangle, RenderTexture, Sprite, Texture } from 'pixi.js'
 import type { Renderer } from 'pixi.js'
 import { ROOM_SIZE, TILE_SIZE } from './RoomRenderer.js'
 
@@ -42,8 +42,9 @@ export class LightingLayer {
   private readonly scene: Container
   private readonly gradientTexture: Texture
   private readonly lights = new Map<string, Sprite>()
-  /** Terrain's contribution: wall shadows and lit wall faces. Owned by the caller. */
-  private wallLighting: Container | null = null
+  /** Baked terrain contribution: wall shadows and lit wall faces. Owned by this layer. */
+  private wallSprites: Sprite[] = []
+  private wallGeneration = 0
   private dirty = false
   private destroyed = false
 
@@ -67,31 +68,61 @@ export class LightingLayer {
   }
 
   /**
-   * Hand over the terrain's lighting contribution — wall shadow and lit wall faces, built
-   * by `createWallLighting`. Pass null when the terrain layer goes away. The previous
-   * container is detached but not destroyed; the terrain layer owns its lifetime.
+   * Adopt the terrain's lighting contribution from `createWallLighting`.
+   *
+   * Both halves are flattened to a texture here and kept as plain sprites. This scene
+   * re-renders on every frame that a creep moves, so nothing in it may carry a filter or
+   * a full-room vector path — the shadow's blur would otherwise be recomputed at 60fps.
+   *
+   * `shadow` and `lit` are consumed: they are destroyed once baked. Returns a generation
+   * token for `clearWallLighting`.
    */
-  setWallLighting(contribution: Container | null): void {
-    if (this.wallLighting === contribution) return
-    if (this.wallLighting && !this.wallLighting.destroyed) this.wallLighting.removeFromParent()
-    this.wallLighting = contribution
-    if (contribution) {
-      contribution.zIndex = 1
-      this.scene.addChild(contribution)
+  setWallLighting(contribution: { shadow: Container; lit: Container }): number {
+    this.disposeWallLighting()
+    this.wallSprites = [
+      this.bake(contribution.shadow, 'multiply'),
+      this.bake(contribution.lit, 'screen'),
+    ]
+    for (const sprite of this.wallSprites) {
+      sprite.zIndex = 1
+      this.scene.addChild(sprite)
     }
     this.dirty = true
+    return ++this.wallGeneration
   }
 
   /**
-   * Withdraw `contribution`, but only while it is still the active one.
+   * Withdraw the contribution identified by `generation`, if it is still the active one.
    *
    * A terrain layer calls this as it is destroyed, and a room switch may already have
    * registered its successor by then — an unconditional clear would blank the new room's
    * shadows on the way out.
    */
-  clearWallLighting(contribution: Container): void {
-    if (this.wallLighting !== contribution) return
-    this.setWallLighting(null)
+  clearWallLighting(generation: number): void {
+    if (generation !== this.wallGeneration) return
+    this.disposeWallLighting()
+    this.dirty = true
+  }
+
+  private bake(source: Container, blendMode: 'multiply' | 'screen'): Sprite {
+    const frame = new Rectangle(0, 0, ROOM_SIZE, ROOM_SIZE)
+    const texture = this.renderer.generateTexture({ target: source, frame })
+    source.filters = null
+    // `context: false` — the wall shape is a cached GraphicsContext shared with the
+    // terrain layer's own masks, and outlives anything baked from it.
+    source.destroy({ children: true, context: false })
+
+    const sprite = new Sprite(texture)
+    sprite.blendMode = blendMode
+    return sprite
+  }
+
+  private disposeWallLighting(): void {
+    for (const sprite of this.wallSprites) {
+      sprite.removeFromParent()
+      sprite.destroy({ texture: true, textureSource: true })
+    }
+    this.wallSprites = []
   }
 
   // Reconcile the live set of lights (called once per tick). Adds sprites for
@@ -151,8 +182,7 @@ export class LightingLayer {
     this.destroyed = true
     for (const sprite of this.lights.values()) sprite.destroy()
     this.lights.clear()
-    // Detach first: the wall contribution belongs to the terrain layer, which destroys it.
-    this.setWallLighting(null)
+    this.disposeWallLighting()
     this.scene.destroy({ children: true })
     this.rt.destroy(true)
     this.gradientTexture.destroy(true)

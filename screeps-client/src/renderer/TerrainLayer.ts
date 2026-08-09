@@ -1,4 +1,4 @@
-import { AlphaFilter, Container, Graphics, BlurFilter, Rectangle, Sprite, Texture, TilingSprite, type DestroyOptions, type StrokeStyle } from 'pixi.js'
+import { AlphaFilter, Container, Graphics, GraphicsContext, BlurFilter, Rectangle, Sprite, Texture, TilingSprite, type DestroyOptions, type StrokeStyle } from 'pixi.js'
 import { TerrainType, RoomTerrain } from 'screeps-connectivity'
 import { TILE_SIZE } from './RoomRenderer.js'
 import type { LightingLayer } from './LightingLayer.js'
@@ -162,13 +162,16 @@ function resolveColors(d?: TerrainDecoration): ResolvedColors {
   }
 }
 
-type ApplyStyle = (g: Graphics) => void
+type ApplyStyle = (g: GraphicsContext) => void
 
 // Walks every quadrant of every tile of `targetType` and calls `apply(g)`
 // after each sub-path. Used to apply either a stroke (border pass) or fill
 // (inner pass) to the same shape geometry.
+//
+// Takes the GraphicsContext rather than the Graphics so callers that only need the raw
+// shape can share one context between several Graphics — see `terrainShape`.
 function drawTerrainQuadrants(
-  g: Graphics,
+  g: GraphicsContext,
   terrain: RoomTerrain,
   targetType: TerrainType,
   apply: ApplyStyle,
@@ -281,7 +284,43 @@ function drawTerrainQuadrants(
   if (pathDrawn) apply(g)
 }
 
-function drawExits(g: Graphics, terrain: RoomTerrain) {
+/**
+ * White-filled path of one terrain type, shared by everything that needs the raw shape —
+ * the wall and swamp masks, the wall shadow, the lit wall face.
+ *
+ * Sharing the GraphicsContext shares its tessellation, so the 2500-tile walk that
+ * dominates layer construction runs twice per room instead of six times. The cache holds
+ * one room: entering a room builds the terrain layer, then builds it again a moment later
+ * when the decorations arrive over their own request, and that second pass is the one the
+ * eye catches. Keyed on the RoomTerrain instance, so the rebuild is a straight hit.
+ */
+let shapeCache: { terrain: RoomTerrain; wall: GraphicsContext; swamp: GraphicsContext } | null = null
+
+function terrainShape(terrain: RoomTerrain, type: TerrainType.Wall | TerrainType.Swamp): GraphicsContext {
+  if (shapeCache?.terrain !== terrain) {
+    shapeCache?.wall.destroy()
+    shapeCache?.swamp.destroy()
+    const build = (t: TerrainType) => {
+      const context = new GraphicsContext()
+      drawTerrainQuadrants(context, terrain, t, (c) => c.fill(0xffffff))
+      return context
+    }
+    shapeCache = { terrain, wall: build(TerrainType.Wall), swamp: build(TerrainType.Swamp) }
+  }
+  return type === TerrainType.Wall ? shapeCache.wall : shapeCache.swamp
+}
+
+/**
+ * A Graphics over a shared shape context. Never destroy one with `{ context: true }` —
+ * the context outlives it, and the other consumers of the same shape are still using it.
+ */
+function shapeGraphics(terrain: RoomTerrain, type: TerrainType.Wall | TerrainType.Swamp, tint?: number): Graphics {
+  const g = new Graphics(terrainShape(terrain, type))
+  if (tint != null) g.tint = tint
+  return g
+}
+
+function drawExits(g: GraphicsContext, terrain: RoomTerrain) {
   const exitColor = TERRAIN_ROAD
   const T = TILE_SIZE
 
@@ -338,8 +377,8 @@ function createFloorBase(colors: ResolvedColors): Graphics {
 function createSwampShapes(terrain: RoomTerrain, colors: ResolvedColors): Graphics {
   const g = new Graphics()
   const swampStroke: StrokeStyle = { color: colors.swampBorderColor, width: TILE_SIZE * colors.swampBorderWidth, alignment: 0, cap: 'round', join: 'round' }
-  drawTerrainQuadrants(g, terrain, TerrainType.Swamp, (gg) => gg.stroke(swampStroke))
-  drawTerrainQuadrants(g, terrain, TerrainType.Swamp, (gg) => gg.fill(colors.swampFillColor))
+  drawTerrainQuadrants(g.context, terrain, TerrainType.Swamp, (gg) => gg.stroke(swampStroke))
+  drawTerrainQuadrants(g.context, terrain, TerrainType.Swamp, (gg) => gg.fill(colors.swampFillColor))
   // Fade via AlphaFilter, not `g.alpha`: plain alpha is applied per-vertex, so the
   // translucent fill blends with the border strokes underneath instead of covering
   // them — every quadrant sub-path gets outlined and the seams show through as a grid.
@@ -353,9 +392,9 @@ function createSwampShapes(terrain: RoomTerrain, colors: ResolvedColors): Graphi
 function createWallShapes(terrain: RoomTerrain, colors: ResolvedColors): Graphics {
   const g = new Graphics()
   const wallStroke: StrokeStyle = { color: colors.wallBorderColor, width: TILE_SIZE * colors.wallBorderWidth, alignment: 0, cap: 'round', join: 'round' }
-  drawTerrainQuadrants(g, terrain, TerrainType.Wall, (gg) => gg.stroke(wallStroke))
-  drawTerrainQuadrants(g, terrain, TerrainType.Wall, (gg) => gg.fill(colors.wallFillColor))
-  drawExits(g, terrain)
+  drawTerrainQuadrants(g.context, terrain, TerrainType.Wall, (gg) => gg.stroke(wallStroke))
+  drawTerrainQuadrants(g.context, terrain, TerrainType.Wall, (gg) => gg.fill(colors.wallFillColor))
+  drawExits(g.context, terrain)
   g.rect(0, 0, 50 * TILE_SIZE, 50 * TILE_SIZE)
   g.stroke({ width: 1, color: TERRAIN_BORDER })
   return g
@@ -373,9 +412,7 @@ function createWallShapes(terrain: RoomTerrain, colors: ResolvedColors): Graphic
  * decoration-driven, so a pack's `swampColor` still reads as its own colour underneath.
  */
 function createSwampTexture(terrain: RoomTerrain): Container {
-  const mask = new Graphics()
-  drawTerrainQuadrants(mask, terrain, TerrainType.Swamp, (g) => g.fill(0xffffff))
-
+  const mask = shapeGraphics(terrain, TerrainType.Swamp)
   const container = maskedCloud(mask, cloud('swamp', 12, 90, 110), 0.15, TERRAIN_SWAMP_TEXTURE)
   container.label = 'swampTexture'
   return container
@@ -390,7 +427,7 @@ function createSwampTexture(terrain: RoomTerrain): Container {
  * landscape its colour.
  */
 function createWallNoise(terrain: RoomTerrain): Container {
-  const container = maskedCloud(createWallMask(terrain), cloud('wall', 12, 90, 110), 0.2)
+  const container = maskedCloud(shapeGraphics(terrain, TerrainType.Wall), cloud('wall', 12, 90, 110), 0.2)
   container.label = 'wallNoise'
   return container
 }
@@ -398,36 +435,39 @@ function createWallNoise(terrain: RoomTerrain): Container {
 /**
  * The terrain's contribution to the light map, for `LightingLayer.setWallLighting`.
  *
- * Mirrors the reference's two lighting-layer wall objects: a blurred black silhouette
- * multiplied in, which is the soft shadow walls cast onto the floor, and the wall shape
- * itself screened back to `WALL_LIGHTING` so wall faces read as lit rather than shadowed.
- * The shape's border is screened at the decoration's `strokeLighting` — 0 leaves the rim
- * sitting in shadow, 1 makes it glow.
+ * Mirrors the reference's two lighting-layer wall objects: a blurred black silhouette,
+ * which is the soft shadow walls cast onto the floor, and the wall shape screened back to
+ * `WALL_LIGHTING` so wall faces read as lit rather than shadowed. The rim is screened at
+ * the decoration's `strokeLighting` — 0 leaves it in shadow, 1 makes it glow.
+ *
+ * Returned as plain display objects for the light map to bake. They must not stay live in
+ * it: that scene re-renders on every frame a creep moves, and a blurred full-room path is
+ * far too expensive to re-tessellate at that rate.
  */
-export function createWallLighting(terrain: RoomTerrain, decoration?: TerrainDecoration): Container {
+export function createWallLighting(
+  terrain: RoomTerrain,
+  decoration?: TerrainDecoration,
+): { shadow: Container; lit: Container } {
   const colors = resolveColors(decoration)
 
-  const shadow = new Graphics()
-  drawTerrainQuadrants(shadow, terrain, TerrainType.Wall, (g) => g.fill(0x000000))
-  shadow.blendMode = 'multiply'
+  const shadow = shapeGraphics(terrain, TerrainType.Wall, 0x000000)
   shadow.filters = [new BlurFilter({ strength: ROOM_EXTENT * WALLS_BLUR, quality: 3 })]
   shadow.filterArea = new Rectangle(0, 0, ROOM_EXTENT, ROOM_EXTENT)
 
-  const lit = new Graphics()
+  // The rim is its own Graphics so the face can keep sharing the cached wall shape. Drawn
+  // first, so the face covers the half of the outside-aligned stroke that lands inside.
   const glow = Math.round(255 * (decoration?.wallBorderLighting ?? 0))
-  const rim: StrokeStyle = {
+  const rim = new Graphics()
+  drawTerrainQuadrants(rim.context, terrain, TerrainType.Wall, (g) => g.stroke({
     color: (glow << 16) | (glow << 8) | glow,
     width: TILE_SIZE * colors.wallBorderWidth,
     alignment: 0, cap: 'round', join: 'round',
-  }
-  drawTerrainQuadrants(lit, terrain, TerrainType.Wall, (g) => g.stroke(rim))
-  drawTerrainQuadrants(lit, terrain, TerrainType.Wall, (g) => g.fill(WALL_LIGHTING))
-  lit.blendMode = 'screen'
+  }))
 
-  const container = new Container()
-  container.label = 'wallLighting'
-  container.addChild(shadow, lit)
-  return container
+  const lit = new Container()
+  lit.addChild(rim, shapeGraphics(terrain, TerrainType.Wall, WALL_LIGHTING))
+
+  return { shadow, lit }
 }
 
 /**
@@ -436,8 +476,11 @@ export function createWallLighting(terrain: RoomTerrain, decoration?: TerrainDec
  * A Graphics can only mask one object, so every consumer needs its own instance.
  */
 export function createWallMask(terrain: RoomTerrain): Graphics {
+  // Deliberately its own geometry, not the shared shape context. DecorationLayer holds one
+  // of these and is torn down on its own schedule, which can outlast the terrain layer
+  // that owns the cache entry — a shared context could be freed out from under it.
   const mask = new Graphics()
-  drawTerrainQuadrants(mask, terrain, TerrainType.Wall, (g) => g.fill(0xffffff))
+  drawTerrainQuadrants(mask.context, terrain, TerrainType.Wall, (g) => g.fill(0xffffff))
   return mask
 }
 
@@ -455,16 +498,11 @@ export function createTerrainLayer(
 ): Container {
   const colors = resolveColors(decoration)
   const container = new Container()
-  const wallLighting = lighting ? createWallLighting(terrain, decoration) : null
   const baseDestroy = container.destroy.bind(container)
-
-  if (lighting && wallLighting) lighting.setWallLighting(wallLighting)
+  const generation = lighting?.setWallLighting(createWallLighting(terrain, decoration))
 
   container.destroy = (options?: DestroyOptions) => {
-    if (wallLighting && !wallLighting.destroyed) {
-      lighting?.clearWallLighting(wallLighting)
-      wallLighting.destroy({ children: true })
-    }
+    if (generation != null) lighting?.clearWallLighting(generation)
     baseDestroy(options)
   }
 
@@ -508,7 +546,7 @@ export function createTerrainLayer(
       sprite.setSize(W, W)
       sprite.tint = wallTextureTint
       sprite.alpha = wallTextureAlpha
-      const maskG = createWallMask(terrain)
+      const maskG = shapeGraphics(terrain, TerrainType.Wall)
       container.addChild(maskG)
       sprite.mask = maskG
       container.addChild(sprite)
