@@ -1,7 +1,7 @@
 import { createEffect, createSignal, onCleanup, onMount, untrack } from 'solid-js'
 import { MapRenderer } from '~/renderer/MapRenderer.js'
 import { buildMapDecoration } from '~/renderer/mapDecorations.js'
-import { client, userInfo, worldBounds, setWorldBounds } from '~/stores/clientStore.js'
+import { client, userInfo, isGuest, worldBounds, setWorldBounds } from '~/stores/clientStore.js'
 import { showMapRoomNames, showUnclaimableRooms, showMapVisuals, showRoomDecorations } from '~/stores/settingsStore.js'
 import { mapOverlayMode } from '~/stores/mapOverlayStore.js'
 import { allianceMembers, loadAlliances, setAllianceRoomCounts } from '~/stores/allianceStore.js'
@@ -263,6 +263,17 @@ export function MapViewer(props: MapViewerProps) {
       const initialBounds = worldBounds()
       if (initialBounds) renderer.setBounds(initialBounds.minX, initialBounds.maxX, initialBounds.minY, initialBounds.maxY)
 
+      // Falls back to the middle of the known world bounds, or the map's origin
+      // room if bounds haven't arrived yet — better than leaving the camera at
+      // the renderer's raw (uncentred) default transform.
+      const centerOnMapMiddle = () => {
+        if (!renderer) return
+        const b = worldBounds()
+        const x = b ? (b.minX + b.maxX) / 2 : 0
+        const y = b ? (b.minY + b.maxY) / 2 : 0
+        renderer.centerOnPoint(x, y)
+      }
+
       // A bookmarked/deep-linked position wins over both the room the map was
       // opened from and the account's start room.
       if (initialCenterPos) {
@@ -276,6 +287,9 @@ export function MapViewer(props: MapViewerProps) {
         if (coord) renderer.centerOn(coord.x, coord.y)
         renderer.setSelectedRoom(props.originRoom)
         props.onSelectedRoomChanged?.(buildRoomInfo(props.originRoom))
+      } else if (isGuest()) {
+        // Guests have no account, so /api/user/world-start-room would just 401 — skip it.
+        centerOnMapMiddle()
       } else {
         const c = client()
         if (c) {
@@ -283,13 +297,15 @@ export function MapViewer(props: MapViewerProps) {
             const res = await c.http.user.worldStartRoom(props.shard ?? 'shard0') as { room?: string | string[] }
             if (!renderer) return
             const roomName = Array.isArray(res?.room) ? res.room[0] : res?.room
-            if (typeof roomName === 'string') {
-              const coord = parseRoomName(roomName)
-              if (coord) renderer.centerOn(coord.x, coord.y)
-            }
+            const coord = typeof roomName === 'string' ? parseRoomName(roomName) : null
+            if (coord) renderer.centerOn(coord.x, coord.y)
+            else centerOnMapMiddle()
           } catch (err) {
             error('worldStartRoom failed:', err)
+            centerOnMapMiddle()
           }
+        } else {
+          centerOnMapMiddle()
         }
       }
 
