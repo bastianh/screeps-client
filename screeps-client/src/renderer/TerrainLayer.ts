@@ -22,6 +22,16 @@ const ROOM_EXTENT = 50 * TILE_SIZE
 /** Blur radius of the wall shadow — the reference's `WALLS_BLUR * size.width`. */
 const WALLS_BLUR = 0.006
 
+/**
+ * Passes the reference's blur runs at (PixiJS v7's `BlurFilter` default `quality`).
+ *
+ * v7 splits `strength` evenly across its passes and applies that fraction in each, so the
+ * shadow it actually lays down has a spread of `strength / sqrt(quality)` — half the
+ * nominal figure. PixiJS v8 normalises instead: its passes combine to exactly `strength`.
+ * Feeding it `WALLS_BLUR` unadjusted therefore doubled every wall's shadow.
+ */
+const REFERENCE_BLUR_QUALITY = 4
+
 /** Grey the reference paints wall faces at in the light map, so walls read lit. */
 const WALL_LIGHTING = 0x808080
 
@@ -451,7 +461,8 @@ export function createWallLighting(
   const colors = resolveColors(decoration)
 
   const shadow = shapeGraphics(terrain, TerrainType.Wall, 0x000000)
-  shadow.filters = [new BlurFilter({ strength: ROOM_EXTENT * WALLS_BLUR, quality: 3 })]
+  const blur = ROOM_EXTENT * WALLS_BLUR / Math.sqrt(REFERENCE_BLUR_QUALITY)
+  shadow.filters = [new BlurFilter({ strength: blur, quality: 3 })]
   shadow.filterArea = new Rectangle(0, 0, ROOM_EXTENT, ROOM_EXTENT)
 
   // The rim is its own Graphics so the face can keep sharing the cached wall shape. Drawn

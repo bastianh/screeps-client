@@ -1,7 +1,9 @@
 import { Application, Container, Graphics, Sprite, Point, Rectangle } from 'pixi.js'
+import type { RoomObjectMap } from 'screeps-connectivity'
 import { HoverHighlightLayer } from './HoverHighlightLayer.js'
 import { LightingLayer } from './LightingLayer.js'
 import type { Light } from './LightingLayer.js'
+import { objectGlows } from './objectLights.js'
 
 export const TILE_SIZE = 12
 export const ROOM_SIZE = 50 * TILE_SIZE
@@ -20,8 +22,6 @@ export const Z = {
   hover:      50,
   nav:        60,
 } as const
-
-const LIGHT_EXCLUDED_TYPES = new Set(['road', 'constructedWall', 'rampart'])
 
 export class RoomRenderer {
   readonly app: Application
@@ -655,14 +655,15 @@ export class RoomRenderer {
     this.lighting.clear()
   }
 
-  updateLighting(objects: Record<string, { type?: unknown; x?: unknown; y?: unknown }>): void {
+  updateLighting(objects: RoomObjectMap): void {
     const lights: Light[] = []
     for (const id in objects) {
       const obj = objects[id]
       if (!obj) continue
-      if (typeof obj.type === 'string' && LIGHT_EXCLUDED_TYPES.has(obj.type)) continue
       if (typeof obj.x !== 'number' || typeof obj.y !== 'number') continue
-      lights.push({ id, cx: (obj.x + 0.5) * TILE_SIZE, cy: (obj.y + 0.5) * TILE_SIZE })
+      const glows = objectGlows(obj)
+      if (glows.length === 0) continue
+      lights.push({ id, cx: (obj.x + 0.5) * TILE_SIZE, cy: (obj.y + 0.5) * TILE_SIZE, glows })
     }
     this.lighting.setLights(lights)
     this.lighting.render()
