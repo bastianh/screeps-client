@@ -734,6 +734,9 @@ export function RoomViewer(props: RoomViewerProps) {
       objLayer.container.label = 'objects'
       objLayer.container.zIndex = Z.objects
       r.world.addChild(objLayer.container)
+      objLayer.rampartLayer.label = 'rampartGlow'
+      objLayer.rampartLayer.zIndex = Z.rampartGlow
+      r.world.addChild(objLayer.rampartLayer)
 
       animLayer = new ActionAnimationLayer(r.app.ticker)
       animLayer.container.label = 'animations'

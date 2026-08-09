@@ -93,6 +93,13 @@ export interface ObjectEntry {
 
 export class ObjectLayer {
   readonly container: Container
+  /**
+   * Ramparts, rendered separately from `container` so a caller can place them above the
+   * lighting layer's dark overlay (`Z.rampartGlow`) — the ambient multiply would otherwise
+   * dim the glow, unlike vanilla's rampart which lives past the light map in its own
+   * "effects" layer.
+   */
+  readonly rampartLayer: Container
   private objects = new Map<string, ContainerWithTarget>()
   private rawObjects = new Map<string, RoomObject>()
   private roadGraphics: Graphics
@@ -142,25 +149,34 @@ export class ObjectLayer {
     this.wallMarkGraphics = new Graphics()
     this.wallMarkGraphics.zIndex = -2
     this.container.addChild(this.wallMarkGraphics)
+    this.rampartLayer = new Container()
+    this.rampartLayer.sortableChildren = true
     this.rampartGraphics = new Graphics()
-    // Ramparts overlay everything in the tile as a translucent green wash (vanilla):
-    // above structures (zIndex 0) AND creeps (100) — a creep standing on a rampart
-    // shows under the green — but below flags (200).
+    // Additive, like the reference's rampart sprite (`BLEND_MODES.ADD` in its topmost
+    // "effects" layer): it *adds* a green cast rather than covering what's underneath, so
+    // a creep standing on a rampart still reads clearly instead of being tinted away — the
+    // fill only ever brightens, never darkens or obscures. Relative order within
+    // `rampartLayer`; the layer itself sits above every other room layer (see its doc).
     this.rampartGraphics.zIndex = 150
-    this.container.addChild(this.rampartGraphics)
+    this.rampartGraphics.blendMode = 'add'
+    this.rampartLayer.addChild(this.rampartGraphics)
     // Soft rim glow, blurred via the same BlurFilter pattern the swamp glow uses
     // (TerrainLayer.createSwampGlow). Sits just below the fill layer so its halo
     // reads past the blob edge and tints up through the translucent fill, while the
-    // crisp rim draws on top.
+    // crisp rim draws on top. Additive for the same reason as the fill above.
     this.rampartGlowGraphics = new Graphics()
     this.rampartGlowGraphics.zIndex = 149
+    this.rampartGlowGraphics.blendMode = 'add'
     this.rampartGlowGraphics.filters = [new BlurFilter({ strength: 3, quality: 3 })]
-    this.container.addChild(this.rampartGlowGraphics)
+    this.rampartLayer.addChild(this.rampartGlowGraphics)
     this.roadGraphics = new Graphics()
     this.container.addChild(this.roadGraphics)
-    // Disabled-structure wash: above ramparts and creeps, below flags — the same
+    // Disabled-structure wash: above structures and creeps, below flags — the same
     // stacking vanilla gets from drawing it in its "effects" layer. Additive, so it
-    // reads as a red glow over the structure rather than a flat cover.
+    // reads as a red glow over the structure rather than a flat cover. Sits below
+    // `rampartLayer` now that ramparts render past the dark overlay (see its doc) — a
+    // ramparted disabled structure shows the glow tinted through the translucent rampart
+    // fill rather than on top of it, a minor trade-off for ramparts not reading muddy.
     this.disabledGraphics = new Graphics()
     this.disabledGraphics.zIndex = 160
     this.disabledGraphics.blendMode = 'add'
@@ -1303,7 +1319,7 @@ export class ObjectLayer {
       // line. Adjacent segments are collinear/tangent, so butt caps meet flush.
       // Wide bright stroke on the blurred glow layer (below the fills) → a soft glow
       // that haloes past the blob edge and tints up through the translucent fill.
-      if (trace(this.rampartGlowGraphics)) this.rampartGlowGraphics.stroke({ color, width: T * 0.3, alpha: 0.55, alignment: 0.5, cap: 'butt', join: 'round' })
+      if (trace(this.rampartGlowGraphics)) this.rampartGlowGraphics.stroke({ color, width: T * 0.3, alpha: 0.35, alignment: 0.5, cap: 'butt', join: 'round' })
       // Crisp core rim on top of the fills.
       if (trace(this.rampartGraphics)) this.rampartGraphics.stroke({ color, width: T * 0.08, alpha: 0.9, alignment: 0.5, cap: 'butt', join: 'round' })
     }
@@ -1675,11 +1691,10 @@ export class ObjectLayer {
     this.disabledGraphics.alpha = 0
     this.disabledSig = ''
     this.container.removeChildren()
-    // Re-attach persistent graphics layers removed by removeChildren()
+    // Re-attach persistent graphics layers removed by removeChildren(). rampartGraphics/
+    // rampartGlowGraphics live in `rampartLayer`, not `container` — untouched by this call.
     this.container.addChild(this.wallGraphics)
     this.container.addChild(this.wallMarkGraphics)
-    this.container.addChild(this.rampartGraphics)
-    this.container.addChild(this.rampartGlowGraphics)
     this.container.addChild(this.roadGraphics)
     this.container.addChild(this.disabledGraphics)
   }

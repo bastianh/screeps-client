@@ -18,6 +18,10 @@ export const Z = {
   objects:    10,
   animations: 20,
   darkOverlay:30,
+  // Above darkOverlay so ramparts glow at full brightness regardless of room lighting —
+  // the reference renders them in its topmost "effects" layer, past the light multiply,
+  // for the same reason.
+  rampartGlow:35,
   visuals:    40,
   hover:      50,
   nav:        60,
