@@ -1,6 +1,7 @@
 import { Container, Graphics, Rectangle, RenderTexture, Sprite, Texture } from 'pixi.js'
 import type { Renderer } from 'pixi.js'
 import { ROOM_SIZE, TILE_SIZE } from './RoomRenderer.js'
+import { REFERENCE_CELL_SIZE } from './roomDecorations.js'
 
 /**
  * Ambient level of the light map, and the reference's own (`renderer-metadata.js`, the
@@ -9,17 +10,36 @@ import { ROOM_SIZE, TILE_SIZE } from './RoomRenderer.js'
  * towards white; wall shadows MULTIPLY it further down.
  */
 const AMBIENT = 0x808080
-// Radius of the light pool punched around each lit object, in tiles. Kept as a
-// tile multiplier (not a module-level pixel constant) so this module doesn't
-// read TILE_SIZE at eval time — RoomRenderer imports us, so its TILE_SIZE is
-// still in its temporal dead zone while this module's top level runs.
-const LIGHT_RADIUS_TILES = 3
+
+/**
+ * Side of the shared glow texture, in pixels. The reference's `glow.png` is 256²; every
+ * pool is that one texture scaled to its own size, so this only sets how finely the
+ * falloff is sampled, not how large a pool is.
+ */
+const GRADIENT_TEXTURE_SIZE = 128
+
+/** One light pool, transcribed from a `layer: 'lighting'` sprite in the reference metadata. */
+export interface Glow {
+  /** Diameter, in the reference's units (100 per tile) — the metadata's `width`. */
+  size: number
+  /** Brightness at the centre — the metadata's `alpha`. */
+  alpha: number
+  /** Pool colour; white (untinted) when absent, as in the metadata. */
+  tint?: number
+}
 
 export interface Light {
   id: string
   /** Light centre in room-pixel space (e.g. (tileX + 0.5) * TILE_SIZE). */
   cx: number
   cy: number
+  /** Pools this object contributes, drawn over one another at its centre. */
+  glows: readonly Glow[]
+}
+
+interface LightEntry {
+  glows: readonly Glow[]
+  sprites: Sprite[]
 }
 
 // GPU lightmap: a mid-grey full-room rectangle, darkened where walls cast shadow and
@@ -41,7 +61,7 @@ export class LightingLayer {
   private readonly rt: RenderTexture
   private readonly scene: Container
   private readonly gradientTexture: Texture
-  private readonly lights = new Map<string, Sprite>()
+  private readonly lights = new Map<string, LightEntry>()
   /** Baked terrain contribution: wall shadows and lit wall faces. Owned by this layer. */
   private wallSprites: Sprite[] = []
   private wallGeneration = 0
@@ -132,26 +152,27 @@ export class LightingLayer {
   }
 
   // Reconcile the live set of lights (called once per tick). Adds sprites for
-  // new ids, removes those that vanished, and repositions the rest.
+  // new ids, removes those that vanished, and repositions the rest. An object
+  // whose pools changed — a spawn that ran dry, an extension that filled — has
+  // its sprites rebuilt, since a pool's size and alpha are baked into them.
   setLights(lights: readonly Light[]): void {
     const seen = new Set<string>()
-    for (const { id, cx, cy } of lights) {
+    for (const { id, cx, cy, glows } of lights) {
       seen.add(id)
-      let sprite = this.lights.get(id)
-      if (!sprite) {
-        sprite = new Sprite(this.gradientTexture)
-        sprite.anchor.set(0.5)
-        // Lights sit above the wall shadow so a lit wall face still reads as lit.
-        sprite.blendMode = 'screen'
-        sprite.zIndex = 2
-        this.scene.addChild(sprite)
-        this.lights.set(id, sprite)
+      let entry = this.lights.get(id)
+      if (entry && !sameGlows(entry.glows, glows)) {
+        this.disposeLight(entry)
+        entry = undefined
       }
-      sprite.position.set(cx, cy)
+      if (!entry) {
+        entry = { glows, sprites: glows.map((glow) => this.createGlow(glow)) }
+        this.lights.set(id, entry)
+      }
+      for (const sprite of entry.sprites) sprite.position.set(cx, cy)
     }
-    for (const [id, sprite] of this.lights) {
+    for (const [id, entry] of this.lights) {
       if (seen.has(id)) continue
-      sprite.destroy()
+      this.disposeLight(entry)
       this.lights.delete(id)
     }
     this.dirty = true
@@ -161,11 +182,31 @@ export class LightingLayer {
   // frame from ObjectLayer.tick). No-op for ids that aren't lit, so callers can
   // fire it for every moving object without checking.
   setLightPosition(id: string, cx: number, cy: number): void {
-    const sprite = this.lights.get(id)
-    if (!sprite) return
-    if (sprite.x === cx && sprite.y === cy) return
-    sprite.position.set(cx, cy)
-    this.dirty = true
+    const entry = this.lights.get(id)
+    if (!entry) return
+    for (const sprite of entry.sprites) {
+      if (sprite.x === cx && sprite.y === cy) continue
+      sprite.position.set(cx, cy)
+      this.dirty = true
+    }
+  }
+
+  private createGlow(glow: Glow): Sprite {
+    const sprite = new Sprite(this.gradientTexture)
+    sprite.anchor.set(0.5)
+    const size = glow.size * TILE_SIZE / REFERENCE_CELL_SIZE
+    sprite.setSize(size, size)
+    sprite.alpha = glow.alpha
+    if (glow.tint !== undefined) sprite.tint = glow.tint
+    // Lights sit above the wall shadow so a lit wall face still reads as lit.
+    sprite.blendMode = 'screen'
+    sprite.zIndex = 2
+    this.scene.addChild(sprite)
+    return sprite
+  }
+
+  private disposeLight(entry: LightEntry): void {
+    for (const sprite of entry.sprites) sprite.destroy()
   }
 
   // Composite the lightmap into the RenderTexture if anything changed. Cheap
@@ -177,7 +218,7 @@ export class LightingLayer {
   }
 
   clear(): void {
-    for (const sprite of this.lights.values()) sprite.destroy()
+    for (const entry of this.lights.values()) this.disposeLight(entry)
     this.lights.clear()
     this.dirty = true
     this.render()
@@ -186,7 +227,7 @@ export class LightingLayer {
   destroy(): void {
     if (this.destroyed) return
     this.destroyed = true
-    for (const sprite of this.lights.values()) sprite.destroy()
+    for (const entry of this.lights.values()) this.disposeLight(entry)
     this.lights.clear()
     this.disposeWallLighting()
     this.scene.destroy({ children: true })
@@ -196,12 +237,21 @@ export class LightingLayer {
   }
 }
 
-// A soft white disc (alpha 1 at centre → 0 at the edge) used by every light.
+function sameGlows(a: readonly Glow[], b: readonly Glow[]): boolean {
+  if (a.length !== b.length) return false
+  for (let i = 0; i < a.length; i++) {
+    if (a[i].size !== b[i].size || a[i].alpha !== b[i].alpha || a[i].tint !== b[i].tint) return false
+  }
+  return true
+}
+
+// A soft white disc (alpha 1 at centre → 0 at the edge) used by every light — the
+// reference's `glow.png`, whose alpha ramps linearly over the same geometry.
 // Screened over the ambient grey this drives the map to white at the centre — so the
 // world below is multiplied by 1 and reads at full brightness — feathering to ambient.
 function buildGradientTexture(): Texture {
-  const r = LIGHT_RADIUS_TILES * TILE_SIZE
-  const size = r * 2
+  const size = GRADIENT_TEXTURE_SIZE
+  const r = size / 2
   const canvas = document.createElement('canvas')
   canvas.width = size
   canvas.height = size
