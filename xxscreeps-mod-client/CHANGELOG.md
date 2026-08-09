@@ -1,5 +1,19 @@
 # xxscreeps-mod-client
 
+## 0.3.15
+
+### Patch Changes
+
+- 4016760: Update the embedded client (RoomVisual text and shape style defaults now match the official client; map visual text now matches the reference client's opacity, stroke and background-box behaviour; room decoration landscapes now tile, stretch and outline at the official geometry).
+- Updated dependencies [3d0aa73]
+- Updated dependencies [677c063]
+- Updated dependencies [f29d41a]
+- Updated dependencies [526e00c]
+- Updated dependencies [4016760]
+- Updated dependencies [d63cb89]
+- Updated dependencies [7ec6fc4]
+  - screeps-client@0.24.1
+
 ## 0.3.14
 
 ### Patch Changes
