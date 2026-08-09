@@ -87,7 +87,12 @@ export class LightingLayer {
       sprite.zIndex = 1
       this.scene.addChild(sprite)
     }
+    // Composite now rather than flagging dirty. Lights can wait for the frame that moved
+    // them, but this is a one-off structural change and nothing else drives a render until
+    // the next game tick — on a slow server that left a room standing shadowless, then
+    // popping, for as long as a tick.
     this.dirty = true
+    this.render()
     return ++this.wallGeneration
   }
 
@@ -102,6 +107,7 @@ export class LightingLayer {
     if (generation !== this.wallGeneration) return
     this.disposeWallLighting()
     this.dirty = true
+    this.render()
   }
 
   private bake(source: Container, blendMode: 'multiply' | 'screen'): Sprite {
