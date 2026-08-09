@@ -1,7 +1,7 @@
 import { For } from 'solid-js'
 import {
   historyTick, historyMaxTick, isPlaying, playbackSpeed,
-  historyLoading, stepTick, togglePlayback, setPlaybackSpeedValue,
+  historyLoading, historyTimestamp, stepTick, togglePlayback, setPlaybackSpeedValue,
 } from '~/stores/historyStore.js'
 import { tickDuration } from '~/stores/clientStore.js'
 
@@ -31,15 +31,20 @@ function stepBtnStyle(disabled: boolean): Record<string, string> {
 }
 
 export function HistoryControlPanel() {
-  const estimatedDate = () => {
+  const dateFormat = { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' } as const
+
+  // Prefer the real server timestamp recorded for the tick's history chunk; fall back to
+  // an estimate derived from tick duration when the server didn't report one.
+  const displayedDate = () => {
+    const real = historyTimestamp()
+    if (real !== undefined) {
+      return new Date(real).toLocaleString(undefined, dateFormat)
+    }
     const max = historyMaxTick()
     const current = historyTick()
     const avgMs = tickDuration() ?? 3000
     const deltaMs = (max - current) * avgMs
-    return new Date(Date.now() - deltaMs).toLocaleString(undefined, {
-      month: 'short', day: 'numeric', year: 'numeric',
-      hour: '2-digit', minute: '2-digit',
-    })
+    return `~${new Date(Date.now() - deltaMs).toLocaleString(undefined, dateFormat)}`
   }
 
   return (
@@ -50,7 +55,7 @@ export function HistoryControlPanel() {
               {historyLoading() ? 'Loading…' : `Tick ${historyTick()}`}
             </div>
             <div style={{ 'font-size': '10px', color: '#484f58', 'margin-top': '2px' }}>
-              ~{estimatedDate()}
+              {displayedDate()}
             </div>
           </div>
 

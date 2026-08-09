@@ -7,6 +7,9 @@ export const [historyMaxTick, setHistoryMaxTick] = createSignal(0)
 export const [isPlaying, setIsPlaying] = createSignal(false)
 export const [playbackSpeed, setPlaybackSpeed] = createSignal(1)
 export const [historyLoading, setHistoryLoading] = createSignal(false)
+// Wall-clock time the currently-shown tick's chunk was written on the server (epoch ms),
+// or undefined when the server didn't report one. Chunk-level resolution, not per-tick.
+export const [historyTimestamp, setHistoryTimestamp] = createSignal<number | undefined>(undefined)
 
 let _timer: ReturnType<typeof setInterval> | null = null
 
@@ -54,6 +57,7 @@ export function enterHistoryMode(currentTick: number, keepTicks?: number | null,
   setHistoryMinTick(min)
   setHistoryTick(Math.max(min, startTick))
   setIsPlaying(false)
+  setHistoryTimestamp(undefined)
   _stopTimer()
   setHistoryMode(true)
 }
@@ -61,6 +65,7 @@ export function enterHistoryMode(currentTick: number, keepTicks?: number | null,
 export function exitHistoryMode(): void {
   _stopTimer()
   setIsPlaying(false)
+  setHistoryTimestamp(undefined)
   setHistoryMode(false)
 }
 

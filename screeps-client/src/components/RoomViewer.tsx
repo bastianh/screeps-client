@@ -22,7 +22,7 @@ import { parseRoomName, formatRoomName, isRoomInWorld } from '~/utils/roomName.j
 import { useRoomNavigationKeys } from '~/utils/useRoomNavigationKeys.js'
 import type { ApiRoomDecorationItem, Badge, RoomTerrain, RoomObjectMap, RoomObjectDiff } from 'screeps-connectivity'
 import { SubscriptionGroup } from 'screeps-connectivity'
-import { historyMode, historyTick, historyMinTick, historyMaxTick, setHistoryMaxTick, historyLoading, setHistoryLoading, seekToTick, playbackSpeed, isPlaying, pausePlayback } from '~/stores/historyStore.js'
+import { historyMode, historyTick, historyMinTick, historyMaxTick, setHistoryMaxTick, historyLoading, setHistoryLoading, seekToTick, playbackSpeed, isPlaying, pausePlayback, historyTimestamp, setHistoryTimestamp } from '~/stores/historyStore.js'
 import { HistoryPlayer, HistoryUnavailableError } from '~/stores/HistoryPlayer.js'
 import {flagDraft, roomViewMode, FLAG_COLOR_MAP, pendingTile, setPendingTile, clearPendingTile, setFlagDraft, modeHint, overlayAction, setOverlayAction, clearOverlayAction, buildDraft, confirmBuild, resetRoomViewMode, resetRoomViewModeOnNavigate} from '~/stores/roomViewStore';
 import { createLogger } from '~/utils/log.js'
@@ -405,6 +405,7 @@ export function RoomViewer(props: RoomViewerProps) {
           batch(() => {
             setObjectState({ objects: state.objects, diff: undefined, users: cachedUsers })
             setGameTime(state.gameTime)
+            setHistoryTimestamp(state.timestamp)
             setRoomObjectCount(objectCount)
             setRoomOwner(owner)
             setControllerLevel(ctrlLevel || null)
@@ -419,6 +420,7 @@ export function RoomViewer(props: RoomViewerProps) {
           // No data for this tick (404): show an in-room hint instead of a failure toast.
           if (err instanceof HistoryUnavailableError) {
             setHistoryNoData(true)
+            setHistoryTimestamp(undefined)
             // While playing, don't re-fetch the same missing chunk file on every tick —
             // skip to the start of the next chunk in one hop. Stop if there's none left.
             if (isPlaying()) {
@@ -1197,8 +1199,19 @@ export function RoomViewer(props: RoomViewerProps) {
             }}
           >
             <span>{historyMinTick()}</span>
-            <span style={{ color: historyLoading() ? '#f0883e' : '#8b949e' }}>
-              {historyLoading() ? 'Loading…' : `Tick ${historyTick()}`}
+            <span style={{ color: historyLoading() ? '#f0883e' : '#8b949e', 'text-align': 'center' }}>
+              {historyLoading()
+                ? 'Loading…'
+                : (
+                  <>
+                    {`Tick ${historyTick()}`}
+                    <Show when={historyTimestamp() !== undefined}>
+                      {' · '}{new Date(historyTimestamp()!).toLocaleString(undefined, {
+                        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+                      })}
+                    </Show>
+                  </>
+                )}
             </span>
             <span>{historyMaxTick()}</span>
           </div>
