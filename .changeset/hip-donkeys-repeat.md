@@ -33,3 +33,6 @@ just decorated ones:
 - Wall noise was a flat grey wash at 50% that pulled decorated walls towards neutral and
   cost a landscape its colour. It is now additive at 20%, as officially.
 - `strokeLighting` is honoured: it sets how brightly a wall's rim reads in the light map.
+- Undecorated rooms use the reference's own terrain colours rather than a darker local
+  palette, and gain the ground mottling the reference draws when no floor landscape
+  applies — without which a plain room under the new light map read almost black.

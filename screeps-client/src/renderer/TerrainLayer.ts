@@ -26,20 +26,20 @@ const WALLS_BLUR = 0.006
 const WALL_LIGHTING = 0x808080
 
 /**
- * Soft grey cloud standing in for the reference's `noise1` / `noise2` assets.
+ * Soft grey cloud standing in for one of the reference's greyscale texture assets.
  *
- * Both are large blurry greyscale textures, tiled so roughly a dozen blobs span a room.
- * We ship neither, so the cloud is generated at that resolution — one texel per blob — and
- * stretched over the room, letting bilinear filtering do the smoothing for free.
+ * `noise1`, `noise2`, `ground` and `ground-mask` are all blurry greyscale tiles, differing
+ * mainly in how many blobs span a room and in tonal range — `ground-mask` is near-white,
+ * `ground` mid-dark. We ship none of them, so each is generated at its blob resolution
+ * (one texel per blob) and stretched over the room, letting bilinear filtering smooth it.
  */
-function cloudTexture(): Texture {
-  const cells = 12
+function cloudTexture(cells: number, min: number, range: number): Texture {
   const canvas = document.createElement('canvas')
   canvas.width = canvas.height = cells
   const ctx = canvas.getContext('2d')!
   const image = ctx.createImageData(cells, cells)
   for (let i = 0; i < cells * cells; i++) {
-    const v = 90 + Math.round(Math.random() * 110)
+    const v = min + Math.round(Math.random() * range)
     image.data.set([v, v, v, 255], i * 4)
   }
   ctx.putImageData(image, 0, 0)
@@ -48,22 +48,53 @@ function cloudTexture(): Texture {
   return texture
 }
 
-// Two independent clouds, built once and shared by every room: regenerating them per room
-// would burn a canvas upload for a texture nobody can tell apart from the last one.
-let wallCloud: Texture | null = null
-let swampCloud: Texture | null = null
+// Built once and shared by every room: regenerating per room would burn a canvas upload
+// for a texture nobody can tell apart from the last one.
+const clouds = new Map<string, Texture>()
 
-/** A cloud masked to one terrain type, added over the terrain rather than replacing it. */
-function cloudLayer(mask: Graphics, texture: Texture, alpha: number, tint?: number): Container {
+function cloud(key: string, cells: number, min: number, range: number): Texture {
+  let texture = clouds.get(key)
+  if (!texture) {
+    texture = cloudTexture(cells, min, range)
+    clouds.set(key, texture)
+  }
+  return texture
+}
+
+/** Room-sized cloud sprite. `mask` limits it to one terrain type; omit to cover the room. */
+function cloudSprite(texture: Texture, alpha: number, blend: 'add' | 'normal' | 'multiply'): Sprite {
   const sprite = new Sprite(texture)
   sprite.setSize(ROOM_EXTENT, ROOM_EXTENT)
   sprite.alpha = alpha
-  sprite.blendMode = 'add'
+  sprite.blendMode = blend
+  return sprite
+}
+
+function maskedCloud(mask: Graphics, texture: Texture, alpha: number, tint?: number): Container {
+  const sprite = cloudSprite(texture, alpha, 'add')
   if (tint != null) sprite.tint = tint
   sprite.mask = mask
 
   const container = new Container()
   container.addChild(mask, sprite)
+  return container
+}
+
+/**
+ * The reference's undecorated ground, i.e. the `else` of its floor branch: a `ground` tile
+ * at alpha 0.3 over the floor colour and a near-white `ground-mask` multiplied at 0.15.
+ *
+ * Subtle mottling rather than a brightness change — but without it a plain room is a flat
+ * field of one colour, which is most of why ours read as deader than the official's. A
+ * floor landscape replaces both with its own artwork, so this is skipped there.
+ */
+function createGroundTexture(): Container {
+  const container = new Container()
+  container.label = 'groundTexture'
+  container.addChild(
+    cloudSprite(cloud('ground', 12, 55, 45), 0.3, 'normal'),
+    cloudSprite(cloud('groundMask', 6, 215, 40), 0.15, 'multiply'),
+  )
   return container
 }
 
@@ -342,11 +373,10 @@ function createWallShapes(terrain: RoomTerrain, colors: ResolvedColors): Graphic
  * decoration-driven, so a pack's `swampColor` still reads as its own colour underneath.
  */
 function createSwampTexture(terrain: RoomTerrain): Container {
-  swampCloud ??= cloudTexture()
   const mask = new Graphics()
   drawTerrainQuadrants(mask, terrain, TerrainType.Swamp, (g) => g.fill(0xffffff))
 
-  const container = cloudLayer(mask, swampCloud, 0.15, TERRAIN_SWAMP_TEXTURE)
+  const container = maskedCloud(mask, cloud('swamp', 12, 90, 110), 0.15, TERRAIN_SWAMP_TEXTURE)
   container.label = 'swampTexture'
   return container
 }
@@ -360,8 +390,7 @@ function createSwampTexture(terrain: RoomTerrain): Container {
  * landscape its colour.
  */
 function createWallNoise(terrain: RoomTerrain): Container {
-  wallCloud ??= cloudTexture()
-  const container = cloudLayer(createWallMask(terrain), wallCloud, 0.2)
+  const container = maskedCloud(createWallMask(terrain), cloud('wall', 12, 90, 110), 0.2)
   container.label = 'wallNoise'
   return container
 }
@@ -440,10 +469,13 @@ export function createTerrainLayer(
   }
 
   container.addChild(createFloorBase(colors))            // index 0: plain floor colour
-  container.addChild(createSwampShapes(terrain, colors)) // index 1: swamp border + fill at alpha 0.4
-  container.addChild(createWallShapes(terrain, colors))  // index 2: wall fills + borders + exits + room border
-  container.addChild(createSwampTexture(terrain))        // index 3
-  container.addChild(createWallNoise(terrain))           // index 4
+  // The reference's floor is one branch or the other, never both: its own ground tiles, or
+  // a landscape's artwork loaded below. Index 1 either way, so the swamp still blends over.
+  if (!decoration?.floorTextureUrl) container.addChild(createGroundTexture())
+  container.addChild(createSwampShapes(terrain, colors)) // swamp border + fill at alpha 0.4
+  container.addChild(createWallShapes(terrain, colors))  // wall fills + borders + exits + room border
+  container.addChild(createSwampTexture(terrain))
+  container.addChild(createWallNoise(terrain))
 
   const W = ROOM_EXTENT
 
