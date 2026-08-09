@@ -1,5 +1,13 @@
 # screeps-client
 
+## 0.24.2
+
+### Patch Changes
+
+- 0cd19e4: History view now shows the real server-recorded time for a tick instead of only an estimate.
+- d30ebd7: Render ramparts in their own layer above the room's ambient lighting overlay, so the glow reads at full brightness instead of being dimmed by the dark-overlay multiply — matching the reference client, which draws ramparts in its topmost "effects" layer past the light map.
+- 760e440: Fix room decoration landscape textures (wall/floor) rendering too dark and desaturated, and stop the stretched landscape sprites from bleeding a sliver past the room's edge into the void.
+
 ## 0.24.1
 
 ### Patch Changes
