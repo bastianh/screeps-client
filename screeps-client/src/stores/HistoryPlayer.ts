@@ -77,7 +77,7 @@ export class HistoryPlayer {
     return result
   }
 
-  async getStateAtTick(tick: number): Promise<{ objects: RoomObjectMap; diff: RoomObjectDiff; gameTime: number; clampedTo?: number }> {
+  async getStateAtTick(tick: number): Promise<{ objects: RoomObjectMap; diff: RoomObjectDiff; gameTime: number; clampedTo?: number; timestamp?: number }> {
     let base = this.chunkBase(tick)
     let chunk: RoomHistoryChunk
     let clampedTo: number | undefined
@@ -121,6 +121,6 @@ export class HistoryPlayer {
       }
     }
 
-    return { objects, diff: chunk.ticks[String(tick)] ?? {}, gameTime: tick, clampedTo }
+    return { objects, diff: chunk.ticks[String(tick)] ?? {}, gameTime: tick, clampedTo, timestamp: chunk.timestamp }
   }
 }
