@@ -12,7 +12,7 @@ export const [showCreepLabels, setShowCreepLabels] = boolSetting(LS.showCreepLab
 export const [showMapRoomNames, setShowMapRoomNames] = boolSetting(LS.showMapRoomNames, false)
 export const [showUnclaimableRooms, setShowUnclaimableRooms] = boolSetting(LS.showUnclaimableRooms, true)
 export const [terrainEffects, setTerrainEffects] = boolSetting(LS.terrainEffects, true)
-export const [showRoomDecorations, setShowRoomDecorations] = boolSetting(LS.showRoomDecorations, false)
+export const [showRoomDecorations, setShowRoomDecorations] = boolSetting(LS.showRoomDecorations, true)
 export const [roomDarkOverlay, setRoomDarkOverlay] = boolSetting(LS.roomDarkOverlay, true)
 export const [showRoomVisuals, setShowRoomVisuals] = boolSetting(LS.showRoomVisuals, true)
 // When off, tick-driven animations (creep movement, fill tweens, build glows, cooldown
