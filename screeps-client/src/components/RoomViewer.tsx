@@ -29,6 +29,11 @@ import { createLogger } from '~/utils/log.js'
 
 const { log, error } = createLogger('room')
 
+// How long the first terrain draw waits for the decoration read of a room change. Long
+// enough for the round trip on a healthy server, short enough that a hanging request only
+// costs a beat of empty room before the plain terrain goes up anyway.
+const DECORATION_WAIT_MS = 500
+
 // After creating a flag the server needs a moment to register it, so an
 // immediate gen-unique-flag-name can still return the name we just used.
 // Retry with a short backoff until we get a different name (or give up).
@@ -90,6 +95,13 @@ export function RoomViewer(props: RoomViewerProps) {
   // Raw items are kept so socket updates can be merged into them by `_id`; the parsed
   // form every layer consumes is derived from that.
   const [decorationItems, setDecorationItems] = createSignal<{ room: string; items: readonly ApiRoomDecorationItem[] } | null>(null)
+  // Terrain comes out of a cache and lands almost instantly, while decorations always cost
+  // an HTTP round trip — so a decorated room would be painted plain and repainted a moment
+  // later, the flash on every room change. Holding the *first* terrain draw of a room until
+  // its decoration read has settled (or the deadline above passed) collapses the two paints
+  // into one. Later arrivals — a socket tick, a colour edit — still rebuild as before.
+  const [decorationsSettled, setDecorationsSettled] = createSignal<string | null>(null)
+  const terrainReady = () => !showRoomDecorations() || decorationsSettled() === props.room
   // Items that arrived over the socket while an HTTP read was in flight. Only those are
   // layered back on top of the response — carrying every earlier socket item over would
   // keep a decoration that has since been taken down alive until the next room change.
@@ -163,6 +175,7 @@ export function RoomViewer(props: RoomViewerProps) {
 
     setTerrain(null)
     setDecorationItems(null)
+    setDecorationsSettled(null)
     setCurrentRoom(room)
     setCurrentShard(shard)
 
@@ -194,6 +207,10 @@ export function RoomViewer(props: RoomViewerProps) {
 
     let cancelled = false
     socketItemsSinceFetch = []
+    // Settling releases the terrain draw, so it has to happen on every outcome — response,
+    // failure, or a server that simply takes too long.
+    const settle = () => setDecorationsSettled(room)
+    const deadline = setTimeout(settle, DECORATION_WAIT_MS)
     c.http.game.roomDecorations(room, shard)
       .then((resp) => {
         if (!cancelled) {
@@ -202,12 +219,24 @@ export function RoomViewer(props: RoomViewerProps) {
           // landed while it was in flight is layered back on top rather than dropped.
           const items = mergeDecorationItems(resp.decorations, socketItemsSinceFetch)
           socketItemsSinceFetch = []
-          setDecorationItems({ room, items })
+          // One batch: the terrain draw waits on the settle and must see the items.
+          batch(() => {
+            setDecorationItems({ room, items })
+            settle()
+          })
         }
       })
-      .catch((err) => { if (!cancelled) log(`no decorations for ${room}: ${err}`) })
+      .catch((err) => {
+        if (!cancelled) {
+          log(`no decorations for ${room}: ${err}`)
+          settle()
+        }
+      })
 
-    onCleanup(() => { cancelled = true })
+    onCleanup(() => {
+      cancelled = true
+      clearTimeout(deadline)
+    })
   })
 
   // Room ticks can carry decoration changes. Merge them into whatever the HTTP fetch
@@ -504,9 +533,11 @@ export function RoomViewer(props: RoomViewerProps) {
     visualLayer?.destroy()
     visualLayer = null
 
-    // Apply terrain immediately if it arrived before this clear ran
+    // Apply terrain immediately if it arrived before this clear ran — unless the room's
+    // decorations are still outstanding, in which case the apply effect below draws it
+    // once they settle. untracked: this effect must not re-clear the scene on that.
     const t = untrack(terrain)
-    if (t && t.room === props.room) {
+    if (t && t.room === props.room && untrack(terrainReady)) {
       log(`terrain applied immediately (pre-loaded) — ${props.room}`)
       const dec = untrack(roomDecoration)
       const terrainDec = dec?.room === props.room ? dec.decoration.terrain : undefined
@@ -579,6 +610,9 @@ export function RoomViewer(props: RoomViewerProps) {
       log(`terrain already in scene, skipping — ${props.room}`)
       return
     }
+    // Tracked: settling the decoration read re-runs this effect and draws the room once,
+    // already decorated, instead of painting it plain and rebuilding a moment later.
+    if (!terrainReady()) return
     log(`terrain applied (async) — ${props.room}`)
     const dec = untrack(roomDecoration)
     const terrainDec = dec?.room === props.room ? dec.decoration.terrain : undefined
