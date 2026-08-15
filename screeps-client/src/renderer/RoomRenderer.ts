@@ -4,6 +4,7 @@ import { HoverHighlightLayer } from './HoverHighlightLayer.js'
 import { LightingLayer } from './LightingLayer.js'
 import type { Light } from './LightingLayer.js'
 import { objectGlows } from './objectLights.js'
+import { destroyTree } from './destroyTree.js'
 
 export const TILE_SIZE = 12
 export const ROOM_SIZE = 50 * TILE_SIZE
@@ -534,8 +535,9 @@ export class RoomRenderer {
     north?: () => void
     south?: () => void
   }): void {
-    // Remove existing zones from overlay
-    this.navOverlay.removeChildren()
+    // Destroy rather than detach: zones are rebuilt on every room change, and a Graphics
+    // that is merely removed leaves its GraphicsContext registered with the renderer.
+    this.clearNavigationZones()
 
     const createZone = (
       x: number,
@@ -637,6 +639,10 @@ export class RoomRenderer {
     }
   }
 
+  private clearNavigationZones(): void {
+    for (const zone of this.navOverlay.removeChildren()) destroyTree(zone)
+  }
+
   clear(): void {
     // Remove all children except navOverlay and hoverLayer
     for (let i = this.world.children.length - 1; i >= 0; i--) {
@@ -645,7 +651,7 @@ export class RoomRenderer {
         this.world.removeChild(child)
       }
     }
-    this.navOverlay.removeChildren()
+    this.clearNavigationZones()
     this.hoverLayer.clearSelection()
     this.hoverLayer.setHoveredTile(null, null)
     this.clearLighting()

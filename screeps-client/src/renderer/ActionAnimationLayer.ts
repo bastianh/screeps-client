@@ -1,5 +1,6 @@
 import { Container, Graphics, Ticker } from 'pixi.js'
 import { TILE_SIZE } from './RoomRenderer.js'
+import { destroyTree } from './destroyTree.js'
 import { ANIM_HARVEST, ANIM_UPGRADE, ANIM_BUILD, ANIM_REPAIR, ANIM_TRANSFER, ANIM_LINK_TRANSFER, ANIM_TOWER_ATTACK, ANIM_TOWER_HEAL, ANIM_TOWER_REPAIR, ANIM_LAB_REACTION } from './colors.js'
 
 interface BeamAnimation {
@@ -266,7 +267,6 @@ export class ActionAnimationLayer {
     }
     this.ticker = null
     this.tickerCallback = null
-    this.graphics.destroy()
-    this.container.destroy()
+    destroyTree(this.container)
   }
 }

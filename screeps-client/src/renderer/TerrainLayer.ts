@@ -3,6 +3,7 @@ import { TerrainType, RoomTerrain } from 'screeps-connectivity'
 import { TILE_SIZE } from './RoomRenderer.js'
 import type { LightingLayer } from './LightingLayer.js'
 import { loadDecorationTexture } from './decorationTextures.js'
+import { destroyTree, markSharedContext } from './destroyTree.js'
 import { REFERENCE_CELL_SIZE } from './roomDecorations.js'
 import {
   TERRAIN_PLAIN, TERRAIN_ROAD, TERRAIN_BORDER,
@@ -325,7 +326,7 @@ function terrainShape(terrain: RoomTerrain, type: TerrainType.Wall | TerrainType
  * the context outlives it, and the other consumers of the same shape are still using it.
  */
 function shapeGraphics(terrain: RoomTerrain, type: TerrainType.Wall | TerrainType.Swamp, tint?: number): Graphics {
-  const g = new Graphics(terrainShape(terrain, type))
+  const g = markSharedContext(new Graphics(terrainShape(terrain, type)))
   if (tint != null) g.tint = tint
   return g
 }
@@ -513,7 +514,14 @@ export function createTerrainLayer(
   const generation = lighting?.setWallLighting(createWallLighting(terrain, decoration))
 
   container.destroy = (options?: DestroyOptions) => {
+    if (container.destroyed) return
     if (generation != null) lighting?.clearWallLighting(generation)
+    // Free every child outright instead of leaning on `{ children: true }`, which leaves
+    // each Graphics' own GraphicsContext registered with the renderer (see destroyTree).
+    // A room's terrain is the largest vector geometry the view builds — six full-room
+    // tessellations — so one stranded set per room switch is what the leak was made of.
+    container.mask = null
+    for (const child of container.removeChildren()) destroyTree(child)
     baseDestroy(options)
   }
 
