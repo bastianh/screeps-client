@@ -1,6 +1,7 @@
 import { Container, Graphics, Rectangle, RenderTexture, Sprite, Texture } from 'pixi.js'
 import type { Renderer } from 'pixi.js'
 import { ROOM_SIZE, TILE_SIZE } from './RoomRenderer.js'
+import { destroyTree } from './destroyTree.js'
 import { REFERENCE_CELL_SIZE } from './roomDecorations.js'
 
 /**
@@ -133,10 +134,10 @@ export class LightingLayer {
   private bake(source: Container, blendMode: 'multiply' | 'screen'): Sprite {
     const frame = new Rectangle(0, 0, ROOM_SIZE, ROOM_SIZE)
     const texture = this.renderer.generateTexture({ target: source, frame })
-    source.filters = null
-    // `context: false` — the wall shape is a cached GraphicsContext shared with the
-    // terrain layer's own masks, and outlives anything baked from it.
-    source.destroy({ children: true, context: false })
+    // destroyTree takes the shadow's blur with it — built per room, dead once baked — and
+    // frees each Graphics' own context while leaving the cached wall shape alone: that one
+    // is shared with the terrain layer's own masks and outlives anything baked from it.
+    destroyTree(source)
 
     const sprite = new Sprite(texture)
     sprite.blendMode = blendMode
@@ -230,7 +231,7 @@ export class LightingLayer {
     for (const entry of this.lights.values()) this.disposeLight(entry)
     this.lights.clear()
     this.disposeWallLighting()
-    this.scene.destroy({ children: true })
+    destroyTree(this.scene)
     this.rt.destroy(true)
     this.gradientTexture.destroy(true)
     this.displaySprite.destroy()

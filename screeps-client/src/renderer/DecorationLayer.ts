@@ -4,6 +4,7 @@ import { TILE_SIZE, Z } from './RoomRenderer.js'
 import { createWallMask } from './TerrainLayer.js'
 import { loadDecorationTexture } from './decorationTextures.js'
 import { DecorationAnimator } from './decorationAnimation.js'
+import { destroyTree } from './destroyTree.js'
 import { REFERENCE_CELL_SIZE, type DecorationSprite, type GraffitiDecoration } from './roomDecorations.js'
 
 /**
@@ -57,7 +58,10 @@ export class DecorationLayer {
     this.animator.destroy()
     this.spritesById.clear()
     this.transforms.clear()
-    this.base.destroy({ children: true })
+    // destroyTree, not `{ children: true }`: the wall mask is a full-room path whose
+    // GraphicsContext the object form of destroy would strand on the renderer.
+    this.baseContent.mask = null
+    destroyTree(this.base)
   }
 
   /**

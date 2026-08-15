@@ -4,6 +4,7 @@ import { BadgeTextureCache } from './BadgeTextureCache.js'
 import type { LightingLayer } from './LightingLayer.js'
 import { TILE_SIZE } from './RoomRenderer.js'
 import { DecorationAnimator } from './decorationAnimation.js'
+import { destroyTree } from './destroyTree.js'
 import { applyObjectDecorations, clearObjectDecorations } from './objectDecorations.js'
 import type { CreepDecoration, ObjectDecoration } from './roomDecorations.js'
 import { CONTROLLER_DOWNGRADE } from '~/utils/gameConstants.js'
@@ -1588,7 +1589,7 @@ export class ObjectLayer {
 
     if (visual.__sayBubble && !visual.__sayBubble.destroyed) {
       visual.removeChild(visual.__sayBubble)
-      visual.__sayBubble.destroy({ children: true })
+      destroyTree(visual.__sayBubble)
     }
 
     const bubble = buildSayBubble(message)
@@ -1623,7 +1624,7 @@ export class ObjectLayer {
       const visual = this.objects.get(id)
       if (visual?.__sayBubble && !visual.__sayBubble.destroyed) {
         visual.removeChild(visual.__sayBubble)
-        visual.__sayBubble.destroy({ children: true })
+        destroyTree(visual.__sayBubble)
       }
       if (visual) {
         visual.__sayBubble = undefined
@@ -1648,7 +1649,7 @@ export class ObjectLayer {
       }
       if (visual.__sayBubble && !visual.__sayBubble.destroyed) {
         visual.removeChild(visual.__sayBubble)
-        visual.__sayBubble.destroy({ children: true })
+        destroyTree(visual.__sayBubble)
         visual.__sayBubble = undefined
         visual.__sayMessage = undefined
       }
@@ -1708,5 +1709,11 @@ export class ObjectLayer {
     }
     this.ticker = null
     this.tickerCallback = null
+    // clear() only empties the containers — the layer itself is replaced on every room
+    // change, so the road/wall/rampart Graphics it keeps across ticks have to go with it.
+    // Each holds a room-wide path; leaving them undestroyed strands that geometry on the
+    // renderer until the whole PixiJS Application is torn down.
+    destroyTree(this.container)
+    destroyTree(this.rampartLayer)
   }
 }

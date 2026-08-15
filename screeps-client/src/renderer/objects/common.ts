@@ -4,6 +4,7 @@ import { defaultSpriteTheme } from '../themes/default.js'
 import { TILE_SIZE } from '../RoomRenderer.js'
 import { OBJECT_COLORS, OBJ_DEFAULT, ST_RESOURCE_OTHER, RESOURCE_COLORS } from '../colors.js'
 import { type ContainerWithTarget } from './types.js'
+import { destroyTree } from '../destroyTree.js'
 
 // Shared helpers used across the per-object renderer modules and ObjectLayer itself.
 export function lerpColor(a: number, b: number, t: number): number {
@@ -70,15 +71,15 @@ export function computeZIndex(obj: RoomObject): number {
 }
 
 export function destroyVisual(visual: ContainerWithTarget): void {
-  visual.destroy({ children: true })
+  destroyTree(visual)
 }
 
 // Soft, tintable radial glow (opaque centre → transparent edge) baked once and shared by every
 // visual that needs one (keeper-lair pulse, portal halo); lazily built so it only touches the
 // DOM/GPU when such an object first renders.
-// Shared, so it must outlive per-object teardown: destroyVisual uses container.destroy({ children: true }),
-// whose object form leaves options.texture undefined, so a child sprite's destroy never frees this
-// texture. A refactor to destroy(true) (boolean) WOULD free it and blank every other user — don't.
+// Shared, so it must outlive per-object teardown: destroyVisual goes through destroyTree, which
+// never passes a texture-destroying option, so a child sprite's destroy never frees this texture.
+// A refactor to destroy(true) (boolean) WOULD free it and blank every other user — don't.
 let glowTexture: Texture | null = null
 export function softGlowTexture(): Texture {
   if (glowTexture) return glowTexture

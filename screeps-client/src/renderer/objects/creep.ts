@@ -3,6 +3,7 @@ import type { RoomObject, Badge } from 'screeps-connectivity'
 import { TILE_SIZE } from '../RoomRenderer.js'
 import { BODY_PART_COLORS, BG_DEEP, BG_DARK, OBJ_FOREIGN, ENERGY_FILL, CREEP_RING_DARK, CREEP_NOTCH, INVADER_BORDER, INVADER_FILL_TOP, INVADER_FILL_BOT } from '../colors.js'
 import { spts } from './common.js'
+import { markSharedContext } from '../destroyTree.js'
 import { type ContainerWithTarget, type VisualBuildContext } from './types.js'
 
 // Creep visuals: body-part arcs, badges, store fill, NPC invader gem, name labels, say bubbles.
@@ -48,8 +49,8 @@ export const INVADER_PTS: ReadonlyArray<readonly [number, number]> = [
 export const INVADER_BORDER_W = TILE_SIZE * 0.073
 
 // All invaders are identical, so build the gem geometry + gradient texture once in
-// a shared context and instance it per creep. An externally-passed context survives
-// the per-creep Graphics.destroy(), so the shared one is never torn down.
+// a shared context and instance it per creep. The per-creep Graphics is registered with
+// markSharedContext so destroyTree leaves this context standing for the next invader.
 let invaderContext: GraphicsContext | null = null
 export function getInvaderContext(): GraphicsContext {
   if (invaderContext) return invaderContext
@@ -75,7 +76,7 @@ export function getInvaderContext(): GraphicsContext {
 
 // __bodyContainer is left unset so tick() skips facing-rotation.
 export function drawInvaderCreep(container: ContainerWithTarget): void {
-  container.addChild(new Graphics({ context: getInvaderContext() }))
+  container.addChild(markSharedContext(new Graphics({ context: getInvaderContext() })))
 }
 
 export function getCreepStore(obj: RoomObject): { used: number; capacity: number } {
