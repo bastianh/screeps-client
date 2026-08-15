@@ -1,5 +1,15 @@
 # xxscreeps-mod-client
 
+## 0.3.16
+
+### Patch Changes
+
+- acfa85b: Rebuild the embedded client so the mods ship the current `screeps-client` fixes.
+- Updated dependencies [acfa85b]
+- Updated dependencies [55194c5]
+- Updated dependencies [0867a1b]
+  - screeps-client@0.24.3
+
 ## 0.3.15
 
 ### Patch Changes

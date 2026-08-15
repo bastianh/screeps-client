@@ -1,5 +1,13 @@
 # screeps-client
 
+## 0.24.3
+
+### Patch Changes
+
+- acfa85b: Fix decorated rooms flashing undecorated on every room change: terrain comes out of a cache and was drawn immediately, while decorations always need an HTTP round trip, so the room was painted plain and repainted decorated a moment later. The first terrain draw of a room now waits for its decoration read to settle — with a 500 ms deadline so a slow or failing request still gets the plain room up.
+- 55194c5: Room decorations are now enabled by default. Users who haven't explicitly toggled the setting (including existing users with no stored preference) will now see decorations on; anyone who previously turned it off keeps it off.
+- 0867a1b: Fix a memory leak in the room view: switching rooms stranded the PixiJS `GraphicsContext` of every object visual, terrain layer, decoration mask and navigation arrow on the renderer, so memory climbed with each room change and only came back when the room view was left entirely (e.g. by switching to the world map). Teardown now frees those contexts — and the per-room filters that went with them — explicitly.
+
 ## 0.24.2
 
 ### Patch Changes
