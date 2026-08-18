@@ -11,6 +11,9 @@ import { embeddedServerUrl } from '~/utils/embedded.js'
 import { createLogger } from '~/utils/log.js'
 import { SS, getSession } from '~/utils/storage.js'
 import { capabilities } from '~/stores/capabilities.js'
+// Side-effect import: registers the effect that feeds mod-defined render
+// metadata from /api/version into the room renderer.
+import '~/stores/customRendererStore.js'
 
 const { log } = createLogger('app')
 

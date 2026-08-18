@@ -27,6 +27,7 @@ import {
   updateControllerSegSprites,
 } from './objects/controller.js'
 import { createObjectVisual } from './objects/createObjectVisual.js'
+import { customObjectMetadata, customRendererRevision } from './custom/registry.js'
 import {
   DISABLED_PEAK_ALPHA,
   computeDisabledIds,
@@ -125,6 +126,7 @@ export class ObjectLayer {
   private readonly EXT_ANIM_DURATION = 300
   private instantMode = false
   private lastWorldScale = 1
+  private customRendererRev = customRendererRevision()
   private showLabels: boolean
   private currentUserId?: string
   private badge?: Badge
@@ -679,6 +681,10 @@ export class ObjectLayer {
       existing.position.set(tx, ty)
     }
 
+    // Mod-defined types re-run their metadata; which processors that actually
+    // rebuilds is decided inside, from each one's `props`.
+    existing.__customVisual?.applyState(obj)
+
     if (obj.type === 'extension') {
       const { energy, capacity } = getExtensionEnergy(obj)
       const ext = existing as ContainerWithTarget & { __extEnergy?: number; __extCapacity?: number }
@@ -895,7 +901,34 @@ export class ObjectLayer {
     }
   }
 
+  /**
+   * Drop and re-create every visual whose type the server now describes, plus any
+   * that was built from a description the server no longer publishes (a
+   * disconnect, or a switch to a server without the mod).
+   */
+  private rebuildCustomVisuals(): void {
+    for (const [id, visual] of [...this.objects]) {
+      const obj = this.rawObjects.get(id)
+      if (!obj) continue
+      const wasCustom = visual.__customVisual !== undefined
+      const isCustom = customObjectMetadata(obj.type) !== undefined
+      if (!wasCustom && !isCustom) continue
+      this.container.removeChild(visual)
+      destroyVisual(visual)
+      this.objects.delete(id)
+      this.createVisual(id, obj)
+    }
+  }
+
   update(objects: RoomObjectMap, diff?: RoomObjectDiff, users?: Record<string, { _id: string; username: string; badge?: Badge }>, gameTime?: number): void {
+    // Server render metadata arrives with /api/version, which usually settles
+    // after the first room has drawn — so anything that fell back to a plain
+    // rectangle gets rebuilt once the description for its type shows up.
+    const rev = customRendererRevision()
+    if (rev !== this.customRendererRev) {
+      this.customRendererRev = rev
+      this.rebuildCustomVisuals()
+    }
     if (users) {
       this.users = users
     }
@@ -1460,6 +1493,7 @@ export class ObjectLayer {
    */
   private applyLabelScale(visual: ContainerWithTarget): void {
     const worldScale = this.lastWorldScale || 1
+    visual.__customVisual?.setWorldScale(worldScale)
     if (visual.__nameLabel) {
       visual.__nameLabel.scale.set(LABEL_FONT_SCALE / worldScale)
       if (visual.__nameLabel.anchor.y === 0) {
