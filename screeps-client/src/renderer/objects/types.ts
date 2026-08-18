@@ -1,6 +1,7 @@
 import { Container, Graphics, Text, Sprite } from 'pixi.js'
 import type { RoomObject, Badge } from 'screeps-connectivity'
 import type { BadgeTextureCache } from '../BadgeTextureCache.js'
+import type { CustomObjectVisual } from '../custom/CustomObjectVisual.js'
 import { type StoreBand } from './store.js'
 
 // Shared types for the per-object renderer modules.
@@ -128,6 +129,7 @@ export type ContainerWithTarget = Container & {
   __portalPhase?: number       // per-portal wave phase offset in [0,1)
   __decorations?: Container[]  // creep/object decoration overlays attached to this visual
   __decoSpawning?: boolean     // spawning state the overlays were built for; creep decorations skip spawning creeps
+  __customVisual?: CustomObjectVisual  // mod-defined type rendered from server metadata; owns its own subtree
 }
 // One generic fill tween. Channel `a` (and optional `b`, for two-channel fills like lab
 // energy+mineral or nuker energy+ghodium) eases from→to over EXT_ANIM_DURATION, then `apply`

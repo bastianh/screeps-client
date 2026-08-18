@@ -60,6 +60,10 @@ src/
 │   ├── ObjectLayer.ts           # Object lifecycle: diffs, fill tweens, movement/animation ticker
 │   ├── objects/                 # Per-object visual modules (creep, spawn, tower, …) +
 │   │                            #   createObjectVisual dispatcher, shared helpers, types
+│   ├── custom/                   # Mod-defined object types rendered from server
+│   │                             #   metadata: expressions.ts, processors.ts,
+│   │                             #   graphicsCompat.ts, resources.ts, registry.ts,
+│   │                             #   CustomObjectVisual.ts
 │   ├── VisualLayer.ts           # Screeps visual primitives
 │   ├── MapVisualLayer.ts        # Map visuals (RoomVisual on the world map)
 │   ├── ActionAnimationLayer.ts  # Attack/heal/rangedAttack animations
@@ -83,6 +87,7 @@ src/
 │   ├── consoleStore.ts          # Console log history + panel visibility
 │   ├── memoryStore.ts           # Memory tree watches
 │   ├── customUiStore.ts         # Custom UI panels driven by a memory segment
+│   ├── customRendererStore.ts   # Feeds serverData.renderer into the renderer registry
 │   ├── historyStore.ts + HistoryPlayer.ts  # Room history playback
 │   ├── mapOverlayStore.ts       # World map overlay mode (owner | mineral | alliance | none)
 │   ├── allianceStore.ts        # LOAN alliance roster (lazy fetch + cache, derived colours)
@@ -174,3 +179,50 @@ Three things make it work:
 - **Saving keeps the editor open.** `placeDecoration` is a deactivate-then-activate pair; closing on success would drop the draft before the re-read lands and the decoration would visibly snap back. The saved state becomes the new baseline instead.
 
 Decoration changes made by this client bump `decorationsRevision` (`roomDataStore`), which re-reads `game/room-decorations`. The response is authoritative, so removals propagate; only socket items that arrived while the request was in flight are layered back on top.
+
+## Mod-defined object types
+
+A private-server mod can publish a render description for its own object types
+(`config.backend.renderer.metadata['mytype'] = { processors: [...] }`, see the
+[stock example mods](https://github.com/screeps/launcher/tree/master/init_dist/example-mods)).
+It reaches us on `/api/version` as `serverData.renderer`, which
+`customRendererStore` pushes into `renderer/custom/registry.ts`.
+
+`createObjectVisual` consults the registry **only for types it has no creator
+for**. The format can also override vanilla types, but our per-type modules under
+`renderer/objects/` draw those far more richly, and a mod's partial `creep`
+metadata replacing the real creep visual would be a bad trade. Anything with
+neither a creator nor metadata keeps the grey-rectangle fallback.
+
+`CustomObjectVisual` is the per-object runtime — the port of the reference
+renderer's `GameObject` (`reference/renderer/`). It owns a container scaled from
+the metadata coordinate frame (one tile = 100 units, centred) down to `TILE_SIZE`,
+and `applyState` decides per processor whether to rebuild, from its
+`props`/`when`/`once`/`until` gates. `ObjectLayer` drives it: `applyState` on every
+object update, `setWorldScale` alongside its own label scaling, and a full rebuild
+when the registry revision changes (metadata lands with the version fetch, usually
+after the first room drew).
+
+Three things are worth knowing:
+
+- **Pixi does the version translation.** Metadata in the wild is written against
+  PixiJS v4–v7 (`lineStyle`, `beginFill`, `drawRoundedRect`, `endFill`) and we run
+  v8, but v8 still ships working deprecation shims for exactly those names — so
+  `graphicsCompat.ts` dispatches to them rather than hand-mapping, and each name
+  warns once per page. What it does add is an **allowlist** (`drawings` is
+  server-supplied JSON feeding a `graphics[name](...)` dispatch) and a **terminating
+  flush**, because old Pixi painted a pending path at render time while v8 paints
+  only on an explicit `fill()`/`stroke()`.
+- **Teardown goes through `destroyTree`.** A props-driven processor rebuilds on
+  every tick that touches its state, and `destroy({ children: true })` leaves each
+  Graphics' context registered with the renderer — see `destroyTree.ts`.
+- **Not implemented:** the action/tween system (animated metadata renders in its
+  resting state), named render layers (`processor.layer` keeps its zIndex ordering
+  but stays in place), and the `customObjectTypes[type].sidepanel` templates, which
+  are Angular-1 markup with no SolidJS equivalent — the selection panel's
+  `DefaultDetails` property dump covers those objects instead.
+
+**Unverified assumption:** `{ASSETS_URL}` in a texture URL resolves against the
+server origin's `/assets`. We have no equivalent of the reference client's own
+asset root, and `@screeps/backend` is closed source, so this wants checking against
+a real modded server before it is relied on.

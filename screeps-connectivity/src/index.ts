@@ -43,6 +43,16 @@ export type {
   MapVisualEntry,
 } from './types/game.js'
 
+export type {
+  RendererExpression,
+  RendererProps,
+  RendererCalculation,
+  RendererProcessor,
+  RendererObjectMetadata,
+  ServerRendererConfig,
+  ServerCustomObjectType,
+} from './types/renderer.js'
+
 export { fetchServerVersion, fetchAuthModInfo, checkUsername, checkEmail, registerUser, fetchAuthMeWithToken, completeProviderRegistration, setNotifyPrefsWithToken, getServerFeature, getScreepsmodAuth, getXxscreepsModClientFeature, getDiscordFeature, hasOfficialLike } from './http/fetchServerVersion.js'
 export type { ApiAuthModInfoResponse } from './http/fetchServerVersion.js'
 export type { ApiAuthMeResponse, RoomHistoryChunk, ApiRoomDecorationsResponse, ApiRoomDecorationItem, ApiRoomDecorationDef, ApiRoomDecorationGraphic, ApiRoomDecorationActive, ApiDecorationProp, ApiDecorationProps, ApiUserDecorationItem, ApiUserDecorationsInventoryResponse, ApiDecorationTheme, ApiDecorationThemesResponse, ApiUserOverviewResponse, ApiUserOverviewTotals, ApiRoomOverviewResponse, ApiUserRoomsResponse, ApiUserStatsResponse, ApiLeaderboardFindResponse, ApiLeaderboardListResponse, ApiLeaderboardSeasonsResponse, ApiLeaderboardEntry, ApiLeaderboardUser, LeaderboardMode, ApiUserMoneyHistoryResponse, ApiMarketOrder, ApiMarketOrdersIndexResponse, ApiMarketOrdersResponse, ApiMarketMyOrdersResponse, ApiMarketStat, ApiMarketStatsResponse, ApiPowerCreep, ApiPowerCreepsListResponse, ApiUserMessage, ApiUserMessagesListResponse, ApiUserMessagesIndexEntry, ApiUserMessagesIndexResponse, ApiUserMessagesUnreadCountResponse, ApiUserFindResponse, ApiCodeModule, ApiUserCodeResponse } from './types/api.js'

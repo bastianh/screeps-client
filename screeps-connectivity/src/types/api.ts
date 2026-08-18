@@ -122,7 +122,8 @@ export interface ApiVersionResponse {
     historyKeepTicks?: number
     features: Array<{ name: string }>
     shards: string[]
-    customObjectTypes?: unknown
+    renderer?: import('./renderer.js').ServerRendererConfig
+    customObjectTypes?: Record<string, import('./renderer.js').ServerCustomObjectType>
   }
 }
 

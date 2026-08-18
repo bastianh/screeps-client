@@ -7,7 +7,7 @@ import type { BadgeTextureCache } from '../BadgeTextureCache.js'
 import { TILE_SIZE } from '../RoomRenderer.js'
 import { OBJ_FOREIGN, ST_OUTLINE } from '../colors.js'
 import { computeZIndex, getObjectColor } from './common.js'
-import type { VisualBuildContext } from './types.js'
+import type { ContainerWithTarget, VisualBuildContext } from './types.js'
 import { createCreepVisual } from './creep.js'
 import { createExtensionVisual } from './extension.js'
 import { createSpawnVisual } from './spawn.js'
@@ -31,6 +31,8 @@ import { createTombstoneVisual } from './tombstone.js'
 import { createPowerBankVisual } from './powerBank.js'
 import { createKeeperLairVisual } from './keeperLair.js'
 import { createPortalVisual } from './portal.js'
+import { customObjectMetadata } from '../custom/registry.js'
+import { CustomObjectVisual } from '../custom/CustomObjectVisual.js'
 import {
   createEnergyVisual,
   createRoadVisual,
@@ -104,12 +106,26 @@ export function createObjectVisual(
   if (creator) {
     creator(ctx)
   } else {
-    // Structures (fallback)
-    const size = TILE_SIZE - 2
-    g.rect(1, 1, size, size)
-    g.fill(color)
+    // A private-server mod can publish a render description for its own object
+    // types (see renderer/custom/). Only types we have no creator for are looked
+    // up: the metadata format can also override vanilla types, but our per-type
+    // modules draw those far more richly, and a mod's partial `creep` metadata
+    // replacing the real creep visual would be a bad trade.
+    const metadata = customObjectMetadata(obj.type)
+    if (metadata) {
+      const custom = new CustomObjectVisual(metadata)
+      custom.applyState(obj)
+      container.addChild(custom.root)
+      ;(container as ContainerWithTarget).__customVisual = custom
+    } else {
+      // Structures (fallback)
+      const size = TILE_SIZE - 2
+      g.rect(1, 1, size, size)
+      g.fill(color)
+    }
   }
-  if (!creator || ATTACH_SHARED_G.has(obj.type)) {
+  const usedCustomVisual = (container as ContainerWithTarget).__customVisual !== undefined
+  if ((!creator && !usedCustomVisual) || ATTACH_SHARED_G.has(obj.type)) {
     container.addChild(g)
   }
 

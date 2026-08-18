@@ -1,3 +1,5 @@
+import type { ServerRendererConfig, ServerCustomObjectType } from './renderer.js'
+
 export interface RoomMap2Data {
     w?: [number, number][] | null    // player-built walls / ramparts
     r?: [number, number][] | null    // roads
@@ -167,8 +169,10 @@ export interface ServerVersion {
         shards: Array<string | null>
         welcomeText?: string
         socketUpdateThrottle?: number
-        customObjectTypes?: unknown
-        renderer?: unknown
+        /** Render descriptions for mod-defined object types, keyed by object type. */
+        renderer?: ServerRendererConfig
+        /** Side-panel templates for mod-defined object types, keyed by object type. */
+        customObjectTypes?: Record<string, ServerCustomObjectType>
     }
 }
 
