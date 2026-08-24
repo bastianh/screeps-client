@@ -123,6 +123,62 @@ describe('UserStore', () => {
     expect(store.console).toHaveLength(1)
   })
 
+  it('console messages keep the shard the output came from', async () => {
+    const { store, socket } = makeStore()
+    await store.me()
+    let handler: (data: unknown) => void = () => {}
+    ;(socket.on as ReturnType<typeof vi.fn>).mockImplementation((_ch: string, cb: (data: unknown) => void) => {
+      handler = cb
+      return { dispose: vi.fn() }
+    })
+    const eventSpy = vi.fn()
+    store.on('user:console', eventSpy)
+    store.subscribe('console')
+    await new Promise(r => setTimeout(r, 0))
+
+    // One channel carries every shard, so the frame's shard is the only thing
+    // separating the streams — it has to survive into the buffer and the event.
+    handler({ shard: 'shard2', messages: { log: ['from shard2'], results: [] } })
+    handler({ shard: 'shard0', messages: { log: [], results: ['ok'] } })
+
+    expect(store.console.map(m => m.shard)).toEqual(['shard2', 'shard0'])
+    expect(eventSpy.mock.calls[0][0].messages.shard).toBe('shard2')
+    expect(store.console[0].receivedAt).toBeGreaterThan(0)
+  })
+
+  it('console messages without a shard stay undefined (server without shards)', async () => {
+    const { store, socket } = makeStore()
+    await store.me()
+    let handler: (data: unknown) => void = () => {}
+    ;(socket.on as ReturnType<typeof vi.fn>).mockImplementation((_ch: string, cb: (data: unknown) => void) => {
+      handler = cb
+      return { dispose: vi.fn() }
+    })
+    store.subscribe('console')
+    await new Promise(r => setTimeout(r, 0))
+    handler({ messages: { log: ['line1'], results: [] } })
+    expect(store.console[0].shard).toBeUndefined()
+  })
+
+  it('consoleBacklog() snapshots the buffer without exposing it', async () => {
+    const { store, socket } = makeStore()
+    await store.me()
+    let handler: (data: unknown) => void = () => {}
+    ;(socket.on as ReturnType<typeof vi.fn>).mockImplementation((_ch: string, cb: (data: unknown) => void) => {
+      handler = cb
+      return { dispose: vi.fn() }
+    })
+    store.subscribe('console')
+    await new Promise(r => setTimeout(r, 0))
+    handler({ shard: 'shard1', messages: { log: ['a'], results: [] } })
+
+    const backlog = await store.consoleBacklog()
+    expect(backlog.map(m => m.log)).toEqual([['a']])
+    // A copy: a late-mounting view must not be able to mutate the store's buffer.
+    backlog.push({ log: [], results: [], error: [], receivedAt: 0 })
+    expect(store.console).toHaveLength(1)
+  })
+
   it('dispose() stops WS subscription', async () => {
     const { store, socket } = makeStore()
     await store.me()

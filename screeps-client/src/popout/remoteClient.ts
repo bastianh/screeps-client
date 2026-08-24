@@ -1,4 +1,4 @@
-import type { ScreepsClient } from 'screeps-connectivity'
+import type { ConsoleMessage, ScreepsClient } from 'screeps-connectivity'
 import type { PopoutRpc } from './rpc.js'
 import { MAP_STATS_TOPIC, map2Topic, mapVisualTopic, memoryTopic } from './protocol.js'
 
@@ -30,6 +30,9 @@ export function createRemoteClient(rpc: PopoutRpc): ScreepsClient {
     stores: {
       user: {
         subscribe: (channel: string) => rpc.subscribe(channel),
+        // The popout keeps no buffer of its own — the host's rolling one is what
+        // makes a window opened mid-session open with the output so far.
+        consoleBacklog: () => rpc.call('console.backlog', []) as Promise<ConsoleMessage[]>,
         subscribeMemory: (path: string, shard?: string | null) =>
           rpc.subscribe(memoryTopic(path, shard ?? null)),
         subscribeMapVisual: (shard: string | null) => rpc.subscribe(mapVisualTopic(shard)),

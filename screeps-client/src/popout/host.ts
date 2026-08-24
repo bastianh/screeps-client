@@ -175,7 +175,9 @@ export function initPopoutHost(client: ScreepsClient, sid: string, opts?: Popout
     const args = msg.args
     switch (msg.method) {
       case 'console.exec':
-        return client.http.user.console(args[0] as string, args[1] as string)
+        return client.http.user.console(args[0] as string, args[1] as string | undefined)
+      case 'console.backlog':
+        return client.stores.user.consoleBacklog()
       case 'memory.get':
         return client.http.user.memory.get(args[0] as string, args[1] as string | null | undefined)
       case 'memory.set':

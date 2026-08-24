@@ -105,6 +105,19 @@ export interface ConsoleMessage {
     log: string[]
     results: string[]
     error: string[]
+    /**
+     * Shard the output came from. The `user:<id>/console` channel is not shard-scoped —
+     * output from every shard the player runs on arrives on the same channel — so this
+     * is the only thing that tells two shards' streams apart. Absent on servers without
+     * shards, and on servers that don't set it.
+     */
+    shard?: string
+    /**
+     * Client-side arrival time (ms since epoch). The wire frame carries no timestamp,
+     * so this is stamped on receipt; it is what makes the rolling buffer replayable
+     * with its original ordering intact.
+     */
+    receivedAt: number
 }
 
 export interface ServerFeature {

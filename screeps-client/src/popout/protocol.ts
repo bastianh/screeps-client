@@ -18,6 +18,7 @@ export const isPopoutWindow = new URLSearchParams(window.location.search).has(PO
 
 export type PopoutMethod =
   | 'console.exec'
+  | 'console.backlog'
   | 'memory.get'
   | 'memory.set'
   | 'memory.segment.get'
