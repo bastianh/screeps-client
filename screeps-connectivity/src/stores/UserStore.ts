@@ -92,6 +92,17 @@ export class UserStore extends TypedStore<UserStoreEvents> {
     return this.worldStatus()
   }
 
+  /**
+   * Snapshot of the rolling console buffer, oldest first, so a view mounted mid-session
+   * starts with the output that already arrived instead of an empty pane.
+   *
+   * Async on purpose: popout windows read theirs from the main window across an RPC
+   * shim, and callers should not have to branch on which side they run.
+   */
+  consoleBacklog(): Promise<ConsoleMessage[]> {
+    return Promise.resolve([...this.console])
+  }
+
   subscribe(channel: 'console' | 'cpu' | 'code' | 'set-active-branch'): Subscription {
     this.logger.log('subscribe', channel)
 
@@ -115,11 +126,16 @@ export class UserStore extends TypedStore<UserStoreEvents> {
               this._cpu = data as CpuStats
               this.emit('user:cpu', this._cpu)
             } else if (channel === 'console') {
-              const raw = data as { messages?: ConsoleMessage, error?: string }
+              // `shard` sits on the frame, not inside `messages` — it is the only marker
+              // distinguishing output from the different shards multiplexed onto this
+              // one channel, so it must survive into the buffer and the event.
+              const raw = data as { messages?: ConsoleMessage, error?: string, shard?: string }
               const msg: ConsoleMessage = {
                 log: raw.messages?.log ?? [],
                 results: raw.messages?.results ?? [],
                 error: raw.messages?.error ?? [],
+                shard: raw.shard,
+                receivedAt: Date.now(),
               }
               if (raw.error) {
                 msg.error.push(raw.error)

@@ -392,6 +392,13 @@ userStore.refreshMe(): Promise<UserInfo>
 Busts the cache and re-fetches. Use after profile changes (username, badge, etc.).
 
 ```ts
+userStore.consoleBacklog(): Promise<ConsoleMessage[]>
+```
+Snapshot (a copy) of the rolling console buffer, oldest first, so a view mounted mid-session
+starts with the output that already arrived. Async so that the same call works across an RPC
+proxy, where the buffer lives in another window.
+
+```ts
 userStore.subscribe(channel: 'cpu' | 'console' | 'code' | 'set-active-branch'): Subscription
 ```
 Opens a WebSocket subscription for the given user channel. Lazily resolves the user ID if `me()` has not yet been called.
@@ -1159,10 +1166,18 @@ interface CpuStats {
 
 ```ts
 interface ConsoleMessage {
-  log: string[]     // console.log() output lines (may contain HTML)
-  results: string[] // expression evaluation results
+  log: string[]      // console.log() output lines (may contain HTML)
+  results: string[]  // expression evaluation results
+  error: string[]    // runtime errors reported for the tick
+  shard?: string     // shard the output came from; absent on servers without shards
+  receivedAt: number // client-side arrival time (ms since epoch)
 }
 ```
+
+The `user:<id>/console` channel is **not** shard-scoped — unlike `room:<shard>/<room>` — so
+output from every shard the player runs on arrives interleaved on the same channel. `shard`
+is the only field that separates the streams; a UI that drops it cannot tell two shards'
+log output apart.
 
 ### `ServerVersion`
 

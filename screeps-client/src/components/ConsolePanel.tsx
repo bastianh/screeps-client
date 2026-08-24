@@ -1,6 +1,6 @@
 import { createEffect, createMemo, createSignal, onCleanup, onMount, untrack, For, Show } from 'solid-js'
 import { Trash2, Pause, Play, X, Plus, Filter, ExternalLink, ChevronDown, ChevronUp } from 'lucide-solid'
-import { client } from '~/stores/clientStore.js'
+import { client, serverVersion } from '~/stores/clientStore.js'
 import { SubscriptionGroup } from 'screeps-connectivity'
 import type { ConsoleMessage } from 'screeps-connectivity'
 import { showLog, showConsole, showMemory, showSegments, toggleShowLog, toggleShowConsole, toggleShowMemory, toggleShowSegments, consoleInput, setConsoleInput, registerConsoleInput, loadConsoleHistory, pushConsoleHistory, historyPrev, historyNext, resetHistoryCursor } from '~/stores/consoleStore.js'
@@ -18,11 +18,67 @@ import { isTauri } from '~/utils/tauri.js'
 
 const { error } = createLogger('console')
 
-interface ConsoleEntry {
+type ConsoleLineKind = 'log' | 'error' | 'result' | 'sent'
+
+/**
+ * One rendered line. Output from every shard the player runs on arrives
+ * multiplexed onto the single `user:<id>/console` channel, so the shard travels
+ * per line — without it two shards' log streams are indistinguishable.
+ */
+interface ConsoleLine {
   id: number
-  log: string[]
-  results: string[]
-  error: string[]
+  kind: ConsoleLineKind
+  text: string
+  shard?: string
+  /** Arrival time, ms since epoch. */
+  at: number
+}
+
+/** Keep each pane's scrollback bounded; panes are capped separately so a noisy
+ *  tick of log output can't evict the command results next to it. */
+const MAX_LINES = 500
+
+// A stable hue per shard, so the same shard reads the same in every window and
+// across sessions. Picked from a fixed set rather than generated, so every tag
+// stays legible on the dark ground.
+const SHARD_COLORS = ['#7ee787', '#79c0ff', '#ffa657', '#d2a8ff', '#f2cc60', '#ff7b72', '#56d4dd']
+
+function shardColor(shard: string): string {
+  let h = 0
+  for (let i = 0; i < shard.length; i++) h = (h * 31 + shard.charCodeAt(i)) >>> 0
+  return SHARD_COLORS[h % SHARD_COLORS.length]
+}
+
+function formatTime(at: number): string {
+  return new Date(at).toLocaleTimeString()
+}
+
+const metaStyle = { 'font-size': '10px', 'flex-shrink': 0, 'line-height': '1.8' } as const
+
+/** Timestamp + shard tag prefix shared by both panes. */
+function LineMeta(props: { line: ConsoleLine; onShardClick?: (shard: string) => void }) {
+  return (
+    <>
+      <span style={{ ...metaStyle, color: '#484f58' }} title={new Date(props.line.at).toLocaleString()}>
+        {formatTime(props.line.at)}
+      </span>
+      <Show when={props.line.shard}>
+        {(shard) => (
+          <span
+            onClick={() => props.onShardClick?.(shard())}
+            title={props.onShardClick ? `Show only ${shard()}` : shard()}
+            style={{
+              ...metaStyle,
+              color: shardColor(shard()),
+              cursor: props.onShardClick ? 'pointer' : 'default',
+            }}
+          >
+            [{shard()}]
+          </span>
+        )}
+      </Show>
+    </>
+  )
 }
 
 function MemoryPane(props: { shard: string | null; width: number }) {
@@ -152,12 +208,16 @@ function MemoryPane(props: { shard: string | null; width: number }) {
 }
 
 export function ConsolePanel(props: { shard?: string | null; isCollapsed?: boolean; onToggle?: () => void }) {
-  const [entries, setEntries] = createSignal<ConsoleEntry[]>([])
+  // Log/error and result/echo lines live in separate buffers: the panes render
+  // them separately and each keeps its own cap.
+  const [logLines, setLogLines] = createSignal<ConsoleLine[]>([])
+  const [outLines, setOutLines] = createSignal<ConsoleLine[]>([])
   const [autoScroll, setAutoScroll] = createSignal(true)
   // When paused, incoming console messages are held here instead of being
   // appended to the feed, then flushed on resume.
   const [paused, setPaused] = createSignal(false)
-  let pendingEntries: ConsoleEntry[] = []
+  let pendingLog: ConsoleLine[] = []
+  let pendingOut: ConsoleLine[] = []
   const DEFAULT_WEIGHTS = [1, 1, 1] as const
   const [weights, setWeights] = createSignal<number[]>(getJson(LS.consoleWeights, [...DEFAULT_WEIGHTS]))
   const [dragging, setDragging] = createSignal<number | null>(null)
@@ -168,38 +228,81 @@ export function ConsolePanel(props: { shard?: string | null; isCollapsed?: boole
   let splitContainerRef: HTMLDivElement | undefined = undefined
   let nextId = 0
 
+  const cap = (lines: ConsoleLine[]) =>
+    lines.length > MAX_LINES ? lines.slice(lines.length - MAX_LINES) : lines
+
+  /** Split one wire frame into rendered lines, carrying its shard and arrival time. */
+  const splitMessage = (msg: ConsoleMessage): { log: ConsoleLine[]; out: ConsoleLine[] } => {
+    const at = msg.receivedAt || Date.now()
+    const mk = (kind: ConsoleLineKind) => (text: string): ConsoleLine =>
+      ({ id: nextId++, kind, text, shard: msg.shard, at })
+    return {
+      // Within a frame: logs first, then errors — the order the tick produced them.
+      log: [...(msg.log ?? []).map(mk('log')), ...(msg.error ?? []).map(mk('error'))],
+      out: (msg.results ?? []).map(mk('result')),
+    }
+  }
+
+  // Arrival time of the first frame received live, used to trim the backlog to
+  // what precedes it. In a popout the backlog snapshot is an RPC round trip, and
+  // the host may open the forwarding topic before it answers — a frame caught in
+  // that gap would otherwise show up twice. `receivedAt` is stamped once, in the
+  // main window, so the same frame carries the same value down both paths.
+  let firstLiveAt: number | null = null
+
+  const appendMessage = (msg: ConsoleMessage) => {
+    if (firstLiveAt === null) firstLiveAt = msg.receivedAt || Date.now()
+    const { log, out } = splitMessage(msg)
+    if (paused()) {
+      if (log.length > 0) pendingLog = cap([...pendingLog, ...log])
+      if (out.length > 0) pendingOut = cap([...pendingOut, ...out])
+      return
+    }
+    if (log.length > 0) setLogLines((prev) => cap([...prev, ...log]))
+    if (out.length > 0) setOutLines((prev) => cap([...prev, ...out]))
+  }
+
   onMount(() => {
     const c = client()
     if (!c) return
 
     const group = new SubscriptionGroup()
-    group.add(c.stores.user.subscribe('console'))
-    // Subscription callback (an event handler); reading paused() here is an
-    // intentional read of the current value, not a reactive dependency.
-    // eslint-disable-next-line solid/reactivity
-    group.add(c.stores.user.on('user:console', (data) => {
-      const msg = data.messages as ConsoleMessage
-      const entry: ConsoleEntry = {
-        id: nextId++,
-        log: msg.log ?? [],
-        results: msg.results ?? [],
-        error: msg.error ?? [],
-      }
-      if (paused()) {
-        pendingEntries.push(entry)
-        if (pendingEntries.length > 200) pendingEntries = pendingEntries.slice(pendingEntries.length - 200)
-        return
-      }
-      setEntries((prev) => {
-        const next = [...prev, entry]
-        return next.length > 200 ? next.slice(next.length - 200) : next
+    let disposed = false
+    onCleanup(() => { disposed = true; group.dispose() })
+
+    // Seed from the store's rolling buffer. It has been filling since login
+    // (customUiStore keeps a console subscription open), so a panel mounted late
+    // — a popout opened mid-session, or a remount — starts with the output so
+    // far instead of an empty pane.
+    c.stores.user.consoleBacklog()
+      .then((backlog) => {
+        if (disposed || backlog.length === 0) return
+        const log: ConsoleLine[] = []
+        const out: ConsoleLine[] = []
+        for (const msg of backlog) {
+          if (firstLiveAt !== null && msg.receivedAt >= firstLiveAt) break
+          const split = splitMessage(msg)
+          log.push(...split.log)
+          out.push(...split.out)
+        }
+        // Prepended: anything that arrived live while the backlog was in flight
+        // is newer than every line in it.
+        setLogLines((prev) => cap([...log, ...prev]))
+        setOutLines((prev) => cap([...out, ...prev]))
       })
-    }))
-    onCleanup(() => group.dispose())
+      .catch((err) => error('console backlog failed:', err))
+
+    group.add(c.stores.user.subscribe('console'))
+    // Subscription callback (an event handler); the paused() read inside
+    // appendMessage is an intentional read of the current value, not a
+    // reactive dependency.
+    // eslint-disable-next-line solid/reactivity
+    group.add(c.stores.user.on('user:console', (data) => appendMessage(data.messages as ConsoleMessage)))
   })
 
   createEffect(() => {
-    entries()
+    logLines()
+    outLines()
     if (!autoScroll()) return
     requestAnimationFrame(() => {
       if (showLog() && logScrollRef) logScrollRef.scrollTop = logScrollRef.scrollHeight
@@ -434,6 +537,30 @@ export function ConsolePanel(props: { shard?: string | null; isCollapsed?: boole
     }
   }
 
+  // --- Command target shard -------------------------------------------------
+  // Commands default to the shard being viewed, as in the reference client. The
+  // picker overrides that for as long as the view stays put: sending to shard3
+  // while watching shard0 used to mean navigating there and back.
+  const [shardOverride, setShardOverride] = createSignal<string | null>(null)
+  const viewedShard = () => props.shard ?? currentShard()
+  const targetShard = () => shardOverride() ?? viewedShard()
+
+  // Navigating to another shard drops a stale override — the default follows the
+  // view again rather than silently keeping a target the user can't see.
+  createEffect(() => {
+    viewedShard()
+    setShardOverride(null)
+  })
+
+  // Servers without shards report an empty list, and a single-shard server needs
+  // no picker — the label alone says where commands go.
+  const shardOptions = () => {
+    const listed = (serverVersion()?.serverData?.shards ?? [])
+      .filter((sh): sh is string => typeof sh === 'string' && sh.length > 0)
+    const target = targetShard()
+    return target && !listed.includes(target) ? [...listed, target] : listed
+  }
+
   const handleSubmit = async (e: Event) => {
     e.preventDefault()
     const c = client()
@@ -444,8 +571,23 @@ export function ConsolePanel(props: { shard?: string | null; isCollapsed?: boole
     // recalling and fixing.
     pushConsoleHistory(cmd)
     setConsoleInput('')
+    const shard = targetShard()
+    // Echo the command into the results pane. With several shards multiplexed
+    // into one feed, the record of which shard a command actually went to is the
+    // whole point — the result that follows is otherwise unattributable.
+    setOutLines((prev) => cap([...prev, {
+      id: nextId++,
+      kind: 'sent' as const,
+      text: cmd,
+      shard: shard ?? undefined,
+      at: Date.now(),
+    }]))
+    setAutoScroll(true)
+    scrollToBottom()
     try {
-      await c.http.user.console(cmd, props.shard ?? 'shard0')
+      // No 'shard0' fallback: on a server without shards the parameter has to be
+      // absent, and withShard() drops it only when it is undefined.
+      await c.http.user.console(cmd, shard ?? undefined)
     } catch (err) {
       error('command failed:', err)
     }
@@ -486,23 +628,33 @@ export function ConsolePanel(props: { shard?: string | null; isCollapsed?: boole
     new DOMParser().parseFromString(line, 'text/html').body.textContent ?? ''
 
   // Match against the visible text, ignoring the HTML colour markup in the line.
-  const matchesFilter = (line: string) => {
+  // The shard tag is part of the haystack, so typing `shard2` into the filter
+  // narrows the feed to one shard without needing a separate control.
+  const matchesFilter = (line: ConsoleLine) => {
     const re = compiledFilter().re
     if (!re) return true
-    return re.test(stripMarkup(line))
+    const text = stripMarkup(line.text)
+    return re.test(line.shard ? `[${line.shard}] ${text}` : text)
   }
 
   // Log pane shows logs and errors together in arrival order: within a tick,
   // logs first then errors, and ticks stay chronological so new lines (errors
   // included) land at the bottom next to the surrounding log output.
   const logPaneLines = () =>
-    entries()
-      .flatMap((e) => [
-        ...e.log.filter((l) => !hideLine(l)).map((line) => ({ kind: 'log' as const, line })),
-        ...e.error.map((line) => ({ kind: 'error' as const, line })),
-      ])
-      .filter((item) => matchesFilter(item.line))
-  const resultLines = () => entries().flatMap((e) => e.results).filter((l) => !hideLine(l))
+    logLines()
+      .filter((l) => !(l.kind === 'log' && hideLine(l.text)))
+      .filter(matchesFilter)
+  // Results and the echoes of the commands that produced them. Echoes are ours,
+  // so the custom-UI protocol filter never applies to them.
+  const outPaneLines = () => outLines().filter((l) => !(l.kind === 'result' && hideLine(l.text)))
+
+  /** Clear both panes and anything buffered behind a pause. */
+  const clearLines = () => {
+    pendingLog = []
+    pendingOut = []
+    setLogLines([])
+    setOutLines([])
+  }
 
   const monoStyle = {
     'font-family': 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
@@ -538,19 +690,21 @@ export function ConsolePanel(props: { shard?: string | null; isCollapsed?: boole
     openPopoutWindow({
       sid,
       panes: panes.length > 0 ? panes : ['log', 'console'],
-      shard: props.shard ?? currentShard(),
+      shard: viewedShard(),
     })
   }
 
   // Resume the feed: flush any messages buffered while paused, then scroll down.
   const resumeConsole = () => {
-    if (pendingEntries.length > 0) {
-      const flush = pendingEntries
-      pendingEntries = []
-      setEntries((prev) => {
-        const next = [...prev, ...flush]
-        return next.length > 200 ? next.slice(next.length - 200) : next
-      })
+    if (pendingLog.length > 0) {
+      const flush = pendingLog
+      pendingLog = []
+      setLogLines((prev) => cap([...prev, ...flush]))
+    }
+    if (pendingOut.length > 0) {
+      const flush = pendingOut
+      pendingOut = []
+      setOutLines((prev) => cap([...prev, ...flush]))
     }
     setPaused(false)
     setAutoScroll(true)
@@ -652,7 +806,7 @@ export function ConsolePanel(props: { shard?: string | null; isCollapsed?: boole
                   {paused() ? <Play size={16} /> : <Pause size={16} />}
                 </button>
                 <button
-                  onClick={() => setEntries([])}
+                  onClick={clearLines}
                   title="Clear"
                   style={iconBtnStyle}
                 >
@@ -708,15 +862,20 @@ export function ConsolePanel(props: { shard?: string | null; isCollapsed?: boole
                 >
                   {logPaneLines().length === 0 && (
                     <div style={{ color: '#484f58', 'font-style': 'italic' }}>
-                      {filterText().trim() && entries().length > 0 ? 'No lines match the filter.' : 'No log output yet…'}
+                      {filterText().trim() && logLines().length > 0 ? 'No lines match the filter.' : 'No log output yet…'}
                     </div>
                   )}
                   <For each={logPaneLines()}>
                     {(item) => (
-                      <div style={{ 'margin-bottom': '4px', color: item.kind === 'error' ? '#f85149' : '#c9d1d9', 'white-space': 'pre-wrap', 'word-break': 'break-word' }}
-                        /* eslint-disable-next-line solid/no-innerhtml */
-                        innerHTML={item.line}
-                      />
+                      <div style={{ 'margin-bottom': '4px', display: 'flex', gap: '6px', 'align-items': 'flex-start' }}>
+                        {/* Clicking a shard tag filters the pane down to that shard. */}
+                        <LineMeta line={item} onShardClick={(sh) => { setFilterText(sh); setShowFilter(true) }} />
+                        <span
+                          style={{ flex: 1, 'min-width': 0, color: item.kind === 'error' ? '#f85149' : '#c9d1d9', 'white-space': 'pre-wrap', 'word-break': 'break-word' }}
+                          /* eslint-disable-next-line solid/no-innerhtml */
+                          innerHTML={item.text}
+                        />
+                      </div>
                     )}
                   </For>
                 </div>
@@ -749,15 +908,30 @@ export function ConsolePanel(props: { shard?: string | null; isCollapsed?: boole
                 }}
                 style={{ flex: 1, overflow: 'auto', padding: '8px', ...monoStyle }}
               >
-                {resultLines().length === 0 && (
+                {outPaneLines().length === 0 && (
                   <div style={{ color: '#484f58', 'font-style': 'italic' }}>No command results yet…</div>
                 )}
-                <For each={resultLines()}>
+                <For each={outPaneLines()}>
                   {(line) => (
-                    <div style={{ 'margin-bottom': '4px', color: '#58a6ff', 'white-space': 'pre-wrap', 'word-break': 'break-word' }}
-                      /* eslint-disable-next-line solid/no-innerhtml */
-                      innerHTML={line}
-                    />
+                    <div style={{ 'margin-bottom': '4px', display: 'flex', gap: '6px', 'align-items': 'flex-start' }}>
+                      <LineMeta line={line} />
+                      <span style={{ ...metaStyle, color: '#484f58' }}>{line.kind === 'sent' ? '›' : '‹'}</span>
+                      <Show
+                        when={line.kind === 'result'}
+                        fallback={
+                          /* The echo is the user's own input — rendered as text, never as markup. */
+                          <span style={{ flex: 1, 'min-width': 0, color: '#82a1d6', 'white-space': 'pre-wrap', 'word-break': 'break-word' }}>
+                            {line.text}
+                          </span>
+                        }
+                      >
+                        <span
+                          style={{ flex: 1, 'min-width': 0, color: '#58a6ff', 'white-space': 'pre-wrap', 'word-break': 'break-word' }}
+                          /* eslint-disable-next-line solid/no-innerhtml */
+                          innerHTML={line.text}
+                        />
+                      </Show>
+                    </div>
                   )}
                 </For>
               </div>
@@ -810,6 +984,42 @@ export function ConsolePanel(props: { shard?: string | null; isCollapsed?: boole
                       </For>
                     </div>
                   )}
+                </Show>
+                {/* Where the command goes. A picker once the server has more than
+                    one shard, a plain label otherwise — either way it is stated,
+                    because the feed above mixes every shard together. */}
+                <Show when={shardOptions().length > 1} fallback={
+                  <Show when={targetShard()}>
+                    {(sh) => (
+                      <span
+                        title="Commands run on this shard"
+                        style={{ color: shardColor(sh()), 'font-size': '11px', 'line-height': '28px', 'flex-shrink': 0 }}
+                      >
+                        {sh()}
+                      </span>
+                    )}
+                  </Show>
+                }>
+                  <select
+                    value={targetShard() ?? ''}
+                    onChange={(e) => setShardOverride(e.currentTarget.value)}
+                    title="Shard this command runs on — defaults to the one you are viewing"
+                    style={{
+                      background: '#161b22',
+                      color: shardColor(targetShard() ?? ''),
+                      border: '1px solid #30363d',
+                      'border-radius': '4px',
+                      'font-size': '11px',
+                      'font-family': 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                      padding: '5px 4px',
+                      cursor: 'pointer',
+                      'flex-shrink': 0,
+                    }}
+                  >
+                    <For each={shardOptions()}>
+                      {(sh) => <option value={sh} style={{ color: '#c9d1d9' }}>{sh}</option>}
+                    </For>
+                  </select>
                 </Show>
                 <span style={{ color: '#8b949e', 'font-size': '13px', 'line-height': '28px' }}>&gt;</span>
                 <input
